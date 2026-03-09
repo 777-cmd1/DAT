@@ -950,10 +950,28 @@ def api_delete_pipeline():
     save_pipeline([c for c in load_pipeline() if c['email'].lower() != email.lower()])
     return jsonify({'ok': True})
 
+def auto_create_admin():
+    """Auto-create admin account from env vars on startup."""
+    admin_email = os.environ.get('ADMIN_EMAIL', '')
+    admin_password = os.environ.get('ADMIN_PASSWORD', '')
+    if not admin_email or not admin_password:
+        return
+    users = load_users()
+    if any(u['email'].lower() == admin_email.lower() for u in users):
+        return  # already exists
+    users.append({
+        'email': admin_email.lower(),
+        'name': 'Admin',
+        'password': hash_password(admin_password),
+        'invited_by': 'system',
+        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
+    })
+    save_users(users)
+    print(f"✓ Admin account auto-created for {admin_email}")
+
+# Run auto-create on every startup (safe — skips if already exists)
+auto_create_admin()
+
 if __name__ == '__main__':
     os.makedirs('templates', exist_ok=True)
-    # Create admin user if no users exist
-    if not load_users() and ADMIN_EMAIL != 'your@email.com':
-        print(f"No users found. Creating admin account for {ADMIN_EMAIL}")
-        print("Set ADMIN_PASSWORD env var or use /api/admin/invite to invite users")
     app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))

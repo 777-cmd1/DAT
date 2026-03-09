@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAT Mailer — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f; --surface: #111118; --surface2: #16161f;
+    --border: #1e1e2e; --text: #e2e2f0; --muted: #6b6b8a;
+    --accent: #6366f1; --green: #22c55e; --red: #ef4444;
+    --yellow: #eab308; --radius: 12px;
+  }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding: 32px; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #6366f1, #22c55e);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .logo-text { font-size: 18px; font-weight: 700; }
+  .badge { font-size: 11px; background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); border-radius: 20px; padding: 2px 8px; }
+  .back-btn {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--muted); font-family: inherit; font-size: 13px; padding: 6px 14px;
+    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .back-btn:hover { color: var(--text); border-color: var(--accent); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1000px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+  }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+  .card-title .count { font-size: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; color: var(--muted); }
+  .invite-form { display: flex; gap: 8px; margin-bottom: 20px; }
+  .invite-form input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: inherit;
+    font-size: 13px; padding: 8px 12px; outline: none; transition: border-color .15s;
+  }
+  .invite-form input:focus { border-color: var(--accent); }
+  .btn-invite {
+    background: linear-gradient(135deg, var(--accent), var(--green));
+    border: none; border-radius: 8px; color: #fff;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 16px; cursor: pointer; white-space: nowrap;
+    transition: opacity .15s;
+  }
+  .btn-invite:hover { opacity: 0.9; }
+  .btn-invite:disabled { opacity: 0.5; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding: 0 0 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .status-badge {
+    font-size: 11px; border-radius: 20px; padding: 2px 8px; font-weight: 500;
+  }
+  .status-used { background: rgba(34,197,94,0.1); color: #86efac; border: 1px solid rgba(34,197,94,0.2); }
+  .status-pending { background: rgba(234,179,8,0.1); color: #fde047; border: 1px solid rgba(234,179,8,0.2); }
+  .del-btn {
+    background: none; border: 1px solid transparent; border-radius: 6px;
+    color: var(--muted); cursor: pointer; font-size: 12px; padding: 3px 8px;
+    transition: all .15s;
+  }
+  .del-btn:hover { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 999;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px; font-size: 13px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    transform: translateY(80px); opacity: 0;
+    transition: transform .3s, opacity .3s;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.green { border-color: rgba(34,197,94,0.4); color: #86efac; }
+  .toast.red { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0; }
+  .invite-url {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--green); word-break: break-all; margin-top: 12px; display: none;
+  }
+  .invite-url.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">✉</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="logo-text">DAT Mailer</span>
+      <span class="badge">Admin Panel</span>
+    </div>
+  </div>
+  <a href="/" class="back-btn">← Back to App</a>
+</div>
+
+<div class="grid">
+  <!-- Invite Users -->
+  <div class="card">
+    <div class="card-title">👥 Invite User</div>
+    <div class="invite-form">
+      <input type="email" id="inviteEmail" placeholder="email@example.com">
+      <button class="btn-invite" id="inviteBtn" onclick="sendInvite()">Send Invite</button>
+    </div>
+    <div class="invite-url" id="inviteUrl"></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:12px">
+      An email with a registration link will be sent. The link can only be used once.
+    </div>
+  </div>
+
+  <!-- Active Users -->
+  <div class="card">
+    <div class="card-title">
+      Active Users
+      <span class="count" id="userCount">0</span>
+    </div>
+    <table>
+      <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th></th></tr></thead>
+      <tbody id="usersTable"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Invites -->
+  <div class="card" style="grid-column: 1 / -1">
+    <div class="card-title">
+      Sent Invites
+      <span class="count" id="inviteCount">0</span>
+    </div>
+    <table>
+      <thead><tr><th>Email</th><th>Sent</th><th>Status</th><th>Used At</th></tr></thead>
+      <tbody id="invitesTable"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+async function loadUsers() {
+  const res = await fetch('/api/admin/users');
+  const users = await res.json();
+  document.getElementById('userCount').textContent = users.length;
+  const tbody = document.getElementById('usersTable');
+  if (!users.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No users yet</td></tr>'; return; }
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td class="mono">${u.email}</td>
+      <td>${u.name || '—'}</td>
+      <td style="color:var(--muted);font-size:12px">${(u.created_at||'').slice(0,10)}</td>
+      <td><button class="del-btn" onclick="deleteUser('${u.email}')">Remove</button></td>
+    </tr>
+  `).join('');
+}
+
+async function loadInvites() {
+  const res = await fetch('/api/admin/invites');
+  const invites = await res.json();
+  document.getElementById('inviteCount').textContent = invites.length;
+  const tbody = document.getElementById('invitesTable');
+  if (!invites.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No invites sent yet</td></tr>'; return; }
+  tbody.innerHTML = [...invites].reverse().map(i => `
+    <tr>
+      <td class="mono">${i.email}</td>
+      <td style="color:var(--muted);font-size:12px">${(i.created_at||'').slice(0,10)}</td>
+      <td><span class="status-badge ${i.used ? 'status-used' : 'status-pending'}">${i.used ? '✓ Used' : '⏳ Pending'}</span></td>
+      <td style="color:var(--muted);font-size:12px">${i.used_at ? i.used_at.slice(0,10) : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+async function sendInvite() {
+  const email = document.getElementById('inviteEmail').value.trim();
+  const btn = document.getElementById('inviteBtn');
+  if (!email) { toast('Enter an email address', 'red'); return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const res = await fetch('/api/admin/invite', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ email })
+  });
+  const data = await res.json();
+  btn.disabled = false; btn.textContent = 'Send Invite';
+  if (res.ok) {
+    toast(`Invite sent to ${email}`, 'green');
+    document.getElementById('inviteEmail').value = '';
+    const urlEl = document.getElementById('inviteUrl');
+    urlEl.textContent = data.invite_url;
+    urlEl.classList.add('show');
+    loadInvites();
+  } else {
+    toast(data.error || 'Failed to send invite', 'red');
+  }
+}
+
+async function deleteUser(email) {
+  if (!confirm(`Remove user ${email}?`)) return;
+  const res = await fetch('/api/admin/users/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ email })
+  });
+  if (res.ok) { toast('User removed', 'green'); loadUsers(); }
+  else { toast('Failed to remove user', 'red'); }
+}
+
+function toast(msg, type='green') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+loadUsers(); loadInvites();
+</script>
+</body>
+</html>

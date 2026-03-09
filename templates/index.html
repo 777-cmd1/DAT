@@ -1,0 +1,2808 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAT Mailer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ─────────────────────────────────────────────────────────── */
+:root {
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --transition: 200ms cubic-bezier(.4,0,.2,1);
+  --ease: cubic-bezier(.4,0,.2,1);
+  --bounce: cubic-bezier(.34,1.56,.64,1);
+}
+[data-theme="dark"] {
+  --bg:       #070a0f;
+  --surface:  #0d1117;
+  --surface2: #141c26;
+  --surface3: #1a2332;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.13);
+  --border-h: rgba(255,255,255,0.18);
+  --text:     #e8edf5;
+  --text2:    #8892a4;
+  --text3:    #4a5568;
+  --accent:   #34d399;
+  --accent-d: #10b981;
+  --accent-glow: rgba(52,211,153,.15);
+  --green:    #34d399;
+  --green-dim: rgba(52,211,153,.1);
+  --red:      #f87171;
+  --red-dim:  rgba(248,113,113,.08);
+  --red-glow: rgba(248,113,113,.12);
+  --yellow:   #fbbf24;
+  --yellow-dim: rgba(251,191,36,.08);
+  --blue:     #60a5fa;
+  --blue-dim: rgba(96,165,250,.1);
+  --blue-glow: rgba(96,165,250,.12);
+  --purple:   #a78bfa;
+  --shadow:   0 4px 24px rgba(0,0,0,.5);
+  --shadow-lg:0 8px 48px rgba(0,0,0,.7);
+  --glow:     0 0 32px rgba(52,211,153,.1);
+  --glass:    rgba(13,17,23,.8);
+  --glass-border: rgba(255,255,255,.06);
+}
+[data-theme="light"] {
+  --bg:       #f4f6fb;
+  --surface:  #ffffff;
+  --surface2: #f8f9fd;
+  --surface3: #eef1f8;
+  --border:   rgba(0,0,0,0.08);
+  --border2:  rgba(0,0,0,0.15);
+  --border-h: rgba(0,0,0,0.20);
+  --text:     #0d1117;
+  --text2:    #4a5568;
+  --text3:    #94a3b8;
+  --accent:   #059669;
+  --accent-d: #047857;
+  --accent-glow: rgba(5,150,105,.12);
+  --green:    #059669;
+  --green-dim: rgba(5,150,105,.08);
+  --red:      #dc2626;
+  --red-dim:  rgba(220,38,38,.06);
+  --red-glow: rgba(220,38,38,.1);
+  --yellow:   #d97706;
+  --yellow-dim: rgba(217,119,6,.06);
+  --blue:     #2563eb;
+  --blue-dim: rgba(37,99,235,.08);
+  --blue-glow: rgba(37,99,235,.1);
+  --purple:   #7c3aed;
+  --shadow:   0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
+  --shadow-lg:0 8px 40px rgba(0,0,0,.10);
+  --glow:     0 0 24px rgba(5,150,105,.12);
+  --glass:    rgba(255,255,255,.85);
+  --glass-border: rgba(0,0,0,.06);
+}
+
+/* ── RESET ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+  overflow-x: hidden;
+}
+[data-theme="dark"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 700px 500px at 10% 0%, rgba(61,255,160,.04) 0%, transparent 70%),
+    radial-gradient(ellipse 600px 400px at 90% 100%, rgba(90,171,255,.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── LAYOUT ─────────────────────────────────────────────────────────── */
+.app { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+
+/* ── SIDEBAR ────────────────────────────────────────────────────────── */
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: background var(--transition);
+}
+.sidebar-top {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.brand-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--accent), var(--blue));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  box-shadow: var(--glow), 0 2px 8px rgba(0,0,0,.2);
+}
+.brand-name {
+  font-family: 'Outfit', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.4px;
+  color: var(--text);
+}
+.brand-sub {
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  margin-left: 42px;
+}
+.nav {
+  flex: 1;
+  padding: 10px 8px;
+  overflow-y: auto;
+}
+.nav-section {
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 12px 8px 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all var(--transition);
+  position: relative;
+  margin-bottom: 2px;
+  user-select: none;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active {
+  background: rgba(5,150,105,.12);
+  color: var(--accent);
+  font-weight: 600;
+}
+[data-theme="dark"] .nav-item.active { box-shadow: inset 0 0 0 1px rgba(61,255,160,.15); }
+.nav-item.active .nav-icon{width:16px;height:16px;flex-shrink:0;opacity:.55;transition:opacity .15s;display:inline-block;vertical-align:middle}
+.nav-icon{width:16px;height:16px;flex-shrink:0;opacity:.55;transition:opacity .15s;display:inline-block;vertical-align:middle}
+.nav-badge {
+  margin-left: auto;
+  background: var(--red);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 20px;
+  min-width: 18px;
+  text-align: center;
+}
+.sidebar-bottom {
+  padding: 12px 8px;
+  border-top: 1px solid var(--border);
+}
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 11px;
+  transition: all var(--transition);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.theme-toggle:hover { border-color: var(--border2); color: var(--text); }
+.toggle-track {
+  width: 34px; height: 18px;
+  border-radius: 9px;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  position: relative;
+  transition: background var(--transition);
+}
+[data-theme="dark"] .toggle-track { background: var(--accent-d); border-color: transparent; }
+.toggle-thumb {
+  width: 12px; height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px; left: 2px;
+  transition: transform var(--transition);
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+[data-theme="dark"] .toggle-thumb { transform: translateX(16px); }
+
+/* ── MAIN ───────────────────────────────────────────────────────────── */
+.main {
+  margin-left: 240px;
+  flex: 1;
+  min-height: 100vh;
+  overflow-y: auto;
+}
+.page { display: none; padding: 32px 40px; animation: pageIn .3s var(--ease); }
+.page.active { display: block; }
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-header { margin-bottom: 28px; }
+.page-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -.6px;
+  color: var(--text);
+}
+.page-sub { font-size: 12px; color: var(--text2); margin-top: 5px; letter-spacing: -.1px; }
+
+/* ── CARDS ──────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  transition: background var(--transition), border-color var(--transition);
+}
+.card:hover { border-color: var(--border2); }
+.card-label {
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+/* ── STAT CARDS ─────────────────────────────────────────────────────── */
+.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition);
+  cursor: default;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.stat-card.green::before { background: linear-gradient(90deg, var(--accent), transparent); }
+.stat-card.blue::before  { background: linear-gradient(90deg, var(--blue), transparent); }
+.stat-card.red::before   { background: linear-gradient(90deg, var(--red), transparent); }
+.stat-card.yellow::before{ background: linear-gradient(90deg, var(--yellow), transparent); }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--border2); }
+.stat-val {
+  font-family: 'Outfit', sans-serif;
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -1.5px;
+}
+.stat-card.green .stat-val { color: var(--accent); }
+.stat-card.blue .stat-val  { color: var(--blue); }
+.stat-card.red .stat-val   { color: var(--red); }
+.stat-card.yellow .stat-val{ color: var(--yellow); }
+.stat-label {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 6px;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* ── BUTTONS ────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition);
+  white-space: nowrap;
+  letter-spacing: -.1px;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-d));
+  color: #051a0e;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px var(--accent-glow), var(--glow);
+  filter: brightness(1.08);
+}
+[data-theme="light"] .btn-primary { color: #fff; }
+[data-theme="light"] .btn-primary:hover { box-shadow: 0 6px 24px var(--accent-glow); }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; filter: none; }
+.btn-outline {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+}
+.btn-outline:hover { color: var(--text); border-color: var(--accent); background: var(--accent-glow); transform: translateY(-1px); }
+.btn-danger {
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid rgba(248,113,113,.15);
+}
+.btn-danger:hover { background: rgba(248,113,113,.16); transform: translateY(-1px); box-shadow: 0 4px 16px var(--red-glow); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid transparent;
+}
+.btn-ghost:hover { background: var(--surface2); color: var(--text); }
+.btn-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
+.btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 8px; }
+
+/* ── FORMS ──────────────────────────────────────────────────────────── */
+label { display: block; font-size: 10px; color: var(--text2); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 6px; font-weight: 600; }
+input, textarea, select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  padding: 10px 13px;
+  border-radius: 8px;
+  outline: none;
+  transition: all var(--transition);
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(61,255,160,.1);
+}
+[data-theme="light"] input:focus, [data-theme="light"] textarea:focus, [data-theme="light"] select:focus {
+  box-shadow: 0 0 0 3px rgba(0,160,96,.1);
+}
+input::placeholder, textarea::placeholder { color: var(--text3); }
+textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+select { cursor: pointer; }
+.field { margin-bottom: 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+/* ── TABLE ──────────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th {
+  padding: 9px 13px;
+  text-align: left;
+  color: var(--text3);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+td { padding: 10px 13px; border-bottom: 1px solid var(--border); transition: background var(--transition); }
+tr:hover td { background: var(--surface2); }
+tr:last-child td { border-bottom: none; }
+.email-cell { color: var(--blue); }
+.route-cell { color: var(--text2); }
+
+/* ── CHIPS ──────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+.chip-sent   { background: rgba(61,255,160,.1);  color: var(--accent); border: 1px solid rgba(61,255,160,.2); }
+.chip-error  { background: rgba(255,92,108,.1);  color: var(--red);    border: 1px solid rgba(255,92,108,.2); }
+.chip-skip   { background: rgba(255,216,77,.07); color: var(--yellow); border: 1px solid rgba(255,216,77,.15); }
+.chip-stop   { background: rgba(255,92,108,.06); color: var(--red);    border: 1px solid rgba(255,92,108,.1); opacity:.7; }
+.chip-dup    { background: var(--surface3);      color: var(--text3);  border: 1px solid var(--border); }
+.chip-today  { background: rgba(255,216,77,.07); color: var(--yellow); border: 1px solid rgba(255,216,77,.15); }
+
+/* ── SEND PAGE ──────────────────────────────────────────────────────── */
+.send-layout { display: grid; grid-template-columns: 1fr 360px; gap: 16px; }
+
+/* ── PARSE BADGES ───────────────────────────────────────────────────── */
+.parse-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.parse-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.badge-new  { background: rgba(61,255,160,.1);  color: var(--accent); border: 1px solid rgba(61,255,160,.2); }
+.badge-skip { background: rgba(255,216,77,.07); color: var(--yellow); border: 1px solid rgba(255,216,77,.15); }
+.badge-stop { background: rgba(255,92,108,.08); color: var(--red);    border: 1px solid rgba(255,92,108,.15); }
+
+/* ── PROGRESS ───────────────────────────────────────────────────────── */
+.progress-wrap { display: none; }
+.progress-wrap.show { display: block; }
+.progress-bar-bg {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  height: 24px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.12);
+  width: 100%;
+}
+.progress-bar-fill {
+  background: linear-gradient(90deg, var(--accent) 0%, #34d399 50%, var(--blue) 100%);
+  background-size: 200% 100%;
+  height: 100%;
+  border-radius: 99px;
+  transition: width .8s cubic-bezier(.4,0,.2,1);
+  box-shadow: 0 0 8px rgba(5,150,105,.35);
+  animation: barShimmer 2.5s ease-in-out infinite;
+}
+@keyframes barShimmer {
+  0%,100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.progress-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 10px; }
+.live-log {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  line-height: 1.6;
+}
+.live-log::-webkit-scrollbar { width: 4px; }
+.live-log::-webkit-scrollbar-track { background: transparent; }
+.live-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.log-row-sent  { color: var(--accent); }
+.log-row-error { color: var(--red); }
+
+/* ── CHART ──────────────────────────────────────────────────────────── */
+.chart-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 140px;
+  padding-bottom: 2px;
+}
+.bar-col { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
+.bar {
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  width: 100%;
+  min-height: 3px;
+  opacity: .6;
+  transition: opacity var(--transition);
+}
+.bar:hover { opacity: 1; }
+.bar-date { font-size: 9px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34px; text-align: center; }
+
+/* ── STOP LIST ──────────────────────────────────────────────────────── */
+.stop-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  transition: border-color var(--transition);
+}
+.stop-item:hover { border-color: var(--border2); }
+.stop-type {
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  font-weight: 700;
+}
+.stop-type-email  { background: rgba(90,171,255,.12); color: var(--blue); }
+.stop-type-domain { background: rgba(255,216,77,.08); color: var(--yellow); }
+.stop-val { flex: 1; font-size: 12px; }
+.stop-del { cursor: pointer; color: var(--text3); font-size: 14px; transition: color var(--transition); line-height: 1; }
+.stop-del:hover { color: var(--red); }
+
+/* ── TEMPLATES ──────────────────────────────────────────────────────── */
+.tmpl-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 10px;
+  transition: border-color var(--transition);
+}
+.tmpl-card:hover { border-color: var(--border2); }
+.tmpl-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.tmpl-num { font-size: 9px; color: var(--accent); letter-spacing: 1.2px; font-weight: 700; text-transform: uppercase; }
+
+/* ── FILTER BAR ─────────────────────────────────────────────────────── */
+.filter-bar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.fbtn {
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  transition: all var(--transition);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  letter-spacing: -.1px;
+}
+.fbtn:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+.fbtn.active {
+  background: var(--surface3);
+  color: var(--text);
+  border-color: var(--border-h);
+  font-weight: 700;
+}
+[data-theme="dark"] .fbtn.active { box-shadow: 0 0 12px rgba(52,211,153,.06); }
+
+/* ── REPLIES ────────────────────────────────────────────────────────── */
+.reply-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:8px; transition:all .2s var(--ease); overflow:hidden; }
+.reply-card:hover { border-color:var(--border2); }
+.reply-card.new { border-top:2px solid var(--red); }
+.reply-card.interested { border-top:2px solid var(--green); }
+.reply-card.not_interested { opacity:.6; }
+.reply-header-row { display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; user-select:none; }
+.reply-header-row:hover { background:var(--surface2); }
+.reply-row:hover td { background:var(--surface2); }
+.reply-row td { border-bottom: 1px solid var(--border); transition: background var(--transition); }
+.reply-chevron { font-size:11px; color:var(--text3); transition:transform .2s; flex-shrink:0; }
+.reply-card.expanded .reply-chevron { transform:rotate(90deg); }
+.reply-header-main { flex:1; min-width:0; }
+.reply-from-inline { font-size:13px; color:var(--blue); font-weight:700; font-family:'DM Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.reply-subject-inline { font-size:11px; color:var(--text2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.reply-body-wrap { padding:0 16px 14px; display:none; }
+.reply-card.expanded .reply-body-wrap { display:block; }
+.reply-body { font-size:12px; color:var(--text2); line-height:1.7; background:var(--surface2); padding:12px 14px; border-radius:var(--radius-sm); margin-bottom:12px; white-space:pre-wrap; max-height:180px; overflow-y:auto; font-family:'DM Mono',monospace; border:1px solid var(--border); }
+
+/* ── ROW ANIMATION ─────────────────────────────────────────────────── */
+@keyframes rowFadeIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.reply-row { animation: rowFadeIn .3s var(--ease) both; }
+.reply-row:nth-child(2) { animation-delay: .02s; }
+.reply-row:nth-child(4) { animation-delay: .04s; }
+.reply-row:nth-child(6) { animation-delay: .06s; }
+.reply-row:nth-child(8) { animation-delay: .08s; }
+.reply-row:nth-child(10) { animation-delay: .1s; }
+
+
+/* ── PIPELINE ─────────────────────────────────────────────────────── */
+.pipeline-tabs { display:flex; gap:8px; margin-bottom:20px; }
+.ptab { padding:7px 16px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text2); transition:all .15s; }
+.ptab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+[data-theme="dark"] .ptab.active { color:#000; }
+
+/* Kanban */
+.kanban-board { display:flex; gap:12px; overflow-x:auto; padding-bottom:12px; }
+.kanban-col { min-width:200px; width:200px; flex-shrink:0; }
+.kanban-col-header { padding:10px 12px; border-radius:8px 8px 0 0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; display:flex; align-items:center; justify-content:space-between; }
+.kanban-col-body { background:var(--surface2); border-radius:0 0 8px 8px; min-height:200px; padding:8px; display:flex; flex-direction:column; gap:6px; border:1px solid var(--border); border-top:none; }
+.kanban-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; cursor:pointer; transition:all .15s; }
+.kanban-card:hover { border-color:var(--border2); box-shadow:var(--shadow); transform:translateY(-1px); }
+.kanban-card-email { font-size:12px; font-weight:600; color:var(--accent); margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kanban-card-route { font-size:10px; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kanban-card-date { font-size:9px; color:var(--text3); margin-top:5px; }
+.kanban-card-deal { font-size:11px; color:var(--accent); font-weight:700; margin-top:4px; }
+.kanban-add-btn { border:1px dashed var(--border2); border-radius:8px; padding:8px; text-align:center; font-size:11px; color:var(--text3); cursor:pointer; transition:all .15s; }
+.kanban-add-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(5,150,105,.05); }
+
+/* List view */
+.pipeline-list-table { width:100%; border-collapse:collapse; }
+.pipeline-list-table th { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--text3); font-weight:700; padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); }
+.pipeline-list-table td { padding:10px 10px; font-size:12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.pipeline-list-table tr:hover td { background:var(--surface2); }
+.stage-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:12px; font-size:10px; font-weight:700; }
+.stage-new_lead  { background:rgba(148,163,184,.15); color:var(--text2); }
+.stage-contacted { background:rgba(96,165,250,.15); color:var(--blue); }
+.stage-replied   { background:rgba(251,191,36,.15); color:var(--yellow); }
+.stage-interested{ background:rgba(52,211,153,.15); color:var(--accent); }
+.stage-deal      { background:rgba(52,211,153,.25); color:var(--accent); }
+.stage-lost      { background:rgba(248,113,113,.12); color:var(--red); }
+
+/* Contact modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:500; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+.modal-box { background:var(--surface); border:1px solid var(--border2); border-radius:16px; width:480px; max-height:85vh; overflow-y:auto; box-shadow:var(--shadow-lg); }
+.modal-header { padding:20px 24px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.modal-title { font-size:16px; font-weight:700; }
+.modal-body { padding:20px 24px; display:flex; flex-direction:column; gap:14px; }
+.modal-field label { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--text3); font-weight:700; margin-bottom:5px; }
+.modal-field input, .modal-field select, .modal-field textarea { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; color:var(--text); font-family:inherit; }
+.modal-field textarea { min-height:80px; resize:vertical; }
+.modal-footer { padding:16px 24px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; }
+
+/* FOLLOWUP CARDS */
+.fu-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:all .2s var(--ease); }
+.fu-card:hover { border-color:var(--border-h); box-shadow: var(--shadow); }
+.fu-check { width:18px; height:18px; flex-shrink:0; cursor:pointer; accent-color:var(--accent); }
+.fu-level { font-size:10px; font-weight:800; padding:4px 12px; border-radius:20px; font-family:'DM Mono',monospace; flex-shrink:0; letter-spacing:.5px; }
+.fu-FU1 { background:var(--blue-dim); color:var(--blue); }
+.fu-FU2 { background:var(--yellow-dim); color:var(--yellow); }
+.fu-FU3 { background:var(--red-dim); color:var(--red); }
+.fu-closed { background:var(--green-dim); color:var(--green); }
+.fu-main { flex:1; min-width:0; }
+.fu-email { font-size:13px; color:var(--blue); font-weight:700; font-family:'DM Mono',monospace; }
+.fu-route { font-size:11px; color:var(--text2); margin-top:3px; }
+.fu-meta { font-size:10px; color:var(--text3); margin-top:3px; font-family:'DM Mono',monospace; }
+.fu-actions { display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; }
+/* ── REPLY ACTION BUTTONS ───────────────────────────────────────────── */
+.reply-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.rbtn {
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  border: 1px solid;
+  transition: all var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rbtn-yes  { background: var(--green-dim); color: var(--accent); border-color: rgba(52,211,153,.15); }
+.rbtn-yes:hover { background: rgba(52,211,153,.2); transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+.rbtn-no   { background: var(--red-dim); color: var(--red); border-color: rgba(248,113,113,.15); }
+.rbtn-no:hover { background: rgba(248,113,113,.18); transform: translateY(-1px); box-shadow: 0 4px 12px var(--red-glow); }
+.rbtn-stop { background: transparent; color: var(--text2); border-color: var(--border2); }
+.rbtn-stop:hover { color: var(--red); border-color: rgba(248,113,113,.2); background: var(--red-dim); }
+.rbtn-reset{ background: transparent; color: var(--text3); border-color: var(--border); font-size: 11px; }
+.rbtn-reset:hover { color: var(--text2); border-color: var(--border2); background: var(--surface2); }
+
+/* ── TOAST UPGRADE ─────────────────────────────────────────────────── */
+.toast {
+  background: var(--glass) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+</style>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js"></script>
+  <style>
+    .ph-icon { display:inline-flex; align-items:center; vertical-align:middle; }
+    .stat-counter { display:flex; align-items:center; gap:10px; padding:10px 0; }
+    .stat-counter-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .stat-counter-val { font-size:20px; font-weight:800; line-height:1; }
+    .stat-counter-label { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--text3); font-weight:600; margin-top:2px; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+        <div class="brand-name">DAT Mailer</div>
+      </div>
+      <div class="brand-sub">Freight Automation</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Workspace</div>
+      <div class="nav-item active" onclick="nav('send',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send
+      </div>
+      <div class="nav-item" onclick="nav('stats',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Statistics
+      </div>
+      <div class="nav-item" onclick="nav('log',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Send Log
+      </div>
+      <div class="nav-item" onclick="nav('replies',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Replies
+        <span id="repliesBadge" class="nav-badge" style="display:none">0</span>
+      </div>
+      <div class="nav-item" onclick="nav('pipeline',this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="6" height="18" rx="1"/><rect x="9" y="8" width="6" height="13" rx="1"/><rect x="16" y="13" width="6" height="8" rx="1"/></svg>
+        Pipeline
+        <span id="pipelineBadge" class="nav-badge">0</span>
+      </div>
+      <div class="nav-item" onclick="nav('followup',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Follow-up
+        <span id="fuBadge" class="nav-badge" style="display:none">0</span>
+      </div>
+      <div class="nav-section">Config</div>
+      <div class="nav-item" onclick="nav('stop',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Stop List
+      </div>
+      <div class="nav-item" onclick="nav('templates',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Templates
+      </div>
+      <div class="nav-item" onclick="nav('settings',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings
+      </div>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="theme-toggle" onclick="toggleTheme()">
+        <span id="themeLabel" style="font-size:11px">Dark mode</span>
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- SEND -->
+    <div class="page active" id="page-send">
+      <div class="page-header">
+        <div class="page-title">Send Emails</div>
+        <div class="page-sub">Paste DAT text → parse → send</div>
+      </div>
+
+      <div class="send-layout">
+        <div>
+          <div class="card">
+            <div class="card-label" style="display:flex;align-items:center;gap:7px"><i class="ph-bold ph-file-text" style="font-size:15px;color:var(--blue)"></i>DAT Text Input</div>
+            <div class="field">
+              <textarea id="datText" placeholder="Paste copied text from DAT One here..." style="min-height:180px" oninput="debounceParse()"></textarea>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="parseDat()"><i class="ph-bold ph-magnifying-glass" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Parse Loads</button>
+              <button class="btn btn-outline" onclick="document.getElementById('datText').value=''">Clear</button>
+            </div>
+          </div>
+          <div id="parseResults" style="display:none">
+            <div class="card">
+              <div class="card-label" style="display:flex;align-items:center;gap:7px"><i class="ph-bold ph-list-checks" style="font-size:15px;color:var(--accent)"></i>Parsed Loads</div>
+              <div class="parse-stats" id="parseStats"></div>
+              <div class="btn-row" id="topSendRow" style="display:none;margin-bottom:8px">
+                <button class="btn btn-primary" onclick="startSend()"><i class="ph-bold ph-paper-plane-tilt" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Send Selected</button>
+                <span id="selectedCountTop" style="font-size:11px;color:var(--text2)"></span>
+              </div>
+              <div class="table-wrap">
+                <table id="loadsTable">
+                  <thead><tr>
+                    <th><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
+                    <th>Email</th><th>Route</th><th>Date</th><th>EQ</th><th>Status</th>
+                  </tr></thead>
+                  <tbody id="loadsBody"></tbody>
+                </table>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" id="sendBtn" onclick="startSend()"><i class="ph-bold ph-paper-plane-tilt" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Send Selected</button>
+                <span id="selectedCount" style="font-size:11px;color:var(--text2)"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="position:sticky;top:24px">
+            <div class="card-label" style="display:flex;align-items:center;gap:7px"><i class="ph-bold ph-activity" style="font-size:15px;color:var(--accent)"></i>Send Progress</div>
+
+            <!-- DAILY STATS -->
+            <div id="dailyStatsBlock" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);display:flex;align-items:center;gap:5px"><i class="ph-bold ph-sun-horizon" style="font-size:13px;color:var(--yellow)"></i>Today</span>
+                <span id="dsDate" style="font-size:10px;color:var(--text3)"></span>
+              </div>
+              <div style="display:flex;gap:0;margin-bottom:12px">
+                <div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid var(--border)">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                    <i class="ph-bold ph-paper-plane-tilt" style="font-size:14px;color:var(--accent)"></i>
+                    <div id="dsSent" style="font-size:22px;font-weight:800;color:var(--accent);line-height:1">0</div>
+                  </div>
+                  <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600">Sent</div>
+                </div>
+                <div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid var(--border)">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                    <i class="ph-bold ph-chat-circle-dots" style="font-size:14px;color:var(--blue)"></i>
+                    <div id="dsReplied" style="font-size:22px;font-weight:800;color:var(--blue);line-height:1">0</div>
+                  </div>
+                  <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600">Replied</div>
+                </div>
+                <div style="flex:1;text-align:center;padding:8px 4px">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                    <i class="ph-bold ph-trend-up" style="font-size:14px;color:var(--yellow)"></i>
+                    <div id="dsConversion" style="font-size:22px;font-weight:800;color:var(--yellow);line-height:1">—</div>
+                  </div>
+                  <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600">Conv%</div>
+                </div>
+              </div>
+              <!-- Target progress -->
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);display:flex;align-items:center;gap:5px"><i class="ph-bold ph-target" style="font-size:13px;color:var(--accent)"></i>Target</span>
+                <span id="dsProgressLabel" style="font-size:11px;font-weight:600;color:var(--text2)">0 / 100</span>
+              </div>
+              <div style="background:var(--surface2);border-radius:99px;height:48px;overflow:hidden;border:1px solid var(--border);box-shadow:inset 0 2px 4px rgba(0,0,0,.15);position:relative">
+                <div id="dsProgressFill" style="height:100%;border-radius:99px;background:linear-gradient(90deg,var(--yellow),var(--accent),var(--blue));background-size:200% 100%;transition:width .8s cubic-bezier(.4,0,.2,1);width:0%;box-shadow:0 0 12px rgba(5,150,105,.4);animation:barShimmer 2.5s ease-in-out infinite;display:flex;align-items:center;justify-content:flex-end;padding-right:10px"></div>
+                <div id="dsProgressPctLabel" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:var(--text);pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.2)">0%</div>
+              </div>
+              <div id="dsMotivation" style="font-size:10px;color:var(--text3);margin-top:5px;text-align:right"></div>
+            </div>
+
+            <div id="progressIdle" style="color:var(--text3);font-size:12px;padding:10px 0;text-align:center">
+              Parse loads and click Send to begin
+            </div>
+            <div class="progress-wrap" id="progressWrap">
+              <div class="progress-info">
+                <span id="progressText">0 / 0</span>
+                <span id="progressPct" style="color:var(--accent)">0%</span>
+              </div>
+              <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+                <div style="background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+                  <div style="width:32px;height:32px;border-radius:8px;background:rgba(5,150,105,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="ph-bold ph-check-circle" style="font-size:18px;color:var(--accent)"></i>
+                  </div>
+                  <div>
+                    <div id="pSent" style="font-size:20px;font-weight:800;color:var(--accent);line-height:1">0</div>
+                    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600;margin-top:2px">Sent</div>
+                  </div>
+                </div>
+                <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+                  <div style="width:32px;height:32px;border-radius:8px;background:rgba(239,68,68,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="ph-bold ph-x-circle" style="font-size:18px;color:var(--red)"></i>
+                  </div>
+                  <div>
+                    <div id="pErr" style="font-size:20px;font-weight:800;color:var(--red);line-height:1">0</div>
+                    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600;margin-top:2px">Errors</div>
+                  </div>
+                </div>
+              </div>
+              <div class="live-log" id="liveLog"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AUTOMATION IMPACT CARD (Send page) -->
+        <div class="card" id="autoImpactSendCard" style="margin-top:12px">
+          <div class="card-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <span style="display:flex;align-items:center;gap:7px">
+              <i class="ph-bold ph-lightning" style="font-size:15px;color:var(--yellow)"></i>
+              Automation Impact
+            </span>
+            <span id="aiSpeedMult" style="background:linear-gradient(135deg,var(--accent),var(--blue));color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px">~4×</span>
+          </div>
+
+          <!-- Today KPI 2×2 -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
+              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px">
+                <i class="ph-bold ph-clock-countdown" style="font-size:11px;color:var(--blue)"></i>Saved Today
+              </div>
+              <div id="aiTimeSavedToday" style="font-size:18px;font-weight:800;color:var(--blue);line-height:1">—</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
+              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px">
+                <i class="ph-bold ph-envelope-simple" style="font-size:11px;color:var(--accent)"></i>Automated
+              </div>
+              <div id="aiEmailsToday" style="font-size:18px;font-weight:800;color:var(--accent);line-height:1">0</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
+              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px">
+                <i class="ph-bold ph-cursor-click" style="font-size:11px;color:var(--yellow)"></i>Actions Saved
+              </div>
+              <div id="aiActionsToday" style="font-size:18px;font-weight:800;color:var(--yellow);line-height:1">0</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
+              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px">
+                <i class="ph-bold ph-rocket-launch" style="font-size:11px;color:var(--red)"></i>Auto Speed
+              </div>
+              <div id="aiSpeedToday" style="font-size:18px;font-weight:800;color:var(--red);line-height:1">—</div>
+            </div>
+          </div>
+
+          <!-- Time comparison bars -->
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:7px">Manual vs Automation — Today</div>
+          <div style="margin-bottom:5px">
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+              <span style="color:var(--text3);display:flex;align-items:center;gap:3px"><i class="ph-bold ph-user" style="font-size:10px"></i>Manual</span>
+              <span id="aiManualBar" style="font-weight:700;color:var(--red)">—</span>
+            </div>
+            <div style="background:rgba(239,68,68,.12);border-radius:99px;height:7px;overflow:hidden;border:1px solid rgba(239,68,68,.15)">
+              <div style="height:100%;background:linear-gradient(90deg,#ef4444,#f87171);border-radius:99px;width:100%"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+              <span style="color:var(--text3);display:flex;align-items:center;gap:3px"><i class="ph-bold ph-lightning" style="font-size:10px;color:var(--accent)"></i>DAT Mailer</span>
+              <span id="aiAutoBar" style="font-weight:700;color:var(--accent)">—</span>
+            </div>
+            <div style="background:rgba(5,150,105,.12);border-radius:99px;height:7px;overflow:hidden;border:1px solid rgba(5,150,105,.15)">
+              <div id="aiAutoBarFill" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));border-radius:99px;width:1%;transition:width .8s ease"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="page" id="page-stats">
+      <div class="page-header">
+        <div class="page-title">Statistics</div>
+        <div class="page-sub">Email send history overview</div>
+      </div>
+
+      <!-- ── AUTOMATION IMPACT ANALYTICS ─────────────────────────────────── -->
+      <div class="card" style="margin-bottom:14px">
+
+        <!-- Header row -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,rgba(250,204,21,.18),rgba(5,150,105,.12));display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="ph-bold ph-lightning" style="font-size:17px;color:var(--yellow)"></i>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:var(--text)">Automation Impact</div>
+            <div style="font-size:11px;color:var(--text3)">DAT Mailer vs manual outreach — real time model</div>
+          </div>
+          <div style="background:linear-gradient(135deg,var(--accent),var(--blue));border-radius:20px;padding:4px 14px;display:flex;align-items:center;gap:6px">
+            <i class="ph-bold ph-lightning" style="font-size:12px;color:#fff"></i>
+            <span id="statsSpeedMult" style="font-size:13px;font-weight:900;color:#fff">~4×</span>
+            <span style="font-size:10px;color:rgba(255,255,255,.8)">faster</span>
+          </div>
+        </div>
+
+        <!-- Period tabs -->
+        <div style="display:flex;gap:5px;margin-bottom:12px">
+          <button class="fbtn active" id="aiTab-lifetime" onclick="setAiTab('lifetime')">Lifetime</button>
+          <button class="fbtn" id="aiTab-week" onclick="setAiTab('week')">This Week</button>
+          <button class="fbtn" id="aiTab-today" onclick="setAiTab('today')">Today</button>
+        </div>
+
+        <!-- KPI grid 3×2 -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px" id="aiKpiGrid"></div>
+
+        <!-- Productivity Impact -->
+        <div id="aiProductivity" style="background:linear-gradient(135deg,rgba(96,165,250,.07),rgba(5,150,105,.05));border:1px solid rgba(96,165,250,.18);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="width:38px;height:38px;border-radius:10px;background:rgba(96,165,250,.14);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="ph-bold ph-user-circle" style="font-size:20px;color:var(--blue)"></i>
+            </div>
+            <div style="flex:1;min-width:140px">
+              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);font-weight:700;margin-bottom:5px">👤 Productivity Impact</div>
+              <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
+                <span style="font-size:11px;color:var(--text2)">You saved</span>
+                <span id="aiHoursSaved" style="font-size:26px;font-weight:900;color:var(--blue);letter-spacing:-0.02em;line-height:1">0</span>
+                <span id="aiHoursUnit" style="font-size:13px;font-weight:700;color:var(--text2)">hours</span>
+                <span style="font-size:11px;color:var(--text2)">of manual work</span>
+              </div>
+              <div style="margin-top:4px;font-size:11px;color:var(--text2)">
+                = <span id="aiWorkDays" style="font-weight:800;color:var(--accent)">0</span> working days
+              </div>
+              <div style="margin-top:3px;font-size:9px;color:var(--text3)">Based on 40s manual email time · 8h workday</div>
+            </div>
+            <div style="text-align:center;min-width:80px">
+              <div id="aiWorkDaysBig" style="font-size:34px;font-weight:900;color:var(--accent);letter-spacing:-0.03em;line-height:1">0</div>
+              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-weight:700;margin-top:3px">Work Days</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Time comparison bars -->
+        <div style="margin-bottom:12px">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:8px">Time Comparison</div>
+          <div style="margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;margin-bottom:3px">
+              <span style="color:var(--text2);display:flex;align-items:center;gap:4px"><i class="ph-bold ph-user" style="font-size:11px;color:var(--red)"></i>Manual outreach</span>
+              <span id="aiStatManualTime" style="color:var(--red)">—</span>
+            </div>
+            <div style="background:rgba(239,68,68,.12);border-radius:99px;height:12px;overflow:hidden;border:1px solid rgba(239,68,68,.18)">
+              <div style="height:100%;background:linear-gradient(90deg,#ef4444,#f87171);border-radius:99px;width:100%;box-shadow:0 0 5px rgba(239,68,68,.25)"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;margin-bottom:3px">
+              <span style="color:var(--text2);display:flex;align-items:center;gap:4px"><i class="ph-bold ph-lightning" style="font-size:11px;color:var(--accent)"></i>DAT Mailer</span>
+              <span id="aiStatAutoTime" style="color:var(--accent)">—</span>
+            </div>
+            <div style="background:rgba(5,150,105,.12);border-radius:99px;height:12px;overflow:hidden;border:1px solid rgba(5,150,105,.18)">
+              <div id="aiStatAutoBarFill" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));border-radius:99px;width:1%;transition:width .8s cubic-bezier(.4,0,.2,1);box-shadow:0 0 5px rgba(5,150,105,.25)"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Best day + peak hour -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <i class="ph-bold ph-trophy" style="font-size:14px;color:var(--yellow)"></i>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3)">Best Day</span>
+            </div>
+            <div id="aiBestDay" style="font-size:13px;font-weight:700;color:var(--text)">—</div>
+            <div id="aiBestDaySub" style="font-size:10px;color:var(--text3);margin-top:2px">—</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <i class="ph-bold ph-clock" style="font-size:14px;color:var(--blue)"></i>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3)">Peak Hour</span>
+            </div>
+            <div id="aiPeakHour" style="font-size:22px;font-weight:800;color:var(--blue);line-height:1">—</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">Most emails sent</div>
+          </div>
+        </div>
+
+        <!-- Daily table -->
+        <div>
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:8px">Daily Breakdown — last 14 days</div>
+          <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;font-size:11px" id="aiDailyTable">
+              <thead>
+                <tr style="background:var(--surface2);border-bottom:1px solid var(--border)">
+                  <th style="padding:7px 10px;text-align:left;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700">Date</th>
+                  <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700">Emails</th>
+                  <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700">Manual</th>
+                  <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700">Auto</th>
+                  <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700">Saved</th>
+                  <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="aiDailyBody">
+                <tr><td colspan="6" style="padding:14px;text-align:center;color:var(--text3);font-size:11px">No data yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-row" id="statsCards"></div>
+      <div id="responseRateBanner" style="display:none;margin-bottom:16px">
+        <div class="card" style="border-color:rgba(61,255,160,.2)">
+          <div class="card-label">Response Rate</div>
+          <div id="responseRateContent"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div class="card">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:16px">📊 Emails Sent — Last 14 Days</div>
+          <div class="chart-wrap" id="chartWrap" style="height:150px"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="card">
+          <div class="card-label">Best sending hours</div>
+          <div class="chart-wrap" id="hourChart" style="gap:2px"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="card">
+          <div class="card-label">Top 10 Recipients</div>
+          <div id="topRecipients"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Top 10 Routes</div>
+          <div id="topRoutes"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="card">
+          <div class="card-label">All Replied Emails <span id="repliedEmailCount" style="color:var(--accent)"></span></div>
+          <div style="max-height:320px;overflow-y:auto" id="repliedEmails"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">All Replied Domains <span id="repliedDomainCount" style="color:var(--accent)"></span></div>
+          <div style="max-height:320px;overflow-y:auto" id="repliedDomains"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Template Usage</div>
+        <div id="variantStats" style="display:flex;gap:12px;flex-wrap:wrap"></div>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div class="page" id="page-log">
+      <div class="page-header">
+        <div class="page-title">Send Log</div>
+        <div class="page-sub" id="logSubtitle">All records</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <input id="logSearch" placeholder="🔍 Search email or route..." style="width:240px" oninput="filterLog()">
+        <select id="logStatus" onchange="filterLog()" style="width:140px">
+          <option value="">All statuses</option>
+          <option value="sent">✅ Sent</option>
+          <option value="error">❌ Error</option>
+        </select>
+        <input id="logDateFrom" type="date" onchange="filterLog()" style="width:148px">
+        <input id="logDateTo" type="date" onchange="filterLog()" style="width:148px">
+        <button class="btn btn-outline btn-sm" onclick="clearLogFilters()">✕ Clear</button>
+        <span id="logCount" style="font-size:11px;color:var(--text2);margin-left:auto"></span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Email</th><th>Route</th><th>Date</th><th>EQ</th><th>Status</th><th>V</th></tr></thead>
+            <tbody id="logBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;align-items:center;justify-content:center" id="logPager"></div>
+    </div>
+
+    <!-- REPLIES -->
+        <!-- REPLIES PAGE -->
+    <div class="page" id="page-replies">
+      <div class="page-header">
+        <div class="page-title">Replies</div>
+        <div class="page-sub">Responses from brokers — auto-refreshes every 2 min</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="repliesSearch" placeholder="🔍 Search email or subject..." style="width:220px;font-size:12px" oninput="renderReplies()">
+          <div class="filter-bar">
+            <button class="fbtn active" id="fb-all" onclick="setFilter('all')">All</button>
+            <button class="fbtn" id="fb-new" onclick="setFilter('new')">🔴 New</button>
+            <button class="fbtn" id="fb-interested" onclick="setFilter('interested')">✅ Interested</button>
+            <button class="fbtn" id="fb-not_interested" onclick="setFilter('not_interested')">❌ Not int.</button>
+          </div>
+          <select id="repliesSort" onchange="renderReplies()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text)">
+            <option value="date_desc">🕐 Newest first</option>
+            <option value="date_asc">🕐 Oldest first</option>
+            <option value="status">📊 By status</option>
+            <option value="email">📧 By email</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span id="fetchStatus" style="font-size:11px;color:var(--text2)"></span>
+          <button class="btn btn-primary" id="fetchBtn" onclick="fetchReplies()"><i class="ph-bold ph-arrows-clockwise" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Check Gmail</button>
+        </div>
+      </div>
+      <div id="repliesList"></div>
+    </div>
+
+    <!-- FOLLOW-UP PAGE -->
+    <div class="page" id="page-followup">
+      <div class="page-header">
+        <div class="page-title">Follow-up</div>
+        <div class="page-sub">Contacts who replied Interested — send follow-ups by level</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="fuSearch" placeholder="🔍 Search email or route..." style="width:220px;font-family:'Syne',sans-serif;font-size:12px" oninput="renderFollowups()">
+          <div class="filter-bar">
+            <button class="fbtn active" id="fuf-all" onclick="setFuFilter('all')">All</button>
+            <button class="fbtn" id="fuf-FU1" onclick="setFuFilter('FU1')">FU1</button>
+            <button class="fbtn" id="fuf-FU2" onclick="setFuFilter('FU2')">FU2</button>
+            <button class="fbtn" id="fuf-FU3" onclick="setFuFilter('FU3')">FU3</button>
+            <button class="fbtn" id="fuf-closed" onclick="setFuFilter('closed')">✓ Closed</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="fuSelectAll()" style="font-size:12px;padding:8px 14px">☑ Select All Pending</button>
+          <button class="btn btn-primary" id="fuAutoBtn" onclick="sendAutoFollowup()"><i class="ph-bold ph-calendar-plus" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Schedule for Tomorrow</button>
+        </div>
+      </div>
+
+      <!-- SCHEDULED BLOCK -->
+      <div id="fuScheduledBlock" style="display:none;background:var(--surface);border:1px solid var(--blue);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin-bottom:10px">📅 Scheduled Follow-ups</div>
+      </div>
+
+      <div id="fuStats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>
+      <div id="followupList"></div>
+    </div>
+
+<div class="page" id="page-stop">
+      <div class="page-header">
+        <div class="page-title">Stop List</div>
+        <div class="page-sub">Blocked emails and domains</div>
+      </div>
+      <div class="card" style="max-width:520px">
+        <div class="card-label">Add New Entry</div>
+        <div class="grid2">
+          <div class="field"><label>Type</label>
+            <select id="stopType"><option value="email">Email</option><option value="domain">Domain</option></select>
+          </div>
+          <div class="field"><label>Value</label>
+            <input id="stopValue" placeholder="bad@example.com or example.com">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addStop()">+ Add to Stop List</button>
+      </div>
+      <div class="card">
+        <div class="card-label">Blocked — <span id="stopCount" style="color:var(--accent)">0</span> entries</div>
+        <div id="stopItems"></div>
+      </div>
+    </div>
+
+    <!-- TEMPLATES -->
+    <div class="page" id="page-templates">
+      <div class="page-header">
+        <div class="page-title">Email Templates</div>
+        <div class="page-sub">Use {origin}, {destination}, {name}, {company}, {phone}, {route}</div>
+      </div>
+
+      <!-- OUTREACH TEMPLATES -->
+      <div style="margin-bottom:32px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">📤 Outreach Templates</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">One is picked randomly per send</div>
+          </div>
+          <button class="btn btn-outline" style="font-size:12px" onclick="addTemplate()">+ Add Template</button>
+        </div>
+        <div id="templatesWrap"></div>
+        <button class="btn btn-primary" onclick="saveTemplates()" style="margin-top:8px">💾 Save Outreach Templates</button>
+      </div>
+
+      <!-- FOLLOW-UP TEMPLATES -->
+      <div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:14px;font-weight:600;color:var(--text)">🔁 Follow-up Templates</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Sent to contacts who replied Interested</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="tmpl-card">
+            <div class="tmpl-header">
+              <span class="tmpl-num" style="background:rgba(59,130,246,.15);color:#60a5fa">FU1 — First Follow-up</span>
+            </div>
+            <textarea id="fu-tmpl-1" style="min-height:130px"></textarea>
+          </div>
+          <div class="tmpl-card">
+            <div class="tmpl-header">
+              <span class="tmpl-num" style="background:rgba(234,179,8,.15);color:#fbbf24">FU2 — Second Follow-up</span>
+            </div>
+            <textarea id="fu-tmpl-2" style="min-height:130px"></textarea>
+          </div>
+          <div class="tmpl-card">
+            <div class="tmpl-header">
+              <span class="tmpl-num" style="background:rgba(239,68,68,.12);color:#f87171">FU3 — Final Follow-up</span>
+            </div>
+            <textarea id="fu-tmpl-3" style="min-height:130px"></textarea>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveFuTemplates()" style="margin-top:12px">💾 Save Follow-up Templates</button>
+      </div>
+    </div>
+
+    
+    <!-- PIPELINE -->
+    <div class="page" id="page-pipeline">
+      <div class="page-header">
+        <div class="page-title">Pipeline</div>
+        <div class="page-sub">CRM воронка — відстежуй кожен контакт від першого листа до deal</div>
+      </div>
+
+      <!-- Stats bar -->
+      <div id="pipelineStats" style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap"></div>
+
+      <!-- Controls -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div class="pipeline-tabs">
+          <div class="ptab active" id="ptab-kanban" onclick="setPipelineView('kanban')">🗂 Kanban</div>
+          <div class="ptab" id="ptab-list" onclick="setPipelineView('list')">☰ List</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="pipelineSearch" placeholder="🔍 Search..." style="width:180px;font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text)" oninput="renderPipeline()">
+          <select id="pipelineStageFilter" onchange="renderPipeline()" style="font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text)">
+            <option value="all">All stages</option>
+            <option value="new_lead">New Lead</option>
+            <option value="contacted">Contacted</option>
+            <option value="replied">Replied</option>
+            <option value="interested">Interested</option>
+            <option value="deal">Deal ✓</option>
+            <option value="lost">Lost</option>
+          </select>
+          <button class="btn btn-primary" style="font-size:12px;padding:7px 14px" onclick="openAddContact()"><i class="ph-bold ph-user-plus" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Add Contact</button>
+        </div>
+      </div>
+
+      <!-- Kanban board -->
+      <div id="pipelineKanban"></div>
+      <!-- List view -->
+      <div id="pipelineListView" style="display:none"></div>
+    </div>
+
+    <!-- Contact Modal -->
+    <div id="contactModal" style="display:none" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box">
+        <div class="modal-header">
+          <div class="modal-title" id="modalTitle">Add Contact</div>
+          <span style="cursor:pointer;font-size:18px;color:var(--text3)" onclick="closeModal()">✕</span>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="modalEmail">
+          <div class="modal-field"><label>Email</label><input id="mEmail" placeholder="contact@company.com"></div>
+          <div class="modal-field"><label>Company</label><input id="mCompany" placeholder="Company name"></div>
+          <div class="modal-field"><label>Route</label><input id="mRoute" placeholder="Laredo, TX → Chicago, IL"></div>
+          <div class="modal-field"><label>Stage</label>
+            <select id="mStage">
+              <option value="new_lead">🔵 New Lead</option>
+              <option value="contacted">📤 Contacted</option>
+              <option value="replied">💬 Replied</option>
+              <option value="interested">⭐ Interested</option>
+              <option value="deal">✅ Deal</option>
+              <option value="lost">❌ Lost</option>
+            </select>
+          </div>
+          <div class="modal-field"><label>Deal Value ($)</label><input id="mDealValue" placeholder="e.g. 2500" type="number"></div>
+          <div class="modal-field"><label>Notes</label><textarea id="mNotes" placeholder="Notes about this contact..."></textarea></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+          <button id="modalDeleteBtn" class="btn" style="background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.3);display:none" onclick="deleteContact()">🗑 Delete</button>
+          <button class="btn btn-primary" onclick="saveContact()">💾 Save</button>
+        </div>
+      </div>
+    </div>
+
+<!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <div class="page-title">Settings</div>
+        <div class="page-sub">Gmail and sender configuration</div>
+      </div>
+      <div style="max-width:520px">
+        <div class="card">
+          <div class="card-label">Gmail Account</div>
+          <div class="field"><label>Gmail Address</label><input id="cfgEmail" placeholder="your@gmail.com"></div>
+          <div class="field"><label>App Password</label><input id="cfgPass" type="password" placeholder="xxxx xxxx xxxx xxxx"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Sender Info</div>
+          <div class="field"><label>Your Name</label><input id="cfgName"></div>
+          <div class="field"><label>Company</label><input id="cfgCompany"></div>
+          <div class="field"><label>Phone</label><input id="cfgPhone"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Delay Between Emails (seconds)</div>
+          <div class="grid2">
+            <div class="field"><label>Minimum</label><input id="cfgDelayMin" type="number" value="20"></div>
+            <div class="field"><label>Maximum</label><input id="cfgDelayMax" type="number" value="45"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-label">Daily Goals</div>
+          <div class="field">
+            <label>Daily Email Target</label>
+            <input id="cfgDailyTarget" type="number" min="1" max="500" placeholder="100">
+            <div style="font-size:11px;color:var(--text3);margin-top:4px">Shown as progress bar on Send page</div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── THEME ────────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.dataset.theme === 'dark';
+  html.dataset.theme = isDark ? 'light' : 'dark';
+  document.getElementById('themeLabel').textContent = isDark ? 'Light mode' : 'Dark mode';
+  localStorage.setItem('theme', html.dataset.theme);
+}
+(function() {
+  const t = localStorage.getItem('theme') || 'dark';
+  document.documentElement.dataset.theme = t;
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark mode' : 'Light mode';
+  });
+})();
+
+// ── NAV ──────────────────────────────────────────────────────────────────────
+function nav(page, el) {
+  // Save send page full state before leaving
+  const datTxt = document.getElementById('datText');
+  if (datTxt && datTxt.value) sessionStorage.setItem('dat_draft', datTxt.value);
+  if (parsedLoads.length) sessionStorage.setItem('dat_loads', JSON.stringify(parsedLoads));
+  // Save checked state
+  const checked = [...document.querySelectorAll('.row-check')].map(cb => cb.checked);
+  if (checked.length) sessionStorage.setItem('dat_checked', JSON.stringify(checked));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  if (el) el.classList.add('active');
+  // Restore send page state when returning
+  if (page === 'send') {
+    loadDailyStats();
+    loadAutomationImpact();
+    const saved = sessionStorage.getItem('dat_draft');
+    if (saved && datTxt && !datTxt.value) datTxt.value = saved;
+    const savedLoads = sessionStorage.getItem('dat_loads');
+    if (savedLoads && !parsedLoads.length) {
+      parsedLoads = JSON.parse(savedLoads);
+      renderLoads(parsedLoads);
+      // Restore checked state
+      const savedChecked = sessionStorage.getItem('dat_checked');
+      if (savedChecked) {
+        const cks = JSON.parse(savedChecked);
+        document.querySelectorAll('.row-check').forEach((cb, i) => { if (cks[i]) cb.checked = true; });
+        updateSelectedCount();
+      }
+    }
+    // Restore progress if send was running
+    if (pollInterval) pollStatus();
+  }
+  if (page === 'stats')     loadStats();
+  if (page === 'log')       loadLog();
+  if (page === 'stop')      loadStop();
+  if (page === 'templates') loadTemplates();
+  if (page === 'settings')  loadSettings();
+  if (page === 'replies')   initReplies();
+  if (page === 'followup')  loadFollowups();
+  if (page === 'pipeline')  loadPipeline();
+}
+
+
+// ── PIPELINE ──────────────────────────────────────────────────────────────────
+let allContacts = [];
+let pipelineView = 'kanban';
+
+const STAGES = [
+  { id:'new_lead',   label:'New Lead',   color:'#94a3b8', emoji:'🔵' },
+  { id:'contacted',  label:'Contacted',  color:'#60a5fa', emoji:'📤' },
+  { id:'replied',    label:'Replied',    color:'#fbbf24', emoji:'💬' },
+  { id:'interested', label:'Interested', color:'#34d399', emoji:'⭐' },
+  { id:'deal',       label:'Deal',       color:'#10b981', emoji:'✅' },
+  { id:'lost',       label:'Lost',       color:'#f87171', emoji:'❌' },
+];
+
+async function loadPipeline() {
+  allContacts = await (await fetch('/api/pipeline')).json();
+  renderPipeline();
+  updatePipelineBadge();
+}
+
+function updatePipelineBadge() {
+  const active = allContacts.filter(c => c.stage !== 'lost' && c.stage !== 'deal').length;
+  const badge = document.getElementById('pipelineBadge');
+  if (badge) { badge.textContent = active; badge.style.display = active > 0 ? 'inline-flex' : 'none'; }
+}
+
+function setPipelineView(v) {
+  pipelineView = v;
+  document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
+  document.getElementById('ptab-' + v).classList.add('active');
+  renderPipeline();
+}
+
+function renderPipeline() {
+  const search = (document.getElementById('pipelineSearch')?.value || '').toLowerCase();
+  const stageF = document.getElementById('pipelineStageFilter')?.value || 'all';
+  let contacts = allContacts.filter(c => {
+    const matchSearch = !search || (c.email||'').toLowerCase().includes(search) || (c.company||'').toLowerCase().includes(search) || (c.route||'').toLowerCase().includes(search);
+    const matchStage = stageF === 'all' || c.stage === stageF;
+    return matchSearch && matchStage;
+  });
+
+  // Stats bar
+  const statsEl = document.getElementById('pipelineStats');
+  if (statsEl) {
+    const now = new Date();
+    const weekAgo = new Date(now - 7*24*60*60*1000);
+    const sevenDaysAgo = new Date(now - 7*24*60*60*1000);
+
+    // Active = not lost/deal
+    const active = allContacts.filter(c => c.stage !== 'lost' && c.stage !== 'deal');
+    const deals = allContacts.filter(c => c.stage === 'deal');
+    const interested = allContacts.filter(c => c.stage === 'interested' || c.stage === 'deal');
+
+    // Pipeline $ (sum of all active deal_value)
+    const pipelineVal = active.reduce(function(sum,c){ return sum + (parseFloat(c.deal_value)||0); }, 0);
+
+    // Won $ this month
+    const wonVal = deals.reduce(function(sum,c){ return sum + (parseFloat(c.deal_value)||0); }, 0);
+
+    // Win rate = deals / (deals + lost) * 100
+    const closed = deals.length + allContacts.filter(c=>c.stage==='lost').length;
+    const winRate = closed > 0 ? Math.round(deals.length / closed * 100) : 0;
+
+    // Stale = active contacts not updated in 7+ days
+    const stale = active.filter(function(c) {
+      const upd = c.updated_at || c.added_at || '';
+      if (!upd) return true;
+      return new Date(upd) < sevenDaysAgo;
+    });
+
+    // New this week
+    const newThisWeek = allContacts.filter(function(c) {
+      const added = c.added_at || '';
+      return added && new Date(added) >= weekAgo;
+    });
+
+    const cards = [
+      { val: active.length, label: 'Active Contacts', color: 'var(--blue)', sub: deals.length + ' deals closed' },
+      { val: pipelineVal > 0 ? '$' + pipelineVal.toLocaleString() : '—', label: 'Pipeline Value', color: 'var(--accent)', sub: wonVal > 0 ? '$' + wonVal.toLocaleString() + ' won' : 'no deal values set' },
+      { val: winRate + '%', label: 'Win Rate', color: winRate >= 30 ? 'var(--accent)' : winRate >= 15 ? 'var(--yellow)' : 'var(--red)', sub: closed + ' closed total' },
+      { val: stale.length, label: 'Stale (7d+)', color: stale.length > 0 ? 'var(--yellow)' : 'var(--accent)', sub: stale.length > 0 ? '⚠️ need follow-up' : '✓ all active', click: stale.length > 0 ? 'filterStale()' : '' },
+      { val: newThisWeek.length, label: 'New This Week', color: 'var(--purple)', sub: 'added last 7 days' },
+    ];
+
+    statsEl.innerHTML = cards.map(function(c) {
+      return '<div onclick="' + (c.click||'') + '" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;min-width:130px;flex:1;' + (c.click ? 'cursor:pointer;' : '') + 'transition:all .15s" ' +
+        '<div style="font-size:24px;font-weight:800;letter-spacing:-0.02em;color:' + c.color + ';line-height:1">' + c.val + '</div>' +
+        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-top:4px">' + c.label + '</div>' +
+        '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + c.sub + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  if (pipelineView === 'kanban') {
+    renderKanban(contacts);
+    document.getElementById('pipelineKanban').style.display = '';
+    document.getElementById('pipelineListView').style.display = 'none';
+  } else {
+    renderList(contacts);
+    document.getElementById('pipelineKanban').style.display = 'none';
+    document.getElementById('pipelineListView').style.display = '';
+  }
+}
+
+function renderKanban(contacts) {
+  const el = document.getElementById('pipelineKanban');
+  let html = '<div class="kanban-board">';
+  STAGES.forEach(function(stage) {
+    const cards = contacts.filter(function(c){ return c.stage === stage.id; });
+    let cardsHtml = cards.map(function(c) {
+      return '<div class="kanban-card" data-email="' + c.email.replace(/"/g,'&quot;') + '" onclick="openEditContactByEmail(this.dataset.email)">' +
+        '<div class="kanban-card-email">' + c.email + '</div>' +
+        (c.company ? '<div style="font-size:10px;color:var(--text2);font-weight:500">' + c.company + '</div>' : '') +
+        (c.route ? '<div class="kanban-card-route">📍 ' + c.route + '</div>' : '') +
+        (c.deal_value ? '<div class="kanban-card-deal">💰 $' + c.deal_value + '</div>' : '') +
+        '<div class="kanban-card-date">' + (c.updated_at||'').slice(0,10) + '</div>' +
+      '</div>';
+    }).join('');
+    html += '<div class="kanban-col">' +
+      '<div class="kanban-col-header" style="background:' + stage.color + '22;color:' + stage.color + '">' +
+        '<span>' + stage.emoji + ' ' + stage.label + '</span>' +
+        '<span style="background:' + stage.color + '33;padding:1px 6px;border-radius:10px;font-size:10px">' + cards.length + '</span>' +
+      '</div>' +
+      '<div class="kanban-col-body">' +
+        cardsHtml +
+        '<div class="kanban-add-btn" data-stage="' + stage.id + '" onclick="openAddContactStage(this.dataset.stage)">+ Add</div>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function renderList(contacts) {
+  const el = document.getElementById('pipelineListView');
+  if (!contacts.length) {
+    el.innerHTML = '<div style="color:var(--text3);padding:40px;text-align:center">No contacts yet</div>';
+    return;
+  }
+  el.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">' +
+    '<table class="pipeline-list-table">' +
+      '<thead><tr>' +
+        '<th>Email</th><th>Company</th><th>Route</th><th>Stage</th><th>Deal $</th><th>Updated</th><th></th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+        contacts.map(c =>
+          '<tr>' +
+            '<td style="color:var(--accent);font-weight:600">' + c.email + '</td>' +
+            '<td style="color:var(--text2)">' + (c.company||'—') + '</td>' +
+            '<td style="color:var(--text3);font-size:11px">' + (c.route||'—') + '</td>' +
+            '<td><span class="stage-badge stage-' + c.stage + '">' + (STAGES.find(s=>s.id===c.stage)||{emoji:'',label:c.stage}).emoji + ' ' + (STAGES.find(s=>s.id===c.stage)||{label:c.stage}).label + '</span></td>' +
+            '<td style="color:var(--accent);font-weight:600">' + (c.deal_value ? '$'+c.deal_value : '—') + '</td>' +
+            '<td style="color:var(--text3)">' + (c.updated_at||'').slice(0,10) + '</td>' +
+            '<td><button class="rbtn rbtn-reset" data-email="' + c.email.replace(/"/g,'&quot;') + '" onclick="openEditContactByEmail(this.dataset.email)">✏️ Edit</button></td>' +
+          '</tr>'
+        ).join('') +
+      '</tbody>' +
+    '</table>' +
+  '</div>';
+}
+
+function openAddContact() { openContactModal(null, 'new_lead'); }
+
+async function addReplyToPipeline(email) {
+  const reply = allReplies.find(r => r.email === email);
+  try {
+    const res = await fetch('/api/pipeline/add', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        email: email,
+        route: reply ? (reply.route||'') : '',
+        company: reply ? (reply.from||'').split('<')[0].trim() : '',
+        stage: 'replied'
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    toast('📋 Added to Pipeline!');
+    if (document.getElementById('page-pipeline').classList.contains('active')) await loadPipeline();
+  } catch(e) {
+    toast('❌ Error: ' + e.message + ' — check that app.py is updated');
+  }
+}
+
+async function addReplyToPipeline(email, route) {
+  await fetch('/api/pipeline/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({email, route, stage: 'replied'})
+  });
+  toast('📋 Added to Pipeline!');
+  await loadPipeline();
+}
+function filterStale() {
+  // Show list view filtered to stale contacts
+  setPipelineView('list');
+  const now = new Date();
+  const sevenDaysAgo = new Date(now - 7*24*60*60*1000);
+  // Highlight stale in list - just scroll to list and show all
+  document.getElementById('pipelineStageFilter').value = 'all';
+  renderPipeline();
+  toast('⚠️ Showing all contacts — stale ones need attention!');
+}
+function openEditContactByEmail(email) {
+  const c = allContacts.find(x => x.email === email);
+  if (c) openContactModal(c, null);
+}
+function openAddContactStage(stage) { openContactModal(null, stage); }
+function openEditContact(cJson) { openContactModal(JSON.parse(cJson), null); }
+
+function openContactModal(contact, defaultStage) {
+  document.getElementById('modalTitle').textContent = contact ? 'Edit Contact' : 'Add Contact';
+  document.getElementById('modalEmail').value = contact ? contact.email : '';
+  document.getElementById('mEmail').value = contact ? contact.email : '';
+  document.getElementById('mEmail').disabled = !!contact;
+  document.getElementById('mCompany').value = contact ? (contact.company||'') : '';
+  document.getElementById('mRoute').value = contact ? (contact.route||'') : '';
+  document.getElementById('mStage').value = contact ? contact.stage : (defaultStage||'new_lead');
+  document.getElementById('mDealValue').value = contact ? (contact.deal_value||'') : '';
+  document.getElementById('mNotes').value = contact ? (contact.notes||'') : '';
+  document.getElementById('modalDeleteBtn').style.display = contact ? 'inline-flex' : 'none';
+  document.getElementById('contactModal').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('contactModal').style.display = 'none';
+}
+
+async function saveContact() {
+  const isEdit = !!document.getElementById('modalEmail').value;
+  const email = isEdit ? document.getElementById('modalEmail').value : document.getElementById('mEmail').value;
+  if (!email || !email.includes('@')) { toast('⚠️ Enter a valid email'); return; }
+  const data = {
+    email: email,
+    company: document.getElementById('mCompany').value,
+    route: document.getElementById('mRoute').value,
+    stage: document.getElementById('mStage').value,
+    deal_value: document.getElementById('mDealValue').value,
+    notes: document.getElementById('mNotes').value,
+  };
+  const url = isEdit ? '/api/pipeline/update' : '/api/pipeline/add';
+  try {
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    closeModal();
+    await loadPipeline();
+    toast('✅ Contact saved!');
+  } catch(e) {
+    toast('❌ Error: ' + e.message);
+  }
+}
+
+async function deleteContact() {
+  const email = document.getElementById('modalEmail').value;
+  if (!confirm('Delete ' + email + ' from pipeline?')) return;
+  await fetch('/api/pipeline/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email})});
+  closeModal();
+  await loadPipeline();
+  toast('🗑 Contact removed');
+}
+
+
+// ── DAILY STATS ──────────────────────────────────────────────────────────────
+let dailyTarget = parseInt(localStorage.getItem('daily_target') || '100');
+
+async function loadDailyStats() {
+  // Always read fresh from localStorage
+  dailyTarget = parseInt(localStorage.getItem('daily_target') || '100');
+  try {
+    const [statsRes, repliesRes] = await Promise.all([
+      fetch('/api/stats'),
+      fetch('/api/replies')
+    ]);
+    const stats = await statsRes.json();
+    const replies = await repliesRes.json();
+
+    const sent = stats.today || 0;
+    const todayStr = new Date().toISOString().slice(0,10);
+    const repliedToday = (replies || []).filter(r =>
+      (r.received_at || r.date || '').slice(0,10) === todayStr
+    ).length;
+    const conversion = sent > 0 ? Math.round(repliedToday / sent * 100) : null;
+
+    // Update date
+    const dsDate = document.getElementById('dsDate');
+    if (dsDate) dsDate.textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+
+    // Update numbers
+    const dsSent = document.getElementById('dsSent');
+    const dsReplied = document.getElementById('dsReplied');
+    const dsConv = document.getElementById('dsConversion');
+    if (dsSent) dsSent.textContent = sent;
+    if (dsReplied) dsReplied.textContent = repliedToday;
+    if (dsConv) {
+      dsConv.textContent = conversion !== null ? conversion + '%' : '—';
+      dsConv.style.color = conversion === null ? 'var(--yellow)'
+        : conversion >= 30 ? 'var(--accent)'
+        : conversion >= 15 ? 'var(--yellow)' : 'var(--red)';
+    }
+
+    // Progress bar
+    const pct = dailyTarget > 0 ? Math.min(100, Math.round(sent / dailyTarget * 100)) : 0;
+    const fill = document.getElementById('dsProgressFill');
+    const label = document.getElementById('dsProgressLabel');
+    const motiv = document.getElementById('dsMotivation');
+
+    if (fill) {
+      fill.style.width = pct + '%';
+      if (pct >= 100) fill.style.background = 'linear-gradient(90deg,var(--accent),#34d399)';
+      else if (pct >= 60) fill.style.background = 'linear-gradient(90deg,var(--blue),var(--accent))';
+      else fill.style.background = 'linear-gradient(90deg,var(--yellow),var(--blue))';
+    }
+    const pctLabel = document.getElementById('dsProgressPctLabel');
+    if (pctLabel) {
+      pctLabel.textContent = pct + '%';
+      pctLabel.style.color = pct > 40 ? '#fff' : 'var(--text)';
+    }
+    if (label) label.textContent = sent + ' / ' + dailyTarget;
+
+    const remaining = Math.max(0, dailyTarget - sent);
+    if (motiv) {
+      if (pct >= 100) motiv.innerHTML = '<i class="ph-bold ph-trophy" style="color:var(--accent);margin-right:4px"></i>Target reached!';
+      else if (pct >= 75) motiv.innerHTML = '<i class="ph-bold ph-rocket-launch" style="color:var(--blue);margin-right:4px"></i>Almost there! ' + remaining + ' to go';
+      else if (pct >= 50) motiv.innerHTML = '<i class="ph-bold ph-fire" style="color:var(--yellow);margin-right:4px"></i>Halfway! ' + remaining + ' left';
+      else if (sent > 0) motiv.innerHTML = '<i class="ph-bold ph-target" style="color:var(--text3);margin-right:4px"></i>' + remaining + ' emails left to hit target';
+      else motiv.innerHTML = '<i class="ph-bold ph-flag" style="color:var(--text3);margin-right:4px"></i>Target: ' + dailyTarget + ' emails today';
+    }
+  } catch(e) { console.error('loadDailyStats:', e); }
+}
+
+function editDailyTarget() {
+  nav('settings', document.querySelector('.nav-item[onclick*=settings]'));
+  setTimeout(() => toast('💡 Change Daily Target in Settings'), 300);
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────────────
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' error' : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── PARSE ────────────────────────────────────────────────────────────────────
+let parsedLoads = [];
+let _parseTimer = null;
+function debounceParse() {
+  const text = document.getElementById('datText').value.trim();
+  if (!text || text.length < 20) return; // ignore tiny input
+  clearTimeout(_parseTimer);
+  _parseTimer = setTimeout(() => parseDat(), 600); // 600ms debounce
+}
+
+async function parseDat() {
+  const text = document.getElementById('datText').value.trim();
+  if (!text) { toast('Paste DAT text first', true); return; }
+  const res = await fetch('/api/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text})});
+  const data = await res.json();
+  parsedLoads = data.loads;
+  sessionStorage.removeItem('dat_loads');
+  sessionStorage.removeItem('dat_checked');
+  renderParseResults(data);
+  document.getElementById('parseResults').style.display = 'block';
+}
+
+function renderParseResults(data) {
+  const {loads, stats} = data;
+
+  // Rich parse stats block
+  const total = loads.length;
+  const withEmail = loads.filter(l => l.email && l.email.includes('@')).length;
+  const emailPct = total > 0 ? Math.round(withEmail / total * 100) : 0;
+  const newCount = stats.new || 0;
+  const dupCount = (stats.skip_dup || 0) + (stats.skip_today || 0);
+  const blockedCount = stats.skip_stop || 0;
+
+  document.getElementById('parseStats').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+      <div style="background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.2);border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <i class="ph-bold ph-check-circle" style="font-size:15px;color:var(--accent)"></i>
+          <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700">New</span>
+        </div>
+        <div style="font-size:22px;font-weight:800;color:var(--accent);line-height:1">${newCount}</div>
+      </div>
+      <div style="background:rgba(250,204,21,.07);border:1px solid rgba(250,204,21,.2);border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <i class="ph-bold ph-copy" style="font-size:15px;color:var(--yellow)"></i>
+          <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700">Duplicate</span>
+        </div>
+        <div style="font-size:22px;font-weight:800;color:var(--yellow);line-height:1">${dupCount}</div>
+      </div>
+      <div style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <i class="ph-bold ph-prohibit" style="font-size:15px;color:var(--red)"></i>
+          <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700">Blocked</span>
+        </div>
+        <div style="font-size:22px;font-weight:800;color:var(--red);line-height:1">${blockedCount}</div>
+      </div>
+      <div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <i class="ph-bold ph-envelope" style="font-size:15px;color:var(--blue)"></i>
+          <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700">% w/ Email</span>
+        </div>
+        <div style="font-size:22px;font-weight:800;color:var(--blue);line-height:1">${emailPct}<span style="font-size:13px;font-weight:600;opacity:.7">%</span></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:5px">
+        <i class="ph-bold ph-rows" style="font-size:13px"></i>Loads Parsed
+      </span>
+      <span style="font-size:11px;font-weight:700;color:var(--text2)">${total} total · ${withEmail} with email</span>
+    </div>
+    <div style="background:var(--surface2);border-radius:99px;height:8px;overflow:hidden;border:1px solid var(--border)">
+      <div style="height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--blue));width:${emailPct}%;transition:width .6s ease"></div>
+    </div>
+  `;
+  document.getElementById('loadsBody').innerHTML = loads.map((l, i) => {
+    const sc = l.skip === 'stop_list' ? 'chip-stop' : l.skip === 'today' ? 'chip-today' : l.skip === 'duplicate' ? 'chip-dup' : 'chip-sent';
+    const sl = l.skip === 'stop_list' ? '🚫 blocked' : l.skip === 'today' ? '⊘ today' : l.skip === 'duplicate' ? '⊘ dup' : '✓ new';
+    return `<tr>
+      <td><input type="checkbox" class="row-check" data-idx="${i}" ${l.skip ? '' : 'checked'} ${l.skip ? 'disabled' : ''}></td>
+      <td class="email-cell">${l.email}</td>
+      <td class="route-cell">${l.origin} → ${l.destination}</td>
+      <td style="color:var(--text2)">${l.date}</td>
+      <td style="color:var(--text2)">${l.equip}</td>
+      <td><span class="chip ${sc}">${sl}</span></td>
+    </tr>`;
+  }).join('');
+  updateSelectedCount();
+  document.querySelectorAll('.row-check').forEach(cb => cb.addEventListener('change', updateSelectedCount));
+}
+function toggleAll(cb) {
+  document.querySelectorAll('.row-check:not(:disabled)').forEach(c => c.checked = cb.checked);
+  updateSelectedCount();
+}
+function updateSelectedCount() {
+  const n = document.querySelectorAll('.row-check:checked').length;
+  const txt = n + ' selected';
+  document.getElementById('selectedCount').textContent = txt;
+  const topEl = document.getElementById('selectedCountTop');
+  if (topEl) topEl.textContent = txt;
+  // Show/hide top button based on whether loads exist
+  const topRow = document.getElementById('topSendRow');
+  if (topRow) topRow.style.display = document.querySelectorAll('.row-check').length > 0 ? '' : 'none';
+}
+
+// ── SEND ─────────────────────────────────────────────────────────────────────
+let pollInterval = null;
+async function startSend() {
+  const checked = [...document.querySelectorAll('.row-check:checked')].map(cb => parseInt(cb.dataset.idx));
+  if (!checked.length) { toast('Select at least one load', true); return; }
+  const loads = checked.map(i => parsedLoads[i]).filter(l => !l.skip);
+  if (!loads.length) { toast('No valid loads selected', true); return; }
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('progressIdle').style.display = 'none';
+  document.getElementById('progressWrap').classList.add('show');
+  document.getElementById('liveLog').innerHTML = '';
+  const res = await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loads})});
+  const data = await res.json();
+  if (!data.ok) { toast(data.error, true); document.getElementById('sendBtn').disabled = false; return; }
+  pollInterval = setInterval(pollStatus, 1500);
+}
+async function pollStatus() {
+  const s = await (await fetch('/api/send-status')).json();
+  const pct = s.total ? Math.round(100 * s.current / s.total) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = `${s.current} / ${s.total}`;
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('pSent').textContent = s.sent;
+  document.getElementById('pErr').textContent = s.errors;
+  document.getElementById('liveLog').innerHTML = s.log.slice(-20).reverse().map(r =>
+    `<div class="log-row-${r.status}" style="display:flex;align-items:center;gap:6px;padding:3px 0">
+      <i class="ph-bold ${r.status === 'sent' ? 'ph-check-circle' : 'ph-x-circle'}" style="font-size:13px;flex-shrink:0"></i>
+      <span style="color:var(--text3);font-size:10px">${r.time}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.email}</span>
+      ${r.error ? '<span style="font-size:10px;opacity:.7">'+r.error+'</span>' : ''}
+    </div>`
+  ).join('');
+  if (s.done) {
+    clearInterval(pollInterval);
+    document.getElementById('sendBtn').disabled = false;
+    toast(`Done! Sent: ${s.sent}, Errors: ${s.errors}`);
+    loadDailyStats();
+  }
+}
+
+// ── STATS ────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  loadAutomationImpact();
+  const s = await (await fetch('/api/stats')).json();
+  document.getElementById('statsCards').innerHTML = `
+    <div class="stat-card green"><div class="stat-val">${s.sent}</div><div class="stat-label">Total Sent</div></div>
+    <div class="stat-card blue"><div class="stat-val">${s.today}</div><div class="stat-label">Sent Today</div></div>
+    <div class="stat-card red"><div class="stat-val">${s.errors}</div><div class="stat-label">Errors</div></div>
+    <div class="stat-card yellow"><div class="stat-val">${s.total}</div><div class="stat-label">Log Records</div></div>`;
+
+  const maxD = Math.max(...s.by_day.map(d => d.count), 1);
+  document.getElementById('chartWrap').innerHTML = s.by_day.length
+    ? s.by_day.map(d => `<div class="bar-col" title="${d.date}: ${d.count} emails">
+        <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px;text-align:center">${d.count > 0 ? d.count : ''}</div>
+        <div class="bar" style="height:${Math.max(4,Math.round(110*d.count/maxD))}px;border-radius:4px 4px 0 0"></div>
+        <div class="bar-date">${d.date.slice(5)}</div></div>`).join('')
+    : '<div style="color:var(--text3);font-size:12px;padding:20px 0">No data yet</div>';
+
+  const maxH = Math.max(...s.by_hour.map(h => h.count), 1);
+  document.getElementById('hourChart').innerHTML = s.by_hour.map(h =>
+    `<div class="bar-col" title="${h.hour}: ${h.count}">
+      <div class="bar" style="height:${Math.max(h.count>0?4:2,Math.round(72*h.count/maxH))}px;opacity:${h.count>0?.75:.15};background:var(--blue)"></div>
+      <div class="bar-date" style="font-size:8px">${h.hour.slice(0,2)}</div>
+    </div>`).join('');
+
+  document.getElementById('variantStats').innerHTML = s.by_variant.map(v =>
+    `<div style="background:var(--surface2);border:1px solid var(--border);padding:12px 18px;border-radius:10px">
+      <div style="color:var(--accent);font-family:'Syne',sans-serif;font-size:22px;font-weight:700">${v.count}</div>
+      <div style="color:var(--text2);font-size:10px;margin-top:3px;text-transform:uppercase;letter-spacing:.5px">Template ${v.variant}</div>
+    </div>`).join('') || '<div style="color:var(--text3);font-size:12px">No data yet</div>';
+
+  const renderTopList = (items, keyField, valueColor) =>
+    items.length
+    ? items.map((r,i) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:10px;color:var(--text3);width:18px;text-align:right">${i+1}</span>
+          <span style="font-size:12px;color:${valueColor}">${r[keyField]}</span>
+        </div>
+        <span style="font-size:11px;font-weight:600;color:var(--accent)">${r.count}</span>
+      </div>`).join('')
+    : '<div style="color:var(--text3);font-size:12px;padding:8px 0">No data yet</div>';
+
+  document.getElementById('topRecipients').innerHTML = renderTopList(s.top_recipients, 'email', 'var(--blue)');
+  document.getElementById('topRoutes').innerHTML     = renderTopList(s.top_routes, 'route', 'var(--text2)');
+
+  const replied = s.replied_emails || [];
+  document.getElementById('repliedEmailCount').textContent = replied.length ? `(${replied.length})` : '';
+  document.getElementById('repliedEmails').innerHTML = replied.length
+    ? replied.map(r => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px">${r.status==='interested'?'✅':r.status==='not_interested'?'❌':'🔴'}</span>
+          <span style="font-size:12px;color:var(--blue)">${r.email}</span>
+        </div>
+        <span style="font-size:11px;color:var(--text2)">${r.count}</span>
+      </div>`).join('')
+    : '<div style="color:var(--text3);font-size:12px;padding:8px 0">No replies yet</div>';
+
+  const domains = s.replied_domains || [];
+  document.getElementById('repliedDomainCount').textContent = domains.length ? `(${domains.length})` : '';
+  document.getElementById('repliedDomains').innerHTML = domains.length
+    ? domains.map(d => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--yellow)">@${d.domain}</span>
+        <span style="font-size:11px;color:var(--text2)">${d.count}</span>
+      </div>`).join('')
+    : '<div style="color:var(--text3);font-size:12px;padding:8px 0">No replies yet</div>';
+
+  const rr = s.response_rate || {};
+  if (rr.total_replies > 0) {
+    document.getElementById('responseRateBanner').style.display = 'block';
+    document.getElementById('responseRateContent').innerHTML = `
+      <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center">
+        <div><span style="font-size:32px;font-weight:800;font-family:'Syne',sans-serif;color:var(--accent)">${rr.pct}%</span>
+          <span style="font-size:11px;color:var(--text2);margin-left:8px">of sent got a reply</span></div>
+        <div style="display:flex;gap:20px">
+          <div><div style="font-size:22px;font-weight:700;color:var(--accent)">${rr.interested}</div><div style="font-size:10px;color:var(--text2);text-transform:uppercase">Interested</div></div>
+          <div><div style="font-size:22px;font-weight:700;color:var(--red)">${rr.not_interested}</div><div style="font-size:10px;color:var(--text2);text-transform:uppercase">Not interested</div></div>
+          <div><div style="font-size:22px;font-weight:700;color:var(--text2)">${rr.new}</div><div style="font-size:10px;color:var(--text2);text-transform:uppercase">Unread</div></div>
+          <div><div style="font-size:22px;font-weight:700;color:var(--blue)">${rr.total_replies}</div><div style="font-size:10px;color:var(--text2);text-transform:uppercase">Total</div></div>
+        </div>
+      </div>`;
+  }
+}
+
+// ── LOG ──────────────────────────────────────────────────────────────────────
+let allLogRows = [], filteredLogRows = [], logPage = 1;
+const LOG_PER_PAGE = 100;
+
+async function loadLog() {
+  allLogRows = await (await fetch('/api/log')).json();
+  logPage = 1; filterLog();
+}
+function clearLogFilters() {
+  ['logSearch','logDateFrom','logDateTo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('logStatus').value = '';
+  filterLog();
+}
+function filterLog() {
+  const search   = document.getElementById('logSearch').value.toLowerCase();
+  const status   = document.getElementById('logStatus').value;
+  const dateFrom = document.getElementById('logDateFrom').value;
+  const dateTo   = document.getElementById('logDateTo').value;
+  filteredLogRows = allLogRows.filter(r => {
+    if (search && !(r.email||'').toLowerCase().includes(search) && !(r.origin||'').toLowerCase().includes(search) && !(r.destination||'').toLowerCase().includes(search)) return false;
+    if (status && r.status !== status) return false;
+    const day = (r.timestamp||'').slice(0,10);
+    if (dateFrom && day < dateFrom) return false;
+    if (dateTo && day > dateTo) return false;
+    return true;
+  });
+  logPage = 1; renderLog();
+}
+function renderLog() {
+  const total = filteredLogRows.length, pages = Math.ceil(total / LOG_PER_PAGE);
+  const start = (logPage - 1) * LOG_PER_PAGE;
+  const slice = filteredLogRows.slice(start, start + LOG_PER_PAGE);
+  document.getElementById('logCount').textContent = total + ' records' + (total !== allLogRows.length ? ` (filtered from ${allLogRows.length})` : '');
+  document.getElementById('logSubtitle').textContent = `All ${allLogRows.length} records`;
+  document.getElementById('logBody').innerHTML = slice.map(r =>
+    `<tr>
+      <td style="color:var(--text2);white-space:nowrap">${r.timestamp||''}</td>
+      <td class="email-cell">${r.email||''}</td>
+      <td class="route-cell">${r.origin||''} → ${r.destination||''}</td>
+      <td style="color:var(--text2)">${r.date||''}</td>
+      <td style="color:var(--text2)">${r.equip||''}</td>
+      <td><span class="chip ${r.status==='sent'?'chip-sent':'chip-error'}">${r.status||''}</span></td>
+      <td style="color:var(--text2)">${r.variant||''}</td>
+    </tr>`).join('') || '<tr><td colspan="7" style="color:var(--text3);text-align:center;padding:28px">No records</td></tr>';
+  if (pages <= 1) { document.getElementById('logPager').innerHTML = ''; return; }
+  let p = '';
+  if (logPage > 1) p += `<button class="btn btn-outline btn-sm" onclick="logPage--;renderLog()">← Prev</button>`;
+  p += `<span style="font-size:11px;color:var(--text2);padding:0 12px">Page ${logPage} / ${pages}</span>`;
+  if (logPage < pages) p += `<button class="btn btn-outline btn-sm" onclick="logPage++;renderLog()">Next →</button>`;
+  document.getElementById('logPager').innerHTML = p;
+}
+
+// ── STOP LIST ────────────────────────────────────────────────────────────────
+let stopEntries = [];
+async function loadStop() {
+  stopEntries = await (await fetch('/api/stop-list')).json();
+  renderStop();
+}
+function renderStop() {
+  document.getElementById('stopCount').textContent = stopEntries.length;
+  document.getElementById('stopItems').innerHTML = stopEntries.length
+    ? stopEntries.map((e,i) => `<div class="stop-item">
+        <span class="stop-type stop-type-${e.type}">${e.type}</span>
+        <span class="stop-val">${e.value}</span>
+        <span class="stop-del" onclick="removeStop(${i})">✕</span>
+      </div>`).join('')
+    : '<div style="color:var(--text3);font-size:12px;padding:8px 0">No blocked entries yet</div>';
+}
+async function addStop() {
+  const type = document.getElementById('stopType').value;
+  const value = document.getElementById('stopValue').value.trim().toLowerCase();
+  if (!value) { toast('Enter a value', true); return; }
+  stopEntries.push({type, value});
+  await fetch('/api/stop-list', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({entries: stopEntries})});
+  document.getElementById('stopValue').value = '';
+  renderStop(); toast('Added to stop list');
+}
+async function removeStop(i) {
+  stopEntries.splice(i, 1);
+  await fetch('/api/stop-list', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({entries: stopEntries})});
+  renderStop(); toast('Removed');
+}
+
+// ── TEMPLATES ────────────────────────────────────────────────────────────────
+let templates = [];
+async function loadTemplates() {
+  templates = await (await fetch('/api/templates')).json();
+  renderTemplates();
+  // Load FU templates
+  try {
+    const fuData = await (await fetch('/api/fu-templates')).json();
+    document.getElementById('fu-tmpl-1').value = fuData.FU1 || '';
+    document.getElementById('fu-tmpl-2').value = fuData.FU2 || '';
+    document.getElementById('fu-tmpl-3').value = fuData.FU3 || '';
+  } catch(e) {}
+}
+function renderTemplates() {
+  document.getElementById('templatesWrap').innerHTML = templates.map((t,i) =>
+    `<div class="tmpl-card">
+      <div class="tmpl-header">
+        <span class="tmpl-num">Template ${i+1}</span>
+        <span class="stop-del" onclick="removeTemplate(${i})">✕</span>
+      </div>
+      <textarea id="tmpl-${i}" style="min-height:140px">${t}</textarea>
+    </div>`).join('');
+}
+function addTemplate() {
+  templates.push("Hello,\n\nAre you still working on this load?\n\nThanks,\n{name}\n{company} | {phone}");
+  renderTemplates();
+}
+function removeTemplate(i) {
+  if (templates.length <= 1) { toast('Keep at least 1 template', true); return; }
+  templates.splice(i, 1); renderTemplates();
+}
+async function saveTemplates() {
+  templates = templates.map((_,i) => document.getElementById('tmpl-'+i).value);
+  await fetch('/api/templates', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({templates})});
+  toast('✅ Outreach templates saved!');
+}
+
+async function saveFuTemplates() {
+  const fu = {
+    FU1: document.getElementById('fu-tmpl-1').value,
+    FU2: document.getElementById('fu-tmpl-2').value,
+    FU3: document.getElementById('fu-tmpl-3').value,
+  };
+  await fetch('/api/fu-templates', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fu)});
+  toast('✅ Follow-up templates saved!');
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────────────────────
+async function loadSettings() {
+  const cfg = await (await fetch('/api/config')).json();
+  document.getElementById('cfgEmail').value    = cfg.gmail_address || '';
+  document.getElementById('cfgPass').placeholder = cfg.has_password ? '••••••••••••••••' : 'xxxx xxxx xxxx xxxx';
+  document.getElementById('cfgName').value     = cfg.your_name || '';
+  document.getElementById('cfgCompany').value  = cfg.your_company || '';
+  document.getElementById('cfgPhone').value    = cfg.your_phone || '';
+  document.getElementById('cfgDelayMin').value = cfg.delay_min || 20;
+  document.getElementById('cfgDelayMax').value = cfg.delay_max || 45;
+  document.getElementById('cfgDailyTarget').value = localStorage.getItem('daily_target') || 100;
+}
+async function saveSettings() {
+  const data = {
+    gmail_address: document.getElementById('cfgEmail').value,
+    your_name:     document.getElementById('cfgName').value,
+    your_company:  document.getElementById('cfgCompany').value,
+    your_phone:    document.getElementById('cfgPhone').value,
+    delay_min: parseInt(document.getElementById('cfgDelayMin').value),
+    delay_max: parseInt(document.getElementById('cfgDelayMax').value),
+  };
+  const pass = document.getElementById('cfgPass').value;
+  if (pass && !pass.startsWith('•')) data.gmail_app_password = pass;
+  await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+  // Save daily target to localStorage
+  const targetVal = parseInt(document.getElementById('cfgDailyTarget').value);
+  if (targetVal > 0) {
+    dailyTarget = targetVal;
+    localStorage.setItem('daily_target', targetVal);
+  }
+  toast('✅ Settings saved!');
+  loadDailyStats();
+}
+
+// ── REPLIES ──────────────────────────────────────────────────────────────────
+// ── REPLIES ────────────────────────────────────────────────────────────────
+let allReplies = [], repliesFilter = 'all', repliesTimer = null;
+
+async function initReplies() {
+  await loadReplies();
+  if (!repliesTimer) repliesTimer = setInterval(() => fetchReplies(true), 120000);
+}
+async function loadReplies() {
+  allReplies = await (await fetch('/api/replies')).json();
+  renderReplies(); updateBadge();
+}
+function updateBadge() {
+  const n = allReplies.filter(r => r.status === 'new').length;
+  const b = document.getElementById('repliesBadge');
+  b.textContent = n; b.style.display = n > 0 ? 'inline' : 'none';
+}
+function setFilter(f) {
+  repliesFilter = f;
+  document.querySelectorAll('.fbtn').forEach(el => el.classList.remove('active'));
+  const btn = document.getElementById('fb-' + f);
+  if (btn) btn.classList.add('active');
+  renderReplies();
+}
+async function fetchReplies(silent) {
+  const btn = document.getElementById('fetchBtn');
+  const st  = document.getElementById('fetchStatus');
+  if (!silent) { btn.disabled = true; st.textContent = 'Checking Gmail...'; }
+  try {
+    const data = await (await fetch('/api/replies/fetch', {method:'POST'})).json();
+    if (data.error) { st.textContent = '⚠️ ' + data.error; }
+    else {
+      st.textContent = data.new > 0 ? `✅ ${data.new} new!` : 'Up to date';
+      if (data.new > 0) toast(data.new + ' new replies!');
+      await loadReplies();
+    }
+  } catch(e) { st.textContent = 'Error'; }
+  btn.disabled = false;
+}
+function setSortReplies(val) {
+  const el = document.getElementById('repliesSort');
+  if (el) { el.value = val; renderReplies(); }
+}
+
+function parseReplyDate(r) {
+  return new Date(r.received_at || r.date || '2000-01-01');
+}
+
+function renderReplies() {
+  const search = (document.getElementById('repliesSearch')?.value || '').toLowerCase();
+  const sortBy = document.getElementById('repliesSort')?.value || 'date_desc';
+  let list = repliesFilter === 'all' ? allReplies : allReplies.filter(r => r.status === repliesFilter);
+  if (search) list = list.filter(r =>
+    (r.email||'').toLowerCase().includes(search) ||
+    (r.subject||'').toLowerCase().includes(search) ||
+    (r.route||'').toLowerCase().includes(search)
+  );
+
+  // Group by email, sort groups by latest date, sort threads within group by date
+  const groups = {};
+  list.forEach(r => {
+    const key = (r.email||'').toLowerCase();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+  // Sort threads within each group newest first
+  Object.values(groups).forEach(g => g.sort((a,b) => parseReplyDate(b) - parseReplyDate(a)));
+  // Sort groups by their latest thread
+  let groupList = Object.values(groups).sort((a,b) => parseReplyDate(b[0]) - parseReplyDate(a[0]));
+  
+  // Apply secondary sort
+  if (sortBy === 'date_asc') {
+    groupList = Object.values(groups).sort((a,b) => parseReplyDate(a[0]) - parseReplyDate(b[0]));
+    groupList.forEach(g => g.sort((a,b) => parseReplyDate(a) - parseReplyDate(b)));
+  } else if (sortBy === 'status') {
+    const order = {new:0, interested:1, not_interested:2};
+    const bestStatus = g => Math.min(...g.map(r => order[r.status]||0));
+    groupList.sort((a,b) => bestStatus(a) - bestStatus(b));
+  } else if (sortBy === 'email') {
+    groupList.sort((a,b) => (a[0].email||'').localeCompare(b[0].email||''));
+  }
+  // Flatten back for table rendering but keep groups together
+  list = groupList.flat();
+  const el = document.getElementById('repliesList');
+  if (!list.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:48px 0;text-align:center">' +
+      (repliesFilter === 'all' && !search ? "No replies yet — click Check Gmail to load" : 'No replies found') +
+      '</div>'; return;
+  }
+
+  const thStyle = 'padding:10px 12px;font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;user-select:none';
+  const thStyleCenter = thStyle + ';text-align:center';
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+    '<thead><tr style="border-bottom:2px solid var(--border);text-align:left">' +
+    '<th style="' + thStyle + '" onclick="setSortReplies(\'email\')" >↕ From</th>' +
+    '<th style="' + thStyle + '">Subject / Route</th>' +
+    '<th style="' + thStyle + '" onclick="setSortReplies(\'date_desc\')">Date ↕</th>' +
+    '<th style="' + thStyle + '" onclick="setSortReplies(\'status\')">Status ↕</th>' +
+    '<th style="' + thStyleCenter + '">Actions</th>' +
+    '</tr></thead><tbody>';
+
+  let lastEmail = null;
+  html += list.map(r => {
+    const sid = 'sid_' + r.msg_id.replace(/[^a-zA-Z0-9]/g,'_');
+    const showEmailHeader = r.email !== lastEmail;
+    lastEmail = r.email;
+    const groupHeaderRow = showEmailHeader
+      ? '<tr style="background:var(--surface2)"><td colspan="5" style="padding:8px 12px 4px;font-size:11px;font-weight:700;color:var(--text2);border-top:2px solid var(--border)">' +
+        '📧 ' + r.email + '</td></tr>'
+      : '';
+    const badge = r.status === 'new'
+      ? '<span class="chip chip-error" style="font-size:10px">🔴 New</span>'
+      : r.status === 'interested'
+      ? '<span class="chip chip-sent" style="font-size:10px">✅ Interested</span>'
+      : '<span class="chip chip-dup" style="font-size:10px">❌ Not int.</span>';
+
+    const eSafe = r.email.replace(/'/g,'');
+    const pipeBtn = '<button class="rbtn" style="background:rgba(96,165,250,.1);color:var(--blue);border-color:rgba(96,165,250,.3)" onclick="event.stopPropagation();addReplyToPipeline(\'' + eSafe + '\')" title="Add to Pipeline">📋</button>';
+    let actionBtns = '';
+    if (r.status === 'new') {
+      actionBtns =
+        '<button class="rbtn rbtn-yes" onclick="event.stopPropagation();markR(\'' + sid + '\',\'interested\')" title="Interested">✅</button>' +
+        '<button class="rbtn rbtn-no" onclick="event.stopPropagation();markR(\'' + sid + '\',\'not_interested\')" title="Not Interested">❌</button>' +
+        '<button class="rbtn rbtn-stop" onclick="event.stopPropagation();markRStop(\'' + sid + '\')" title="Not Interested + Stop">🚫</button>' +
+        pipeBtn;
+    } else {
+      actionBtns = '<button class="rbtn rbtn-reset" onclick="event.stopPropagation();markR(\'' + sid + '\',\'new\')" title="Reset">↩</button>' + pipeBtn;
+    }
+
+    const rowOpacity = r.status === 'not_interested' ? 'opacity:.5;' : '';
+    const borderLeft = r.status === 'new' ? 'border-left:3px solid var(--red);'
+      : r.status === 'interested' ? 'border-left:3px solid var(--green);'
+      : 'border-left:3px solid var(--text3);';
+    const fromName = (r.from||'').replace(/<[^>]+>/g,'').replace(/"/g,'').trim();
+
+    return groupHeaderRow + '<tr id="rc_' + sid + '" class="reply-row" style="' + borderLeft + rowOpacity + 'cursor:pointer" onclick="toggleReplyBody(\'' + sid + '\')">' +
+      '<td style="padding:10px 12px;white-space:nowrap">' +
+        '<div style="font-size:13px;color:var(--blue);font-weight:700;font-family:\'DM Mono\',monospace">' + r.email + '</div>' +
+        '<div style="font-size:10px;color:var(--text3)">' + fromName + '</div>' +
+      '</td>' +
+      '<td style="padding:10px 12px;max-width:350px">' +
+        '<div style="font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (r.subject || '(no subject)') + '</div>' +
+        '<div style="font-size:10px;color:var(--text2)">' + (r.route ? '📍 ' + r.route : '') + '</div>' +
+      '</td>' +
+      '<td style="padding:10px 12px;font-size:11px;color:var(--text3);white-space:nowrap">' + (r.received_at||r.date||'').slice(0,16) + '</td>' +
+      '<td style="padding:10px 12px">' + badge + '</td>' +
+      '<td style="padding:10px 12px;text-align:center">' +
+        '<div style="display:flex;gap:5px;justify-content:center" onclick="event.stopPropagation()">' + actionBtns + '</div>' +
+      '</td>' +
+    '</tr>' +
+    '<tr id="body_' + sid + '" class="reply-body-row" style="display:none">' +
+      '<td colspan="5" style="padding:0 12px 14px 20px;background:var(--surface2)">' +
+        '<div class="reply-body" style="font-size:12px;color:var(--text2);line-height:1.7;background:var(--surface);padding:12px 14px;border-radius:var(--radius-sm);margin:8px 0;white-space:pre-wrap;max-height:180px;overflow-y:auto;font-family:\'DM Mono\',monospace;border:1px solid var(--border)">' + (r.body || '(empty)') + '</div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function toggleReplyBody(sid) {
+  const bodyRow = document.getElementById('body_' + sid);
+  if (bodyRow) bodyRow.style.display = bodyRow.style.display === 'none' ? 'table-row' : 'none';
+}
+function toggleReply(sid) { toggleReplyBody(sid); }
+function findReply(sid) { const clean = sid.replace(/^sid_/,''); return allReplies.find(r => r.msg_id.replace(/[^a-zA-Z0-9]/g,'_') === clean); }
+async function markR(sid, status) {
+  const r = findReply(sid); if (!r) return;
+  await fetch('/api/replies/status', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({msg_id: r.msg_id, status})});
+  r.status = status;
+  renderReplies(); updateBadge();
+  if (status === 'interested') { await loadFollowups(); toast('✅ Added to Follow-up!'); }
+}
+async function markRStop(sid) {
+  const r = findReply(sid); if (!r) return;
+  await fetch('/api/replies/status', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({msg_id: r.msg_id, status:'not_interested', add_to_stop: true})});
+  r.status = 'not_interested'; renderReplies(); updateBadge(); toast('Added to Stop List');
+}
+
+// ── FOLLOW-UP ───────────────────────────────────────────────────────────────
+let allFollowups = [], fuFilter = 'all';
+
+async function loadFollowups() {
+  allFollowups = await (await fetch('/api/followups')).json();
+  renderFollowups(); updateFuBadge();
+}
+function updateFuBadge() {
+  const n = allFollowups.filter(f => f.status === 'pending' && f.level !== 'closed').length;
+  const b = document.getElementById('fuBadge');
+  if (b) { b.textContent = n; b.style.display = n > 0 ? 'inline' : 'none'; }
+}
+function setFuFilter(f) {
+  fuFilter = f;
+  document.querySelectorAll('[id^="fuf-"]').forEach(el => el.classList.remove('active'));
+  document.getElementById('fuf-' + f)?.classList.add('active');
+  renderFollowups();
+}
+function fuSelectAll() {
+  document.querySelectorAll('.fu-check').forEach(cb => {
+    const fu = allFollowups.find(f => f.email === cb.dataset.email);
+    if (fu && fu.status !== 'closed') cb.checked = true;
+  });
+}
+function renderFollowups() {
+  const search = (document.getElementById('fuSearch')?.value || '').toLowerCase();
+  let list = fuFilter === 'all' ? allFollowups : allFollowups.filter(f =>
+    fuFilter === 'closed' ? f.status === 'closed' : f.level === fuFilter && f.status !== 'closed'
+  );
+  if (search) list = list.filter(f =>
+    (f.email||'').toLowerCase().includes(search) ||
+    (f.route||'').toLowerCase().includes(search)
+  );
+  // Stats bar
+  const counts = {FU1:0, FU2:0, FU3:0, closed:0};
+  allFollowups.forEach(f => { if(f.status==='closed') counts.closed++; else counts[f.level]=(counts[f.level]||0)+1; });
+  document.getElementById('fuStats').innerHTML = [
+    ['FU1', counts.FU1, 'var(--blue)'],
+    ['FU2', counts.FU2, 'var(--yellow)'],
+    ['FU3', counts.FU3, 'var(--red)'],
+    ['Closed', counts.closed, 'var(--green)'],
+  ].map(([label, n, color]) => `<div style="background:var(--surface);border:1px solid var(--border);padding:10px 16px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:10px">
+    <span style="font-size:20px;font-weight:800;color:${color};font-family:'DM Mono',monospace">${n}</span>
+    <span style="font-size:11px;color:var(--text2);font-weight:700">${label}</span>
+  </div>`).join('');
+  const el = document.getElementById('followupList');
+  if (!list.length) {
+    el.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:48px 0;text-align:center">
+      ${allFollowups.length === 0 ? 'No follow-ups yet — mark replies as Interested to add them here' : 'No contacts in this category'}
+    </div>`; return;
+  }
+  const levelColors = {FU1:'fu-FU1', FU2:'fu-FU2', FU3:'fu-FU3', closed:'fu-closed'};
+  el.innerHTML = list.map(f => {
+    const lvlClass = levelColors[f.level] || 'fu-FU1';
+    const isClosed = f.status === 'closed';
+    return `<div class="fu-card" style="${isClosed ? 'opacity:.5' : ''}">
+      <input type="checkbox" class="fu-check" data-email="${f.email}" ${isClosed ? 'disabled' : ''}>
+      <span class="fu-level ${lvlClass}">${f.level}</span>
+      <div class="fu-main">
+        <div class="fu-email">${f.email}</div>
+        ${f.route ? `<div class="fu-route">📍 ${f.route}</div>` : ''}
+        <div class="fu-meta">Last contact: ${f.last_contact || '—'} · Added: ${f.added_at || '—'}</div>
+      </div>
+      <div class="fu-actions">
+        ${!isClosed ? `<button class="rbtn rbtn-yes" onclick="sendOneFu('${f.email}')">📤 Send ${f.level}</button>` : ''}
+        ${!isClosed ? `<button class="rbtn rbtn-stop" onclick="closeFu('${f.email}')">✓ Close</button>` : ''}
+        <button class="rbtn rbtn-reset" onclick="deleteFu('${f.email}')" style="font-size:10px">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function sendOneFu(email) {
+  const res = await fetch('/api/followups/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({emails:[email]})});
+  const data = await res.json();
+  const r = data.results?.[0];
+  if (r?.ok) toast(`Follow-up sent → now ${r.new_level}`);
+  else toast('Error: ' + (r?.error || 'unknown'), true);
+  await loadFollowups();
+}
+// ── FOLLOWUP SCHEDULER ──────────────────────────────────────────────────────
+function nextBusinessDay() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  // Skip weekends
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function fmtScheduleDate(d) {
+  return d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+}
+
+function getScheduled() {
+  try { return JSON.parse(localStorage.getItem('fu_scheduled') || '[]'); } catch { return []; }
+}
+
+function saveScheduled(arr) {
+  localStorage.setItem('fu_scheduled', JSON.stringify(arr));
+}
+
+async function sendAutoFollowup() {
+  const checked = [...document.querySelectorAll('.fu-check:checked')].map(cb => cb.dataset.email);
+  if (!checked.length) { toast('Select contacts first', true); return; }
+
+  const nextDay = nextBusinessDay();
+  const dateStr = nextDay.toISOString().slice(0, 10);
+  const existing = getScheduled();
+
+  // Add to schedule (avoid duplicates)
+  const newEmails = checked.filter(e => !existing.find(s => s.email === e && s.date === dateStr));
+  const updated = [...existing, ...newEmails.map(email => ({email, date: dateStr, scheduledAt: new Date().toISOString()}))];
+  saveScheduled(updated);
+
+  toast('📅 Scheduled ' + newEmails.length + ' follow-ups for ' + fmtScheduleDate(nextDay));
+  renderScheduledBlock();
+  // Uncheck all
+  document.querySelectorAll('.fu-check:checked').forEach(cb => cb.checked = false);
+}
+
+function renderScheduledBlock() {
+  const scheduled = getScheduled();
+  const block = document.getElementById('fuScheduledBlock');
+  if (!block) return;
+  if (!scheduled.length) { block.style.display = 'none'; return; }
+  block.style.display = '';
+
+  const byDate = {};
+  scheduled.forEach(s => { if (!byDate[s.date]) byDate[s.date] = []; byDate[s.date].push(s); });
+
+  block.innerHTML = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin-bottom:10px">\uD83D\uDCC5 Scheduled Follow-ups</div>';
+
+  Object.entries(byDate).sort().forEach(([date, items]) => {
+    const d = new Date(date + 'T12:00:00');
+    const isPast = new Date(date) < new Date(new Date().toDateString());
+
+    const row = document.createElement('div');
+    row.style.marginBottom = '10px';
+
+    const top = document.createElement('div');
+    top.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px';
+
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:11px;font-weight:700;color:' + (isPast ? 'var(--red)' : 'var(--blue)');
+    lbl.textContent = (isPast ? '\u26A0\uFE0F Overdue: ' : '\uD83D\uDCC5 ') + fmtScheduleDate(d);
+
+    const bgroup = document.createElement('div');
+    bgroup.style.cssText = 'display:flex;gap:6px';
+    if (isPast) {
+      const sb = document.createElement('button');
+      sb.className = 'rbtn rbtn-yes';
+      sb.textContent = '\u25B6 Send Now';
+      sb.onclick = () => sendScheduledNow(date);
+      bgroup.appendChild(sb);
+    }
+    const cb = document.createElement('button');
+    cb.className = 'rbtn rbtn-stop';
+    cb.textContent = '\u2715 Cancel';
+    cb.onclick = () => cancelScheduled(date);
+    bgroup.appendChild(cb);
+
+    top.appendChild(lbl);
+    top.appendChild(bgroup);
+
+    const emails = document.createElement('div');
+    emails.style.cssText = 'font-size:11px;color:var(--text2);margin-top:4px';
+    items.forEach(s => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;margin:2px;font-size:10px';
+      chip.textContent = s.email;
+      emails.appendChild(chip);
+    });
+
+    row.appendChild(top);
+    row.appendChild(emails);
+    block.appendChild(row);
+  });
+}
+
+
+async function sendScheduledNow(date) {
+  const scheduled = getScheduled();
+  const toSend = scheduled.filter(s => s.date === date).map(s => s.email);
+  if (!toSend.length) return;
+
+  const res = await fetch('/api/followups/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({emails: toSend})});
+  const data = await res.json();
+  const ok = data.results?.filter(r => r.ok).length || 0;
+  const err = data.results?.filter(r => !r.ok).length || 0;
+
+  // Remove sent from schedule
+  saveScheduled(getScheduled().filter(s => s.date !== date));
+  renderScheduledBlock();
+  toast('Sent: ' + ok + (err ? ', Errors: ' + err : ''));
+  await loadFollowups();
+}
+
+function cancelScheduled(date) {
+  saveScheduled(getScheduled().filter(s => s.date !== date));
+  renderScheduledBlock();
+  toast('🗑 Cancelled');
+}
+
+// Check on load if any scheduled FUs are due today
+function checkScheduledDue() {
+  const today = new Date().toISOString().slice(0, 10);
+  const scheduled = getScheduled();
+  const due = scheduled.filter(s => s.date <= today);
+  if (due.length > 0) {
+    const uniqueDates = [...new Set(due.map(s => s.date))];
+    uniqueDates.forEach(date => {
+      const items = due.filter(s => s.date === date);
+      toast('⏰ ' + items.length + ' follow-ups scheduled for ' + fmtScheduleDate(new Date(date + 'T12:00:00')) + ' — ready to send!');
+    });
+  }
+  renderScheduledBlock();
+}
+async function closeFu(email) {
+  await fetch('/api/followups/update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, status:'closed', level:'closed'})});
+  await loadFollowups(); toast('Closed');
+}
+async function deleteFu(email) {
+  await fetch('/api/followups/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email})});
+  await loadFollowups();
+}
+
+
+// ── AUTOMATION IMPACT ────────────────────────────────────────────────────────
+// Mirrors backend time model exactly
+const AI = {
+  MANUAL_SEC:    40,   // per email
+  BATCH_SIZE:    30,
+  BATCH_SETUP:   20,   // sec per batch
+  DELAY_EMAIL:   10,   // sec per email send
+  ACTIONS:        4,
+  WORK_HOURS:     8,
+  MANUAL_SPD: 60/40,   // emails/min
+};
+
+let _aiData = null, _aiTab = 'lifetime';
+
+function aiFmt(s) {
+  s = Math.max(0, s);
+  if (s < 60)   return Math.round(s) + 's';
+  if (s < 3600) return (s/60).toFixed(1) + ' min';
+  return (s/3600).toFixed(1) + ' hr';
+}
+
+function aiCalc(n) {
+  if (!n) return { emails_sent:0, manual_time_sec:0, auto_time_sec:0, time_saved_sec:0,
+    time_saved_fmt:'0s', manual_time_fmt:'0s', auto_time_fmt:'0s',
+    manual_actions_avoided:0, speed_multiplier:1, manual_speed:AI.MANUAL_SPD,
+    auto_speed:0, hours_saved:0, working_days_saved:0 };
+  const batches    = Math.ceil(n / AI.BATCH_SIZE);
+  const manual_sec = n * AI.MANUAL_SEC;
+  const auto_sec   = batches * AI.BATCH_SETUP + n * AI.DELAY_EMAIL;
+  const saved_sec  = Math.max(0, manual_sec - auto_sec);
+  const mult       = auto_sec > 0 ? Math.round(manual_sec / auto_sec * 10) / 10 : 1;
+  const spd        = auto_sec > 0 ? Math.round(n / (auto_sec/60) * 10)/10 : 0;
+  const hrs        = Math.round(saved_sec / 3600 * 10) / 10;
+  return { emails_sent:n, manual_time_sec:manual_sec, auto_time_sec:auto_sec,
+    time_saved_sec:saved_sec, time_saved_fmt:aiFmt(saved_sec),
+    manual_time_fmt:aiFmt(manual_sec), auto_time_fmt:aiFmt(auto_sec),
+    manual_actions_avoided:n*AI.ACTIONS, speed_multiplier:mult,
+    manual_speed:Math.round(AI.MANUAL_SPD*10)/10, auto_speed:spd,
+    hours_saved:hrs, working_days_saved:Math.round(hrs/AI.WORK_HOURS*10)/10 };
+}
+
+function animateCount(el, target, dec, sfx) {
+  if (!el) return;
+  dec=dec||0; sfx=sfx||'';
+  const t0=performance.now(), dur=800;
+  (function step(now){
+    const p=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-p,3), v=target*e;
+    el.textContent = (dec>0 ? v.toFixed(dec) : Math.round(v)) + sfx;
+    if(p<1) requestAnimationFrame(step);
+  })(t0);
+}
+
+function setEl(id, v) { const e=document.getElementById(id); if(e) e.textContent=v; }
+
+async function loadAutomationImpact() {
+  try {
+    const res = await fetch('/api/automation-impact');
+    if (!res.ok) return;
+    _aiData = await res.json();
+    renderAiSendCard();
+    renderAiStats(_aiTab);
+  } catch(e) { console.error('AI impact:', e); }
+}
+
+function renderAiSendCard() {
+  if (!_aiData) return;
+  const d   = _aiData.today  || aiCalc(0);
+  const lft = _aiData.lifetime || aiCalc(0);
+  const mult = lft.speed_multiplier;
+
+  setEl('aiSpeedMult', '~' + mult + '×');
+  setEl('aiTimeSavedToday', d.time_saved_fmt || '0s');
+  const em = document.getElementById('aiEmailsToday');
+  if (em) animateCount(em, d.emails_sent);
+  const ac = document.getElementById('aiActionsToday');
+  if (ac) animateCount(ac, d.manual_actions_avoided);
+  setEl('aiSpeedToday', d.auto_speed ? d.auto_speed + '/min' : '—');
+  setEl('aiManualBar',  d.manual_time_fmt);
+  setEl('aiAutoBar',    d.auto_time_fmt);
+
+  const fill = document.getElementById('aiAutoBarFill');
+  if (fill && d.manual_time_sec > 0) {
+    const pct = Math.max(1, Math.round(d.auto_time_sec / d.manual_time_sec * 100));
+    setTimeout(() => fill.style.width = pct + '%', 200);
+  }
+}
+
+function setAiTab(tab) {
+  _aiTab = tab;
+  ['lifetime','week','today'].forEach(t => {
+    const el = document.getElementById('aiTab-' + t);
+    if (el) el.classList.toggle('active', t===tab);
+  });
+  renderAiStats(tab);
+}
+
+function renderAiStats(tab) {
+  if (!_aiData) return;
+  const d   = _aiData[tab] || _aiData.lifetime;
+  const lft = _aiData.lifetime;
+
+  // Speed badge
+  setEl('statsSpeedMult', '~' + lft.speed_multiplier + '×');
+
+  // KPI grid
+  const kpis = [
+    { icon:'ph-envelope-simple', color:'var(--accent)',  label:'Emails Automated',  val: d.emails_sent.toLocaleString() },
+    { icon:'ph-clock-countdown', color:'var(--blue)',    label:'Time Saved',        val: d.time_saved_fmt },
+    { icon:'ph-cursor-click',    color:'var(--yellow)',  label:'Actions Avoided',   val: d.manual_actions_avoided.toLocaleString() },
+    { icon:'ph-rocket-launch',   color:'var(--red)',     label:'Auto Speed',        val: d.auto_speed ? d.auto_speed + '/min' : '—' },
+    { icon:'ph-user',            color:'var(--text3)',   label:'Manual Speed',      val: lft.manual_speed + '/min' },
+    { icon:'ph-lightning',       color:'var(--yellow)',  label:'Efficiency',        val: '~' + d.speed_multiplier + '×' },
+  ];
+  const grid = document.getElementById('aiKpiGrid');
+  if (grid) grid.innerHTML = kpis.map(k => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
+        <i class="ph-bold ${k.icon}" style="font-size:12px;color:${k.color}"></i>
+        <span style="font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);font-weight:700">${k.label}</span>
+      </div>
+      <div style="font-size:16px;font-weight:800;color:var(--text);line-height:1">${k.val}</div>
+    </div>`).join('');
+
+  // Productivity — always lifetime
+  const hrs  = lft.hours_saved;
+  const days = lft.working_days_saved;
+  const hoursEl = document.getElementById('aiHoursSaved');
+  const unitEl  = document.getElementById('aiHoursUnit');
+  if (hoursEl) {
+    if (hrs < 1) { animateCount(hoursEl, Math.round(lft.time_saved_sec/60)); if(unitEl) unitEl.textContent='minutes'; }
+    else         { animateCount(hoursEl, hrs, 1); if(unitEl) unitEl.textContent='hours'; }
+  }
+  const daysEl = document.getElementById('aiWorkDays');
+  const bigEl  = document.getElementById('aiWorkDaysBig');
+  if (daysEl) animateCount(daysEl, days, 1);
+  if (bigEl)  animateCount(bigEl,  days, 1);
+
+  // Time bars
+  setEl('aiStatManualTime', d.manual_time_fmt);
+  setEl('aiStatAutoTime',   d.auto_time_fmt);
+  const autoFill = document.getElementById('aiStatAutoBarFill');
+  if (autoFill && d.manual_time_sec > 0) {
+    const pct = Math.max(0.5, d.auto_time_sec / d.manual_time_sec * 100);
+    setTimeout(() => autoFill.style.width = pct + '%', 300);
+  }
+
+  // Best day + peak hour
+  const bd = _aiData.best_day;
+  const bdEl = document.getElementById('aiBestDay');
+  if (bdEl) {
+    if (bd?.date) {
+      const dt = new Date(bd.date + 'T12:00:00');
+      bdEl.textContent = dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+      setEl('aiBestDaySub', bd.emails + ' emails · ' + bd.time_saved_fmt + ' saved');
+    } else bdEl.textContent = 'No data yet';
+  }
+  setEl('aiPeakHour', _aiData.peak_hour || '—');
+
+  // Daily table
+  const tbody = document.getElementById('aiDailyBody');
+  if (tbody) {
+    const rows = _aiData.daily || [];
+    tbody.innerHTML = rows.length
+      ? [...rows].reverse().map(r => `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 10px;color:var(--text2)">${r.date}</td>
+          <td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--accent)">${r.emails}</td>
+          <td style="padding:6px 10px;text-align:right;color:var(--red)">${r.manual_time_fmt}</td>
+          <td style="padding:6px 10px;text-align:right;color:var(--accent)">${r.auto_time_fmt}</td>
+          <td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--blue)">${r.time_saved_fmt}</td>
+          <td style="padding:6px 10px;text-align:right;color:var(--text2)">${r.actions_avoided}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="6" style="padding:14px;text-align:center;color:var(--text3)">No data yet</td></tr>';
+  }
+}
+
+
+// ── STARTUP ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+  loadReplies();
+  loadFollowups();
+  loadDailyStats();
+  loadAutomationImpact();
+  checkScheduledDue();
+  setInterval(loadDailyStats, 120000);
+});
+</script>
+</body>
+</html>

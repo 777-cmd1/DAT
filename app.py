@@ -12,18 +12,34 @@ from functools import wraps
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
-BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE    = os.path.join(BASE_DIR, "config.json")
-LOG_FILE       = os.path.join(BASE_DIR, "sent_log.csv")
-STOP_FILE      = os.path.join(BASE_DIR, "stop_list.txt")
-TEMPLATES_FILE = os.path.join(BASE_DIR, "templates.json")
-REPLIES_FILE   = os.path.join(BASE_DIR, "replies.json")
-FOLLOWUPS_FILE = os.path.join(BASE_DIR, "followups.json")
-USERS_FILE     = os.path.join(BASE_DIR, "users.json")
-INVITES_FILE   = os.path.join(BASE_DIR, "invites.json")
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+USERS_FILE  = os.path.join(BASE_DIR, "users.json")
+INVITES_FILE = os.path.join(BASE_DIR, "invites.json")
 
-# Your admin email — change this to your email
+# Your admin email
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'your@email.com')
+
+def user_dir(email=None):
+    """Return per-user data directory, creating it if needed."""
+    if email is None:
+        email = session.get('user_email', '_shared')
+    safe = re.sub(r'[^\w@.\-]', '_', email.lower())
+    d = os.path.join(BASE_DIR, 'userdata', safe)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+def upath(filename, email=None):
+    """Return full path for a per-user file."""
+    return os.path.join(user_dir(email), filename)
+
+# Legacy aliases (now per-user via upath())
+def _CONFIG_FILE(): return upath("config.json")
+def _LOG_FILE(): return upath("sent_log.csv")
+def _STOP_FILE(): return upath("stop_list.txt")
+def _TEMPLATES_FILE(): return upath("templates.json")
+def _REPLIES_FILE(): return upath("replies.json")
+def _FOLLOWUPS_FILE(): return upath("followups.json")
+def _PIPELINE_FILE(): return upath("pipeline.json")
 
 send_state = {"running":False,"total":0,"current":0,"sent":0,"errors":0,"skipped":0,"log":[],"done":False}
 DEFAULT_CONFIG = {"gmail_address":"","gmail_app_password":"","your_name":"","your_company":"","your_phone":"","delay_min":20,"delay_max":45}
@@ -258,12 +274,12 @@ DAT Mailer Team"""
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
 def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE) as f: return {**DEFAULT_CONFIG, **json.load(f)}
+    if os.path.exists(_CONFIG_FILE()):
+        with open(_CONFIG_FILE()) as f: return {**DEFAULT_CONFIG, **json.load(f)}
     return DEFAULT_CONFIG.copy()
 
 def save_config(cfg):
-    with open(CONFIG_FILE,'w') as f: json.dump(cfg,f,indent=2)
+    with open(_CONFIG_FILE(),'w') as f: json.dump(cfg,f,indent=2)
 
 DEFAULT_TEMPLATES = [
     "Hi,\n\nAre you still working on this load?\nPlease provide more info.\n\nThanks,\n{name}\n{company} | {phone}",
@@ -272,14 +288,14 @@ DEFAULT_TEMPLATES = [
 ]
 
 def load_templates():
-    if os.path.exists(TEMPLATES_FILE):
-        with open(TEMPLATES_FILE) as f: data = json.load(f)
+    if os.path.exists(_TEMPLATES_FILE()):
+        with open(_TEMPLATES_FILE()) as f: data = json.load(f)
         if isinstance(data, list): return data
         if isinstance(data, dict): return data.get('outreach', DEFAULT_TEMPLATES.copy())
     return DEFAULT_TEMPLATES.copy()
 
 def save_templates_file(t):
-    with open(TEMPLATES_FILE,'w') as f: json.dump(t,f,indent=2)
+    with open(_TEMPLATES_FILE(),'w') as f: json.dump(t,f,indent=2)
 
 def render_template_text(tmpl, load, cfg):
     return tmpl.format(name=cfg.get("your_name",""),company=cfg.get("your_company",""),
@@ -288,8 +304,8 @@ def render_template_text(tmpl, load, cfg):
 
 def load_stop_list():
     be, bd = set(), set()
-    if not os.path.exists(STOP_FILE): return be, bd
-    with open(STOP_FILE,encoding='utf-8') as f:
+    if not os.path.exists(_STOP_FILE()): return be, bd
+    with open(_STOP_FILE(),encoding='utf-8') as f:
         for line in f:
             line=line.strip()
             if not line or line.startswith('#'): continue
@@ -300,8 +316,8 @@ def load_stop_list():
 
 def get_stop_list_raw():
     entries=[]
-    if not os.path.exists(STOP_FILE): return entries
-    with open(STOP_FILE,encoding='utf-8') as f:
+    if not os.path.exists(_STOP_FILE()): return entries
+    with open(_STOP_FILE(),encoding='utf-8') as f:
         for line in f:
             line=line.strip()
             if not line or line.startswith('#'): continue
@@ -311,7 +327,7 @@ def get_stop_list_raw():
     return entries
 
 def write_stop_list(entries):
-    with open(STOP_FILE,'w',encoding='utf-8') as f:
+    with open(_STOP_FILE(),'w',encoding='utf-8') as f:
         f.write("# STOP LIST\n")
         for e in entries:
             f.write(f"{'domain' if e['type']=='domain' else 'email'}:{e['value'].strip().lower()}\n")
@@ -327,8 +343,8 @@ LOG_FIELDS=['timestamp','email','origin','destination','date','equip','weight','
 def load_sent_log():
     all_sent,sent_today=set(),set()
     today=date.today().strftime('%Y-%m-%d')
-    if not os.path.exists(LOG_FILE): return all_sent,sent_today
-    with open(LOG_FILE,newline='',encoding='utf-8') as f:
+    if not os.path.exists(_LOG_FILE()): return all_sent,sent_today
+    with open(_LOG_FILE(),newline='',encoding='utf-8') as f:
         for row in csv.DictReader(f):
             if row.get('status')!='sent': continue
             em=row.get('email','').lower().strip()
@@ -341,8 +357,8 @@ def load_sent_log():
     return all_sent,sent_today
 
 def append_log(load, status, variant=0):
-    exists=os.path.exists(LOG_FILE)
-    with open(LOG_FILE,'a',newline='',encoding='utf-8') as f:
+    exists=os.path.exists(_LOG_FILE())
+    with open(_LOG_FILE(),'a',newline='',encoding='utf-8') as f:
         w=csv.DictWriter(f,fieldnames=LOG_FIELDS)
         if not exists: w.writeheader()
         w.writerow({'timestamp':datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -351,20 +367,20 @@ def append_log(load, status, variant=0):
             'company':load.get('company',''),'status':status,'variant':variant})
 
 def get_log_rows():
-    if not os.path.exists(LOG_FILE): return []
+    if not os.path.exists(_LOG_FILE()): return []
     rows=[]
-    with open(LOG_FILE,newline='',encoding='utf-8') as f:
+    with open(_LOG_FILE(),newline='',encoding='utf-8') as f:
         for row in csv.DictReader(f):
             rows.append({k:(v if v is not None else '') for k,v in row.items()})
     return list(reversed(rows))
 
 def load_replies():
-    if os.path.exists(REPLIES_FILE):
-        with open(REPLIES_FILE) as f: return json.load(f)
+    if os.path.exists(_REPLIES_FILE()):
+        with open(_REPLIES_FILE()) as f: return json.load(f)
     return []
 
 def save_replies(replies):
-    with open(REPLIES_FILE,'w') as f: json.dump(replies,f,indent=2,ensure_ascii=False)
+    with open(_REPLIES_FILE(),'w') as f: json.dump(replies,f,indent=2,ensure_ascii=False)
 
 def decode_str(s):
     if s is None: return ""
@@ -395,8 +411,8 @@ def get_email_body(msg):
 
 def get_known_emails():
     known=set()
-    if not os.path.exists(LOG_FILE): return known
-    with open(LOG_FILE,newline='',encoding='utf-8') as f:
+    if not os.path.exists(_LOG_FILE()): return known
+    with open(_LOG_FILE(),newline='',encoding='utf-8') as f:
         for row in csv.DictReader(f):
             if row.get('email'): known.add(row['email'].lower().strip())
     return known
@@ -404,8 +420,8 @@ def get_known_emails():
 def get_route_for_email(email_addr):
     email_addr=email_addr.lower().strip()
     last=None
-    if not os.path.exists(LOG_FILE): return ""
-    with open(LOG_FILE,newline='',encoding='utf-8') as f:
+    if not os.path.exists(_LOG_FILE()): return ""
+    with open(_LOG_FILE(),newline='',encoding='utf-8') as f:
         for row in csv.DictReader(f):
             if row.get('email','').lower().strip()==email_addr: last=row
     if last: return f"{last.get('origin','')} → {last.get('destination','')}"
@@ -461,11 +477,11 @@ def fetch_replies_from_gmail():
 def get_stats():
     empty={"total":0,"sent":0,"errors":0,"today":0,"by_day":[],"by_variant":[],"by_hour":[],
            "top_recipients":[],"top_routes":[],"replied_emails":[],"replied_domains":[],"response_rate":{}}
-    if not os.path.exists(LOG_FILE): return empty
+    if not os.path.exists(_LOG_FILE()): return empty
     today_str=date.today().strftime('%Y-%m-%d')
     total=sent=errors=today_count=0
     by_day,by_var,by_em,by_route,by_hr=Counter(),Counter(),Counter(),Counter(),Counter()
-    with open(LOG_FILE,newline='',encoding='utf-8') as f:
+    with open(_LOG_FILE(),newline='',encoding='utf-8') as f:
         for row in csv.DictReader(f):
             total+=1
             st=row.get('status','')
@@ -551,8 +567,8 @@ def get_automation_impact():
     week_start = today - timedelta(days=today.weekday())
     daily_counts = Counter()
     hourly_counts = Counter()
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, newline='', encoding='utf-8') as f:
+    if os.path.exists(_LOG_FILE()):
+        with open(_LOG_FILE(), newline='', encoding='utf-8') as f:
             for row in csv.DictReader(f):
                 if row.get('status') != 'sent': continue
                 ts = (row.get('timestamp') or '').strip()
@@ -677,11 +693,11 @@ def api_get_templates(): return jsonify(load_templates())
 def api_save_templates():
     outreach = request.json.get("templates", [])
     existing = {}
-    if os.path.exists(TEMPLATES_FILE):
-        with open(TEMPLATES_FILE) as f: existing = json.load(f)
+    if os.path.exists(_TEMPLATES_FILE()):
+        with open(_TEMPLATES_FILE()) as f: existing = json.load(f)
     if isinstance(existing, list): existing = {}
     existing['outreach'] = outreach
-    with open(TEMPLATES_FILE, 'w') as f: json.dump(existing, f, indent=2)
+    with open(_TEMPLATES_FILE(), 'w') as f: json.dump(existing, f, indent=2)
     return jsonify({"ok": True})
 
 @app.route('/api/stop-list', methods=['GET'])
@@ -777,12 +793,12 @@ def index(): return render_template('index.html')
 
 # ─── FOLLOW-UPS ───────────────────────────────────────────────────────────────
 def load_followups():
-    if os.path.exists(FOLLOWUPS_FILE):
-        with open(FOLLOWUPS_FILE) as f: return json.load(f)
+    if os.path.exists(_FOLLOWUPS_FILE()):
+        with open(_FOLLOWUPS_FILE()) as f: return json.load(f)
     return []
 
 def save_followups(fus):
-    with open(FOLLOWUPS_FILE, 'w') as f: json.dump(fus, f, indent=2, ensure_ascii=False)
+    with open(_FOLLOWUPS_FILE(), 'w') as f: json.dump(fus, f, indent=2, ensure_ascii=False)
 
 def add_to_followups(reply):
     fus = load_followups()
@@ -826,8 +842,8 @@ def send_followup_email(fu, template_text, cfg):
 LEVEL_PROGRESSION = {'FU1': 'FU2', 'FU2': 'FU3', 'FU3': 'closed'}
 
 def get_fu_templates():
-    if os.path.exists(TEMPLATES_FILE):
-        with open(TEMPLATES_FILE) as f: data = json.load(f)
+    if os.path.exists(_TEMPLATES_FILE()):
+        with open(_TEMPLATES_FILE()) as f: data = json.load(f)
         if isinstance(data, dict): return data.get('followup', {})
     return {
         'FU1': "Hi,\n\nJust wanted to follow up — are you working on any loads this week?\n\nThank you,\n{name}\n{company} | {phone}",
@@ -890,24 +906,23 @@ def api_get_fu_templates(): return jsonify(get_fu_templates())
 @login_required
 def api_save_fu_templates():
     data = request.json; existing = {}
-    if os.path.exists(TEMPLATES_FILE):
-        with open(TEMPLATES_FILE) as f: existing = json.load(f)
+    if os.path.exists(_TEMPLATES_FILE()):
+        with open(_TEMPLATES_FILE()) as f: existing = json.load(f)
     if isinstance(existing, list): existing = {'outreach': existing}
     existing['followup'] = data
-    with open(TEMPLATES_FILE, 'w') as f: json.dump(existing, f, indent=2)
+    with open(_TEMPLATES_FILE(), 'w') as f: json.dump(existing, f, indent=2)
     return jsonify({'ok': True})
 
 # ── PIPELINE ──────────────────────────────────────────────────────────────────
-PIPELINE_FILE = os.path.join(BASE_DIR, 'pipeline.json')
 STAGES = ['new_lead', 'contacted', 'replied', 'interested', 'deal', 'lost']
 
 def load_pipeline():
-    if os.path.exists(PIPELINE_FILE):
-        with open(PIPELINE_FILE) as f: return json.load(f)
+    if os.path.exists(_PIPELINE_FILE()):
+        with open(_PIPELINE_FILE()) as f: return json.load(f)
     return []
 
 def save_pipeline(contacts):
-    with open(PIPELINE_FILE, 'w') as f: json.dump(contacts, f, indent=2)
+    with open(_PIPELINE_FILE(), 'w') as f: json.dump(contacts, f, indent=2)
 
 def upsert_pipeline(email, updates):
     contacts = load_pipeline()

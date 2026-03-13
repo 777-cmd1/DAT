@@ -775,7 +775,7 @@ def get_daily_quota(uid=None):
         return {'plan': 'free', 'limit': 0, 'used': 0, 'remaining': 0, 'pct': 0, 'unlimited': False}
     from app.models import Workspace, UsageEvent, User as _User
     user = _User.query.filter_by(id=uid).first()
-    if user and user.role == 'admin':
+    if user and (user.role == 'admin' or getattr(user, 'plan', 'free') == 'pro'):
         plan, limit = 'pro', None
     else:
         ws = Workspace.query.filter_by(owner_id=uid).first()
@@ -2002,9 +2002,15 @@ def auto_create_admin():
         if existing:
             # Ensure workspace exists even for pre-existing admin
             get_or_create_workspace(existing.id, name='Admin Workspace')
-            # Ensure admin always has pro plan
+            # Ensure admin always has correct role + plan
+            changed = False
+            if getattr(existing, 'role', 'user') != 'admin':
+                existing.role = 'admin'
+                changed = True
             if getattr(existing, 'plan', 'free') != 'pro':
                 existing.plan = 'pro'
+                changed = True
+            if changed:
                 db.session.commit()
             return
         user = UserModel(

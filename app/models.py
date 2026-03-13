@@ -65,7 +65,9 @@ class Invitation(db.Model):
             'invited_by': self.invited_by,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else None,
             'used_at': self.used_at.strftime('%Y-%m-%d %H:%M') if self.used_at else None,
+            'expires_at': self.expires_at.strftime('%Y-%m-%d %H:%M') if self.expires_at else None,
             'used': self.status == 'accepted',
+            'token': self.token if self.status == 'pending' else None,  # only for pending
         }
 
 

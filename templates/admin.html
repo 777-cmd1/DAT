@@ -362,8 +362,8 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Email</th><th>Sent</th><th>Expires</th><th>Status</th><th>Used At</th></tr></thead>
-          <tbody id="invitesTable"><tr><td colspan="5" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
+          <thead><tr><th>Email</th><th>Sent</th><th>Expires</th><th>Status</th><th>Used At</th><th>Link</th></tr></thead>
+          <tbody id="invitesTable"><tr><td colspan="6" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -656,11 +656,15 @@ async function loadInvites() {
   const invites = await res.json();
   document.getElementById('inviteCount').textContent = invites.length;
   const tbody = document.getElementById('invitesTable');
-  if (!invites.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No invites sent yet</td></tr>'; return; }
+  if (!invites.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No invites sent yet</td></tr>'; return; }
   tbody.innerHTML = [...invites].reverse().map(i => {
     let statusClass = 'status-pending', statusText = '⏳ Pending';
     if (i.used)    { statusClass = 'status-used';    statusText = '✓ Used'; }
     if (i.expired) { statusClass = 'status-expired'; statusText = '✕ Expired'; }
+    const inviteLink = i.token ? `${location.origin}/register/${i.token}` : null;
+    const copyBtn = inviteLink
+      ? `<button onclick="copyInviteLink('${inviteLink}', this)" style="font-size:11px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">📋 Copy Link</button>`
+      : '—';
     return `
       <tr>
         <td class="mono">${esc(i.email)}</td>
@@ -668,6 +672,7 @@ async function loadInvites() {
         <td class="muted" style="font-size:12px">${i.expires_at ? i.expires_at.slice(0,10) : '—'}</td>
         <td><span class="status-badge ${statusClass}">${statusText}</span></td>
         <td class="muted" style="font-size:12px">${i.used_at ? i.used_at.slice(0,10) : '—'}</td>
+        <td>${copyBtn}</td>
       </tr>`;
   }).join('');
 }
@@ -694,6 +699,17 @@ async function sendInvite() {
   } else {
     toast(data.error || 'Failed to send invite', 'red');
   }
+}
+
+function copyInviteLink(url, btn) {
+  navigator.clipboard.writeText(url).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.background = '#22c55e';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+  }).catch(() => {
+    prompt('Copy this link:', url);
+  });
 }
 
 async function deleteUser(email) {

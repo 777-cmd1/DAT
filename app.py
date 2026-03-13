@@ -773,10 +773,14 @@ def get_daily_quota(uid=None):
         uid = current_user_id()
     if not uid:
         return {'plan': 'free', 'limit': 0, 'used': 0, 'remaining': 0, 'pct': 0, 'unlimited': False}
-    from app.models import Workspace, UsageEvent
-    ws = Workspace.query.filter_by(owner_id=uid).first()
-    plan = (ws.plan if ws else None) or 'free'
-    limit = PLAN_QUOTAS.get(plan, 50)
+    from app.models import Workspace, UsageEvent, User as _User
+    user = _User.query.filter_by(id=uid).first()
+    if user and user.role == 'admin':
+        plan, limit = 'pro', None
+    else:
+        ws = Workspace.query.filter_by(owner_id=uid).first()
+        plan = (ws.plan if ws else None) or 'free'
+        limit = PLAN_QUOTAS.get(plan, 50)
     today = date.today()
     used = db.session.query(db.func.sum(UsageEvent.count)).filter(
         UsageEvent.user_id == uid,

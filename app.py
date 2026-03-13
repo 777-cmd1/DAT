@@ -1995,11 +1995,15 @@ def auto_create_admin():
         if existing:
             # Ensure workspace exists even for pre-existing admin
             get_or_create_workspace(existing.id, name='Admin Workspace')
+            # Ensure admin always has pro plan
+            if existing.plan != 'pro':
+                existing.plan = 'pro'
+                db.session.commit()
             return
         user = UserModel(
             email=admin_email.lower(), name='Admin',
             password=hash_password(admin_password),
-            role='admin', invited_by='system',
+            role='admin', plan='pro', invited_by='system',
         )
         db.session.add(user)
         db.session.flush()   # populate user.id before creating workspace

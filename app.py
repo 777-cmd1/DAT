@@ -501,7 +501,7 @@ def api_admin_invite():
     # Remove old unused invites for same email
     Invitation.query.filter_by(email=email, status='pending').delete()
     db.session.add(Invitation(
-        token=token, email=email, invited_by=session['user_email'],
+        token=token, email=email, invited_by=current_user_id(),
         expires_at=datetime.utcnow() + timedelta(days=7),
     ))
     db.session.commit()

@@ -1996,7 +1996,7 @@ def auto_create_admin():
             # Ensure workspace exists even for pre-existing admin
             get_or_create_workspace(existing.id, name='Admin Workspace')
             # Ensure admin always has pro plan
-            if existing.plan != 'pro':
+            if getattr(existing, 'plan', 'free') != 'pro':
                 existing.plan = 'pro'
                 db.session.commit()
             return

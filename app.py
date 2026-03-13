@@ -1286,11 +1286,12 @@ def _smtp_send_with_retry(msg_obj, from_addr, to_addr, password, retries=3, base
             raise   # auth errors are permanent — don't retry
         except smtplib.SMTPRecipientsRefused:
             raise   # bad address — don't retry
-        except _SMTP_RETRYABLE as e:
+        except Exception as e:
             last_exc = e
+            app.logger.error(f'SMTP attempt {attempt+1}/{retries} failed: {type(e).__name__}: {e}')
             if attempt < retries - 1:
                 time.sleep(base_delay * (2 ** attempt))  # 1s, 2s, 4s
-    raise last_exc
+    raise last_exc or RuntimeError('SMTP failed with no exception captured')
 
 
 def send_one_email(to_email, subject, body, cfg):
@@ -1424,12 +1425,16 @@ def api_parse():
 @limiter.limit("5 per minute")   # prevent accidental double-clicks / runaway loops
 def api_send():
     uid = current_user_id()
+    app.logger.info(f'API /api/send called — uid={uid}')
     state = _user_send_state(uid)
     if state["running"]: return jsonify({"error": "Already running"}), 400
     loads = request.json.get("loads", [])
     if not loads: return jsonify({"error": "No loads"}), 400
     cfg = load_config()
-    if not cfg.get("gmail_address") or not cfg.get("gmail_app_password"):
+    has_email = bool(cfg.get("gmail_address"))
+    has_pass  = bool(cfg.get("gmail_app_password"))
+    app.logger.info(f'API /api/send cfg — has_email={has_email} has_pass={has_pass}')
+    if not has_email or not has_pass:
         return jsonify({"error": "Gmail not configured"}), 400
     # ── Quota check ──────────────────────────────────────────────────────────
     quota = get_daily_quota(uid)
@@ -1458,6 +1463,36 @@ def api_automation_impact(): return jsonify(get_automation_impact())
 def api_quota():
     """Return today's send quota status for the current user."""
     return jsonify(get_daily_quota())
+
+@app.route('/api/smtp-test', methods=['GET'])
+@login_required
+def api_smtp_test():
+    """Test SMTP connection using saved Gmail credentials. Returns detailed result."""
+    cfg = load_config()
+    gmail  = cfg.get('gmail_address', '')
+    passwd = cfg.get('gmail_app_password', '')
+    if not gmail or not passwd:
+        return jsonify({'ok': False, 'step': 'config', 'error': 'Gmail not configured — save Settings first'})
+    steps = []
+    try:
+        steps.append('connect smtp.gmail.com:587')
+        import smtplib as _smtplib
+        s = _smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
+        steps.append('ehlo')
+        s.ehlo()
+        steps.append('starttls')
+        s.starttls()
+        steps.append('ehlo2')
+        s.ehlo()
+        steps.append(f'login as {gmail}')
+        s.login(gmail, passwd)
+        steps.append('quit')
+        s.quit()
+        app.logger.info(f'SMTP-TEST OK for {gmail}')
+        return jsonify({'ok': True, 'steps': steps, 'gmail': gmail})
+    except Exception as e:
+        app.logger.error(f'SMTP-TEST FAIL at step "{steps[-1] if steps else "?"}": {e}')
+        return jsonify({'ok': False, 'step': steps[-1] if steps else 'unknown', 'error': str(e), 'steps': steps})
 
 @app.route('/api/stats', methods=['GET'])
 @login_required

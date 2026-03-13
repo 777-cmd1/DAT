@@ -1275,7 +1275,10 @@ def _smtp_send_with_retry(msg_obj, from_addr, to_addr, password, retries=3, base
     last_exc = None
     for attempt in range(retries):
         try:
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+            with smtplib.SMTP('smtp.gmail.com', 587) as s:
+                s.ehlo()
+                s.starttls()
+                s.ehlo()
                 s.login(from_addr, password)
                 s.sendmail(from_addr, to_addr, msg_obj.as_string())
             return  # success

@@ -1294,16 +1294,45 @@ def _smtp_send_with_retry(msg_obj, from_addr, to_addr, password, retries=3, base
     raise last_exc or RuntimeError('SMTP failed with no exception captured')
 
 
+def _send_via_brevo(to_email, subject, body, cfg):
+    """Send via Brevo HTTP API (works on Railway — no SMTP needed)."""
+    import urllib.request, json as _json
+    api_key = os.environ.get('BREVO_API_KEY', '')
+    if not api_key:
+        raise RuntimeError('BREVO_API_KEY not set')
+    sender_name = ' '.join(filter(None, [cfg.get('your_name',''), cfg.get('your_company','')])) or 'DAT Mailer'
+    payload = _json.dumps({
+        'sender':  {'name': sender_name, 'email': cfg['gmail_address']},
+        'to':      [{'email': to_email}],
+        'subject': subject,
+        'textContent': body,
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        'https://api.brevo.com/v3/smtp/email',
+        data=payload,
+        headers={'api-key': api_key, 'Content-Type': 'application/json', 'Accept': 'application/json'},
+        method='POST',
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        if resp.status not in (200, 201):
+            raise RuntimeError(f'Brevo HTTP {resp.status}: {resp.read().decode()}')
+
+
 def send_one_email(to_email, subject, body, cfg):
     try:
-        msg = MIMEMultipart()
-        msg['From'] = cfg['gmail_address']
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
-        _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, cfg['gmail_app_password'])
+        if os.environ.get('BREVO_API_KEY'):
+            _send_via_brevo(to_email, subject, body, cfg)
+        else:
+            msg = MIMEMultipart()
+            msg['From'] = cfg['gmail_address']
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+            _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, cfg['gmail_app_password'])
         return True, None
-    except Exception as e: return False, str(e)
+    except Exception as e:
+        app.logger.error(f'send_one_email FAILED to={to_email}: {type(e).__name__}: {e}')
+        return False, str(e)
 
 def run_send_job(loads, cfg, templates, uid=None):
     """Run in a background thread. uid must be passed explicitly — no session in threads."""
@@ -1467,32 +1496,45 @@ def api_quota():
 @app.route('/api/smtp-test', methods=['GET'])
 @login_required
 def api_smtp_test():
-    """Test SMTP connection using saved Gmail credentials. Returns detailed result."""
+    """Test email sending capability. Uses Brevo if BREVO_API_KEY set, else SMTP."""
     cfg = load_config()
-    gmail  = cfg.get('gmail_address', '')
-    passwd = cfg.get('gmail_app_password', '')
-    if not gmail or not passwd:
-        return jsonify({'ok': False, 'step': 'config', 'error': 'Gmail not configured — save Settings first'})
-    steps = []
-    try:
-        steps.append('connect smtp.gmail.com:587')
-        import smtplib as _smtplib
-        s = _smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
-        steps.append('ehlo')
-        s.ehlo()
-        steps.append('starttls')
-        s.starttls()
-        steps.append('ehlo2')
-        s.ehlo()
-        steps.append(f'login as {gmail}')
-        s.login(gmail, passwd)
-        steps.append('quit')
-        s.quit()
-        app.logger.info(f'SMTP-TEST OK for {gmail}')
-        return jsonify({'ok': True, 'steps': steps, 'gmail': gmail})
-    except Exception as e:
-        app.logger.error(f'SMTP-TEST FAIL at step "{steps[-1] if steps else "?"}": {e}')
-        return jsonify({'ok': False, 'step': steps[-1] if steps else 'unknown', 'error': str(e), 'steps': steps})
+    gmail = cfg.get('gmail_address', '')
+    if not gmail:
+        return jsonify({'ok': False, 'step': 'config', 'error': 'Gmail address not configured'})
+
+    brevo_key = os.environ.get('BREVO_API_KEY', '')
+    if brevo_key:
+        # Test Brevo API connectivity
+        try:
+            import urllib.request, json as _json
+            req = urllib.request.Request(
+                'https://api.brevo.com/v3/account',
+                headers={'api-key': brevo_key, 'Accept': 'application/json'},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = _json.loads(resp.read())
+            return jsonify({'ok': True, 'method': 'brevo', 'sender': gmail,
+                            'plan': data.get('plan', [{}])[0].get('type', '?'),
+                            'credits': data.get('plan', [{}])[0].get('credits', '?')})
+        except Exception as e:
+            return jsonify({'ok': False, 'method': 'brevo', 'step': 'api_check', 'error': str(e)})
+    else:
+        # Test SMTP
+        passwd = cfg.get('gmail_app_password', '')
+        if not passwd:
+            return jsonify({'ok': False, 'step': 'config', 'error': 'App password not configured'})
+        steps = []
+        try:
+            steps.append('connect smtp.gmail.com:587')
+            import smtplib as _smtplib
+            s = _smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
+            steps.append('starttls'); s.ehlo(); s.starttls(); s.ehlo()
+            steps.append(f'login {gmail}'); s.login(gmail, passwd)
+            steps.append('quit'); s.quit()
+            return jsonify({'ok': True, 'method': 'smtp', 'steps': steps})
+        except Exception as e:
+            return jsonify({'ok': False, 'method': 'smtp', 'step': steps[-1] if steps else '?',
+                            'error': str(e), 'steps': steps})
 
 @app.route('/api/stats', methods=['GET'])
 @login_required

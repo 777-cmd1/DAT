@@ -14,29 +14,128 @@
     --accent: #6366f1; --green: #22c55e; --red: #ef4444;
     --yellow: #eab308; --radius: 12px;
   }
-  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding: 32px; }
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Layout ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 32px; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 0; z-index: 100;
+  }
   .logo { display: flex; align-items: center; gap: 10px; }
   .logo-icon {
-    width: 36px; height: 36px;
+    width: 34px; height: 34px;
     background: linear-gradient(135deg, #6366f1, #22c55e);
-    border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px;
+    border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px;
   }
-  .logo-text { font-size: 18px; font-weight: 700; }
+  .logo-text { font-size: 17px; font-weight: 700; }
   .badge { font-size: 11px; background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); border-radius: 20px; padding: 2px 8px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
   .back-btn {
     background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
     color: var(--muted); font-family: inherit; font-size: 13px; padding: 6px 14px;
     cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    transition: color .15s, border-color .15s;
   }
   .back-btn:hover { color: var(--text); border-color: var(--accent); }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1000px; }
+  .refresh-btn {
+    background: none; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--muted); font-family: inherit; font-size: 13px; padding: 6px 12px;
+    cursor: pointer; transition: all .15s;
+  }
+  .refresh-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  .main { padding: 28px 32px; max-width: 1200px; }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 28px;
+    border-bottom: 1px solid var(--border); padding-bottom: 0;
+  }
+  .tab {
+    background: none; border: none; color: var(--muted);
+    font-family: inherit; font-size: 14px; font-weight: 500;
+    padding: 10px 18px; cursor: pointer; position: relative;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Stat cards ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+  }
+  .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 10px; }
+  .stat-value { font-size: 28px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+  .stat-value.green { color: var(--green); }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  /* ── Plan pills ── */
+  .plan-row { display: flex; gap: 12px; margin-bottom: 28px; }
+  .plan-pill {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 40px;
+    padding: 8px 18px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+  }
+  .plan-pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-free { background: var(--muted); }
+  .dot-starter { background: var(--accent); }
+  .dot-pro { background: var(--green); }
+  .plan-pill strong { font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+
+  /* ── Cards ── */
   .card {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 24px;
+    border-radius: var(--radius); padding: 24px; margin-bottom: 20px;
   }
   .card-title { font-size: 15px; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-  .card-title .count { font-size: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; color: var(--muted); }
+  .card-title .count { font-size: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; color: var(--muted); font-weight: 400; }
+
+  /* ── Tables ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; font-size: 11px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .05em;
+    padding: 0 12px 10px 0; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  th:last-child { padding-right: 0; }
+  td { padding: 11px 12px 11px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  td:last-child { padding-right: 0; }
+  tr:last-child td { border-bottom: none; }
+  .accounts-table tbody tr { cursor: pointer; transition: background .1s; }
+  .accounts-table tbody tr:hover td { background: rgba(99,102,241,0.04); }
+
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 32px 0; }
+
+  /* ── Badges ── */
+  .badge-plan {
+    font-size: 11px; border-radius: 20px; padding: 2px 8px; font-weight: 500;
+  }
+  .plan-free { background: rgba(107,107,138,0.15); color: var(--muted); border: 1px solid rgba(107,107,138,0.25); }
+  .plan-starter { background: rgba(99,102,241,0.1); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.25); }
+  .plan-pro { background: rgba(34,197,94,0.1); color: #86efac; border: 1px solid rgba(34,197,94,0.2); }
+  .status-badge { font-size: 11px; border-radius: 20px; padding: 2px 8px; font-weight: 500; }
+  .status-used { background: rgba(34,197,94,0.1); color: #86efac; border: 1px solid rgba(34,197,94,0.2); }
+  .status-pending { background: rgba(234,179,8,0.1); color: #fde047; border: 1px solid rgba(234,179,8,0.2); }
+  .status-expired { background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+  .conn-yes { color: var(--green); font-size: 12px; }
+  .conn-no  { color: var(--muted); font-size: 12px; }
+
+  /* ── Quota bar ── */
+  .quota-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 4px; min-width: 60px; }
+  .quota-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; }
+  .quota-fill.warn { background: var(--yellow); }
+  .quota-fill.full { background: var(--red); }
+
+  /* ── Invite form ── */
   .invite-form { display: flex; gap: 8px; margin-bottom: 20px; }
   .invite-form input {
     flex: 1; background: var(--bg); border: 1px solid var(--border);
@@ -53,22 +152,71 @@
   }
   .btn-invite:hover { opacity: 0.9; }
   .btn-invite:disabled { opacity: 0.5; cursor: not-allowed; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding: 0 0 10px; border-bottom: 1px solid var(--border); }
-  td { padding: 10px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-  .status-badge {
-    font-size: 11px; border-radius: 20px; padding: 2px 8px; font-weight: 500;
+  .invite-url {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--green); word-break: break-all; margin-top: 12px; display: none;
   }
-  .status-used { background: rgba(34,197,94,0.1); color: #86efac; border: 1px solid rgba(34,197,94,0.2); }
-  .status-pending { background: rgba(234,179,8,0.1); color: #fde047; border: 1px solid rgba(234,179,8,0.2); }
+  .invite-url.show { display: block; }
+
+  /* ── Delete btn ── */
   .del-btn {
     background: none; border: 1px solid transparent; border-radius: 6px;
     color: var(--muted); cursor: pointer; font-size: 12px; padding: 3px 8px;
     transition: all .15s;
   }
   .del-btn:hover { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 40px 20px; overflow-y: auto;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; width: 100%; max-width: 760px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    transform: translateY(20px); transition: transform .2s;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 24px; border-bottom: 1px solid var(--border);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; }
+  .modal-close {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 20px; line-height: 1; padding: 4px;
+    transition: color .15s;
+  }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 24px; }
+
+  .modal-section { margin-bottom: 24px; }
+  .modal-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 14px; }
+
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .info-item { background: var(--surface2); border-radius: 8px; padding: 12px 14px; }
+  .info-item-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .info-item-value { font-size: 14px; font-weight: 500; }
+
+  .mini-stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .mini-stat { background: var(--surface2); border-radius: 8px; padding: 12px 14px; text-align: center; }
+  .mini-stat-val { font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .mini-stat-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .quota-block { background: var(--surface2); border-radius: 8px; padding: 14px 16px; }
+  .quota-block-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .quota-block .quota-bar { height: 6px; }
+
+  .modal-table { font-size: 12px; }
+  .modal-table th { font-size: 10px; padding-bottom: 8px; }
+  .modal-table td { padding: 8px 10px 8px 0; }
+
+  /* ── Toast ── */
   .toast {
     position: fixed; bottom: 24px; right: 24px; z-index: 999;
     background: var(--surface); border: 1px solid var(--border);
@@ -79,71 +227,413 @@
   }
   .toast.show { transform: translateY(0); opacity: 1; }
   .toast.green { border-color: rgba(34,197,94,0.4); color: #86efac; }
-  .toast.red { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
-  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0; }
-  .invite-url {
-    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
-    color: var(--green); word-break: break-all; margin-top: 12px; display: none;
+  .toast.red   { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+
+  /* ── Loading spinner ── */
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Section display ── */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  @media (max-width: 900px) {
+    .stat-grid { grid-template-columns: repeat(3, 1fr); }
+    .mini-stat-row { grid-template-columns: repeat(2, 1fr); }
+    .info-grid { grid-template-columns: 1fr; }
+    .main { padding: 20px 16px; }
+    .header { padding: 16px; }
   }
-  .invite-url.show { display: block; }
 </style>
 </head>
 <body>
 
+<!-- Header -->
 <div class="header">
   <div class="logo">
     <div class="logo-icon">✉</div>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="logo-text">DAT Mailer</span>
-      <span class="badge">Admin Panel</span>
+      <span class="badge">Admin</span>
     </div>
   </div>
-  <a href="/" class="back-btn">← Back to App</a>
+  <div class="header-right">
+    <button class="refresh-btn" onclick="refreshCurrent()">↻ Refresh</button>
+    <a href="/" class="back-btn">← App</a>
+  </div>
 </div>
 
-<div class="grid">
-  <!-- Invite Users -->
-  <div class="card">
-    <div class="card-title">👥 Invite User</div>
-    <div class="invite-form">
-      <input type="email" id="inviteEmail" placeholder="email@example.com">
-      <button class="btn-invite" id="inviteBtn" onclick="sendInvite()">Send Invite</button>
+<!-- Main -->
+<div class="main">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
+    <button class="tab" data-tab="accounts" onclick="switchTab('accounts')">Accounts</button>
+    <button class="tab" data-tab="invites" onclick="switchTab('invites')">Invites</button>
+  </div>
+
+  <!-- ══ OVERVIEW ══ -->
+  <div class="section active" id="section-overview">
+
+    <div class="stat-grid" id="overview-cards">
+      <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="ov-users">—</div><div class="stat-sub">registered accounts</div></div>
+      <div class="stat-card"><div class="stat-label">Workspaces</div><div class="stat-value accent" id="ov-ws">—</div><div class="stat-sub">active workspaces</div></div>
+      <div class="stat-card"><div class="stat-label">Sends Today</div><div class="stat-value green" id="ov-sends">—</div><div class="stat-sub">emails sent today</div></div>
+      <div class="stat-card"><div class="stat-label">Total Replies</div><div class="stat-value" id="ov-replies">—</div><div class="stat-sub">all-time replies</div></div>
+      <div class="stat-card"><div class="stat-label">Active (24h)</div><div class="stat-value yellow" id="ov-active">—</div><div class="stat-sub">users active today</div></div>
     </div>
-    <div class="invite-url" id="inviteUrl"></div>
-    <div style="font-size:12px;color:var(--muted);margin-top:12px">
-      An email with a registration link will be sent. The link can only be used once.
+
+    <div class="plan-row" id="plan-pills">
+      <div class="plan-pill"><div class="dot dot-free"></div><span>Free</span><strong id="pp-free">—</strong></div>
+      <div class="plan-pill"><div class="dot dot-starter"></div><span>Starter</span><strong id="pp-starter">—</strong></div>
+      <div class="plan-pill"><div class="dot dot-pro"></div><span>Pro</span><strong id="pp-pro">—</strong></div>
+    </div>
+
+  </div>
+
+  <!-- ══ ACCOUNTS ══ -->
+  <div class="section" id="section-accounts">
+    <div class="card">
+      <div class="card-title">
+        All Accounts
+        <span class="count" id="accounts-count">0</span>
+      </div>
+      <div class="table-wrap">
+        <table class="accounts-table">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Workspace</th>
+              <th>Plan</th>
+              <th>Quota today</th>
+              <th>Sends</th>
+              <th>Replies</th>
+              <th>Follow-ups</th>
+              <th>Gmail</th>
+              <th>Last active</th>
+              <th>Joined</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="accounts-tbody">
+            <tr><td colspan="11" class="empty"><span class="spinner"></span>Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <!-- Active Users -->
-  <div class="card">
-    <div class="card-title">
-      Active Users
-      <span class="count" id="userCount">0</span>
+  <!-- ══ INVITES ══ -->
+  <div class="section" id="section-invites">
+
+    <!-- Invite form -->
+    <div class="card">
+      <div class="card-title">👥 Invite User</div>
+      <div class="invite-form">
+        <input type="email" id="inviteEmail" placeholder="email@example.com">
+        <button class="btn-invite" id="inviteBtn" onclick="sendInvite()">Send Invite</button>
+      </div>
+      <div class="invite-url" id="inviteUrl"></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px">
+        An email with a registration link will be sent. The link can only be used once and expires in 7 days.
+      </div>
     </div>
-    <table>
-      <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th></th></tr></thead>
-      <tbody id="usersTable"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
-    </table>
+
+    <!-- Users table -->
+    <div class="card">
+      <div class="card-title">
+        Active Users
+        <span class="count" id="userCount">0</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th></th></tr></thead>
+          <tbody id="usersTable"><tr><td colspan="4" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sent invites -->
+    <div class="card">
+      <div class="card-title">
+        Sent Invites
+        <span class="count" id="inviteCount">0</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Email</th><th>Sent</th><th>Expires</th><th>Status</th><th>Used At</th></tr></thead>
+          <tbody id="invitesTable"><tr><td colspan="5" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
-  <!-- Invites -->
-  <div class="card" style="grid-column: 1 / -1">
-    <div class="card-title">
-      Sent Invites
-      <span class="count" id="inviteCount">0</span>
+</div><!-- /main -->
+
+<!-- ══ Account Detail Modal ══ -->
+<div class="modal-overlay" id="acctModal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-title">Account Detail</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
     </div>
-    <table>
-      <thead><tr><th>Email</th><th>Sent</th><th>Status</th><th>Used At</th></tr></thead>
-      <tbody id="invitesTable"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
-    </table>
+    <div class="modal-body" id="modal-body">
+      <div style="text-align:center;padding:40px"><span class="spinner"></span>Loading…</div>
+    </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
+/* ─── Tab switching ─── */
+let currentTab = 'overview';
+let overviewLoaded = false, accountsLoaded = false, invitesLoaded = false;
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + tab));
+  if (tab === 'overview' && !overviewLoaded) loadOverview();
+  if (tab === 'accounts' && !accountsLoaded) loadAccounts();
+  if (tab === 'invites' && !invitesLoaded) { loadUsers(); loadInvites(); }
+}
+
+function refreshCurrent() {
+  if (currentTab === 'overview') { overviewLoaded = false; loadOverview(); }
+  if (currentTab === 'accounts') { accountsLoaded = false; loadAccounts(); }
+  if (currentTab === 'invites') { loadUsers(); loadInvites(); }
+}
+
+/* ─── Overview ─── */
+async function loadOverview() {
+  overviewLoaded = true;
+  try {
+    const res = await fetch('/api/admin/stats/overview');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    document.getElementById('ov-users').textContent   = d.total_users ?? 0;
+    document.getElementById('ov-ws').textContent      = d.total_workspaces ?? 0;
+    document.getElementById('ov-sends').textContent   = d.sends_today ?? 0;
+    document.getElementById('ov-replies').textContent = d.replies_total ?? 0;
+    document.getElementById('ov-active').textContent  = d.active_users_24h ?? 0;
+    const plans = d.plans || {};
+    document.getElementById('pp-free').textContent    = plans.free    ?? 0;
+    document.getElementById('pp-starter').textContent = plans.starter ?? 0;
+    document.getElementById('pp-pro').textContent     = plans.pro     ?? 0;
+  } catch(e) {
+    toast('Failed to load overview', 'red');
+  }
+}
+
+/* ─── Accounts ─── */
+let accountsData = [];
+
+async function loadAccounts() {
+  accountsLoaded = true;
+  const tbody = document.getElementById('accounts-tbody');
+  tbody.innerHTML = '<tr><td colspan="11" class="empty"><span class="spinner"></span>Loading…</td></tr>';
+  try {
+    const res = await fetch('/api/admin/stats/accounts');
+    if (!res.ok) throw new Error();
+    accountsData = await res.json();
+    document.getElementById('accounts-count').textContent = accountsData.length;
+    if (!accountsData.length) {
+      tbody.innerHTML = '<tr><td colspan="11" class="empty">No accounts yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = accountsData.map(a => {
+      const pct = a.quota_limit > 0 ? Math.min(100, Math.round(a.quota_used_today / a.quota_limit * 100)) : 0;
+      const fillClass = pct >= 100 ? 'full' : pct >= 80 ? 'warn' : '';
+      const quotaLabel = a.quota_limit > 0 ? `${a.quota_used_today}/${a.quota_limit}` : `${a.quota_used_today}/∞`;
+      const planClass = `plan-${a.plan || 'free'}`;
+      const lastAct = a.last_activity ? a.last_activity.slice(0, 10) : '—';
+      return `
+        <tr onclick="openAccountModal('${a.user_id}')">
+          <td class="mono">${esc(a.email)}</td>
+          <td>${esc(a.workspace_name || '—')}</td>
+          <td><span class="badge-plan ${planClass}">${a.plan || 'free'}</span></td>
+          <td>
+            <div style="font-size:12px;color:var(--muted)">${quotaLabel}</div>
+            <div class="quota-bar"><div class="quota-fill ${fillClass}" style="width:${pct}%"></div></div>
+          </td>
+          <td class="mono">${a.sends_total ?? 0}</td>
+          <td class="mono">${a.replies_total ?? 0}</td>
+          <td class="mono">${a.followups_total ?? 0}</td>
+          <td class="${a.email_connected ? 'conn-yes' : 'conn-no'}">${a.email_connected ? '● Connected' : '○ None'}</td>
+          <td class="muted" style="font-size:12px">${lastAct}</td>
+          <td class="muted" style="font-size:12px">${(a.created_at || '').slice(0, 10)}</td>
+          <td><button class="del-btn" onclick="event.stopPropagation();deleteUser('${esc(a.email)}')">Remove</button></td>
+        </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty">Failed to load accounts</td></tr>';
+    toast('Failed to load accounts', 'red');
+  }
+}
+
+/* ─── Account Detail Modal ─── */
+async function openAccountModal(userId) {
+  const overlay = document.getElementById('acctModal');
+  const body    = document.getElementById('modal-body');
+  const title   = document.getElementById('modal-title');
+  const sub     = document.getElementById('modal-sub');
+  body.innerHTML = '<div style="text-align:center;padding:40px"><span class="spinner"></span>Loading…</div>';
+  title.textContent = 'Account Detail';
+  sub.textContent = '';
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const res = await fetch(`/api/admin/stats/account/${encodeURIComponent(userId)}`);
+    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+    const d = await res.json();
+
+    title.textContent = d.email || 'Account Detail';
+    sub.textContent   = d.workspace_name ? `Workspace: ${d.workspace_name}` : '';
+
+    const planClass = `plan-${d.plan || 'free'}`;
+    const pct = d.quota_limit > 0 ? Math.min(100, Math.round(d.quota_used_today / d.quota_limit * 100)) : 0;
+    const fillClass = pct >= 100 ? 'full' : pct >= 80 ? 'warn' : '';
+    const quotaLabel = d.quota_limit > 0 ? `${d.quota_used_today} / ${d.quota_limit}` : `${d.quota_used_today} / Unlimited`;
+
+    /* Recent audit rows */
+    const auditRows = (d.recent_audit || []).map(a =>
+      `<tr>
+        <td style="color:var(--muted);font-size:11px">${(a.timestamp||'').slice(0,16).replace('T',' ')}</td>
+        <td>${esc(a.action||'')}</td>
+        <td style="color:var(--muted)">${esc(a.detail||'')}</td>
+      </tr>`
+    ).join('') || `<tr><td colspan="3" class="empty" style="padding:12px 0">No audit events</td></tr>`;
+
+    /* Recent sends rows */
+    const sendRows = (d.recent_sends || []).map(s =>
+      `<tr>
+        <td class="mono" style="font-size:11px">${esc(s.to_email||'')}</td>
+        <td style="color:var(--muted);font-size:11px">${(s.sent_at||'').slice(0,16).replace('T',' ')}</td>
+        <td style="color:var(--muted)">${esc((s.subject||'').slice(0,40))}</td>
+      </tr>`
+    ).join('') || `<tr><td colspan="3" class="empty" style="padding:12px 0">No sends yet</td></tr>`;
+
+    const replies_by = d.replies_by_status || {};
+    const followups_by = d.followups_by_status || {};
+
+    body.innerHTML = `
+      <!-- Info -->
+      <div class="modal-section">
+        <div class="modal-section-title">Account Info</div>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-item-label">Email</div>
+            <div class="info-item-value mono" style="font-size:13px">${esc(d.email||'—')}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-item-label">Name</div>
+            <div class="info-item-value">${esc(d.name||'—')}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-item-label">Plan</div>
+            <div class="info-item-value"><span class="badge-plan ${planClass}">${d.plan||'free'}</span></div>
+          </div>
+          <div class="info-item">
+            <div class="info-item-label">Joined</div>
+            <div class="info-item-value" style="color:var(--muted);font-size:13px">${(d.created_at||'').slice(0,10)||'—'}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-item-label">Gmail Account</div>
+            <div class="info-item-value mono" style="font-size:12px">${esc(d.gmail_address||'—')}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-item-label">Pipeline Size</div>
+            <div class="info-item-value mono">${d.pipeline_size ?? 0} contacts</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quota -->
+      <div class="modal-section">
+        <div class="modal-section-title">Quota Today</div>
+        <div class="quota-block">
+          <div class="quota-block-row">
+            <span style="font-size:13px">${quotaLabel}</span>
+            <span style="font-size:12px;color:var(--muted)">${pct}%</span>
+          </div>
+          <div class="quota-bar"><div class="quota-fill ${fillClass}" style="width:${pct}%"></div></div>
+        </div>
+      </div>
+
+      <!-- Send stats -->
+      <div class="modal-section">
+        <div class="modal-section-title">Sends</div>
+        <div class="mini-stat-row">
+          <div class="mini-stat"><div class="mini-stat-val">${d.sends_total??0}</div><div class="mini-stat-lbl">All-time</div></div>
+          <div class="mini-stat"><div class="mini-stat-val green">${d.sends_today??0}</div><div class="mini-stat-lbl">Today</div></div>
+          <div class="mini-stat"><div class="mini-stat-val accent">${d.sends_week??0}</div><div class="mini-stat-lbl">This week</div></div>
+          <div class="mini-stat"><div class="mini-stat-val">${d.replies_total??0}</div><div class="mini-stat-lbl">Replies</div></div>
+        </div>
+      </div>
+
+      <!-- Reply breakdown -->
+      <div class="modal-section">
+        <div class="modal-section-title">Replies by Status</div>
+        <div class="mini-stat-row">
+          <div class="mini-stat"><div class="mini-stat-val">${replies_by.new??0}</div><div class="mini-stat-lbl">New</div></div>
+          <div class="mini-stat"><div class="mini-stat-val">${replies_by.interested??0}</div><div class="mini-stat-lbl">Interested</div></div>
+          <div class="mini-stat"><div class="mini-stat-val">${replies_by.not_interested??0}</div><div class="mini-stat-lbl">Not interested</div></div>
+          <div class="mini-stat"><div class="mini-stat-val">${replies_by.booked??0}</div><div class="mini-stat-lbl">Booked</div></div>
+        </div>
+      </div>
+
+      <!-- Follow-up breakdown -->
+      <div class="modal-section">
+        <div class="modal-section-title">Follow-ups by Status</div>
+        <div class="mini-stat-row">
+          <div class="mini-stat"><div class="mini-stat-val">${followups_by.pending??0}</div><div class="mini-stat-lbl">Pending</div></div>
+          <div class="mini-stat"><div class="mini-stat-val green">${followups_by.sent??0}</div><div class="mini-stat-lbl">Sent</div></div>
+          <div class="mini-stat"><div class="mini-stat-val">${followups_by.skipped??0}</div><div class="mini-stat-lbl">Skipped</div></div>
+          <div class="mini-stat"><div class="mini-stat-val yellow">${(d.followups_total??0)}</div><div class="mini-stat-lbl">Total</div></div>
+        </div>
+      </div>
+
+      <!-- Recent sends -->
+      <div class="modal-section">
+        <div class="modal-section-title">Recent Sends (last 10)</div>
+        <table class="modal-table">
+          <thead><tr><th>To</th><th>Sent at</th><th>Subject</th></tr></thead>
+          <tbody>${sendRows}</tbody>
+        </table>
+      </div>
+
+      <!-- Audit log -->
+      <div class="modal-section">
+        <div class="modal-section-title">Recent Audit Log (last 10)</div>
+        <table class="modal-table">
+          <thead><tr><th>Time</th><th>Action</th><th>Detail</th></tr></thead>
+          <tbody>${auditRows}</tbody>
+        </table>
+      </div>
+    `;
+  } catch(e) {
+    body.innerHTML = `<div class="empty" style="padding:40px">${esc(e.message)||'Failed to load account detail'}</div>`;
+    toast('Failed to load account detail', 'red');
+  }
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('acctModal')) closeModalDirect();
+}
+function closeModalDirect() {
+  document.getElementById('acctModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDirect(); });
+
+/* ─── Invites section ─── */
 async function loadUsers() {
   const res = await fetch('/api/admin/users');
   const users = await res.json();
@@ -152,28 +642,34 @@ async function loadUsers() {
   if (!users.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No users yet</td></tr>'; return; }
   tbody.innerHTML = users.map(u => `
     <tr>
-      <td class="mono">${u.email}</td>
-      <td>${u.name || '—'}</td>
-      <td style="color:var(--muted);font-size:12px">${(u.created_at||'').slice(0,10)}</td>
-      <td><button class="del-btn" onclick="deleteUser('${u.email}')">Remove</button></td>
+      <td class="mono">${esc(u.email)}</td>
+      <td>${esc(u.name||'—')}</td>
+      <td class="muted" style="font-size:12px">${(u.created_at||'').slice(0,10)}</td>
+      <td><button class="del-btn" onclick="deleteUser('${esc(u.email)}')">Remove</button></td>
     </tr>
   `).join('');
 }
 
 async function loadInvites() {
+  invitesLoaded = true;
   const res = await fetch('/api/admin/invites');
   const invites = await res.json();
   document.getElementById('inviteCount').textContent = invites.length;
   const tbody = document.getElementById('invitesTable');
-  if (!invites.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No invites sent yet</td></tr>'; return; }
-  tbody.innerHTML = [...invites].reverse().map(i => `
-    <tr>
-      <td class="mono">${i.email}</td>
-      <td style="color:var(--muted);font-size:12px">${(i.created_at||'').slice(0,10)}</td>
-      <td><span class="status-badge ${i.used ? 'status-used' : 'status-pending'}">${i.used ? '✓ Used' : '⏳ Pending'}</span></td>
-      <td style="color:var(--muted);font-size:12px">${i.used_at ? i.used_at.slice(0,10) : '—'}</td>
-    </tr>
-  `).join('');
+  if (!invites.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No invites sent yet</td></tr>'; return; }
+  tbody.innerHTML = [...invites].reverse().map(i => {
+    let statusClass = 'status-pending', statusText = '⏳ Pending';
+    if (i.used)    { statusClass = 'status-used';    statusText = '✓ Used'; }
+    if (i.expired) { statusClass = 'status-expired'; statusText = '✕ Expired'; }
+    return `
+      <tr>
+        <td class="mono">${esc(i.email)}</td>
+        <td class="muted" style="font-size:12px">${(i.created_at||'').slice(0,10)}</td>
+        <td class="muted" style="font-size:12px">${i.expires_at ? i.expires_at.slice(0,10) : '—'}</td>
+        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+        <td class="muted" style="font-size:12px">${i.used_at ? i.used_at.slice(0,10) : '—'}</td>
+      </tr>`;
+  }).join('');
 }
 
 async function sendInvite() {
@@ -201,23 +697,34 @@ async function sendInvite() {
 }
 
 async function deleteUser(email) {
-  if (!confirm(`Remove user ${email}?`)) return;
+  if (!confirm(`Remove user ${email}? This cannot be undone.`)) return;
   const res = await fetch('/api/admin/users/delete', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ email })
   });
-  if (res.ok) { toast('User removed', 'green'); loadUsers(); }
-  else { toast('Failed to remove user', 'red'); }
+  if (res.ok) {
+    toast('User removed', 'green');
+    loadUsers();
+    if (currentTab === 'accounts') { accountsLoaded = false; loadAccounts(); }
+  } else {
+    toast('Failed to remove user', 'red');
+  }
+}
+
+/* ─── Helpers ─── */
+function esc(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function toast(msg, type='green') {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = `toast ${type} show`;
-  setTimeout(() => t.classList.remove('show'), 3000);
+  setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-loadUsers(); loadInvites();
+/* ─── Init ─── */
+loadOverview();
 </script>
 </body>
 </html>

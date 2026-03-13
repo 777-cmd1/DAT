@@ -130,9 +130,11 @@
     <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
   </div>
   <button class="btn" id="loginBtn" onclick="doLogin()">Sign In</button>
+  <a href="/reset-password" style="display:block;text-align:center;margin-top:16px;font-size:13px;color:var(--muted);text-decoration:none;transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">Forgot password?</a>
 </div>
 
 <script>
+  const CSRF_TOKEN = '{{ csrf_token }}';
   document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
   async function doLogin() {
@@ -145,7 +147,7 @@
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();

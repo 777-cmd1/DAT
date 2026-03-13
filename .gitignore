@@ -1,4 +1,47 @@
+# ── Secrets & local config ──────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+secrets.json
+*_private*
+
+# ── Local dev database ───────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Legacy flat-file data (pre-DB) ───────────────────────────────────────────
+userdata/
 users.json
-*.json
+invites.json
+data/activation.json
+
+# ── Uploads / user files ─────────────────────────────────────────────────────
 *.csv
-*.txt
+uploads/
+
+# ── Python cache ─────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Virtual envs ─────────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── Flask instance folder ────────────────────────────────────────────────────
+instance/
+
+# ── OS / IDE ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

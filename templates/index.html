@@ -220,6 +220,59 @@ body {
   background: var(--surface2);
 }
 .theme-toggle:hover { border-color: var(--border2); color: var(--text); }
+
+/* ── SIDEBAR USER + LOGOUT ─────────────────────────────────────────── */
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+.sidebar-user-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--accent-d);
+  color: var(--accent);
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+.sidebar-user-info { min-width: 0; flex: 1; }
+.sidebar-user-name {
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sidebar-user-role {
+  font-size: 10px; color: var(--text2);
+  margin-top: 1px;
+}
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 500;
+  transition: all var(--transition);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.logout-btn:hover {
+  color: #f87171;
+  border-color: rgba(248,113,113,.3);
+  background: rgba(248,113,113,.06);
+}
+.logout-btn svg { flex-shrink: 0; }
 .toggle-track {
   width: 34px; height: 18px;
   border-radius: 9px;
@@ -661,8 +714,15 @@ tr:last-child td { border-bottom: none; }
 .modal-footer { padding:16px 24px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; }
 
 /* FOLLOWUP CARDS */
-.fu-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:all .2s var(--ease); }
-.fu-card:hover { border-color:var(--border-h); box-shadow: var(--shadow); }
+.fu-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-bottom:8px; display:flex; align-items:center; gap:14px; transition:all .18s var(--ease); border-left-width:3px; border-left-color:transparent; }
+.fu-card:hover { border-color:var(--border-h); box-shadow: var(--shadow); transform: translateX(2px); }
+.fu-card.fu-selected { border-color:var(--accent); background:rgba(52,211,153,.04); border-left-color:var(--accent); }
+.fu-card.fu-lv-FU1 { border-left-color:var(--blue); }
+.fu-card.fu-lv-FU2 { border-left-color:var(--yellow); }
+.fu-card.fu-lv-FU3 { border-left-color:var(--red); }
+.fu-card.fu-selected.fu-lv-FU1,
+.fu-card.fu-selected.fu-lv-FU2,
+.fu-card.fu-selected.fu-lv-FU3 { border-color:var(--accent); border-left-color:var(--accent); }
 .fu-check { width:18px; height:18px; flex-shrink:0; cursor:pointer; accent-color:var(--accent); }
 .fu-level { font-size:10px; font-weight:800; padding:4px 12px; border-radius:20px; font-family:'DM Mono',monospace; flex-shrink:0; letter-spacing:.5px; }
 .fu-FU1 { background:var(--blue-dim); color:var(--blue); }
@@ -674,6 +734,77 @@ tr:last-child td { border-bottom: none; }
 .fu-route { font-size:11px; color:var(--text2); margin-top:3px; }
 .fu-meta { font-size:10px; color:var(--text3); margin-top:3px; font-family:'DM Mono',monospace; }
 .fu-actions { display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; }
+.fu-date-filters { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+.fu-date-btn {
+  font-size:11px; font-weight:600; padding:5px 11px; border-radius:6px;
+  cursor:pointer; border:1px solid var(--border); background:var(--surface2);
+  color:var(--text2); transition:all .15s; font-family:inherit;
+}
+.fu-date-btn:hover { border-color:var(--border2); color:var(--text); }
+.fu-date-btn.active { background:var(--accent-d); border-color:var(--accent); color:var(--accent); }
+.fu-sort-btn {
+  font-size:11px; font-weight:600; padding:5px 11px; border-radius:6px;
+  cursor:pointer; border:1px solid var(--border); background:var(--surface2);
+  color:var(--text2); transition:all .15s; font-family:inherit; display:flex; align-items:center; gap:4px;
+}
+.fu-sort-btn:hover { border-color:var(--border2); color:var(--text); }
+.fu-sort-btn.active { background:var(--accent-d); border-color:var(--accent); color:var(--accent); }
+.fu-bulk-bar {
+  display:none; align-items:center; gap:10px; flex-wrap:wrap;
+  background:rgba(52,211,153,.06); border:1px solid var(--accent); border-radius:10px;
+  padding:10px 14px; margin-bottom:12px;
+  animation: fuBulkIn .2s var(--ease);
+}
+@keyframes fuBulkIn {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.fu-bulk-bar.visible { display:flex; }
+.fu-bulk-count { font-size:13px; font-weight:800; color:var(--accent); margin-right:2px; font-family:'DM Mono',monospace; }
+.fu-bulk-label { font-size:12px; color:var(--text2); }
+
+/* ── INTELLIGENCE PAGE ───────────────────────────────────────────────────── */
+.intel-kpi-row { display:flex; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
+.intel-kpi {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:18px 22px; flex:1; min-width:160px;
+  display:flex; flex-direction:column; gap:6px;
+}
+.intel-kpi-label { font-size:11px; color:var(--text2); font-weight:700; text-transform:uppercase; letter-spacing:.07em; }
+.intel-kpi-value { font-size:32px; font-weight:800; font-family:'DM Mono',monospace; color:var(--accent); }
+.intel-kpi-sub   { font-size:11px; color:var(--text3); }
+.intel-kpi.future { border-style:dashed; opacity:.55; }
+.intel-kpi.future .intel-kpi-value { font-size:13px; color:var(--text2); font-weight:600; }
+.intel-table-wrap { overflow-x:auto; }
+.intel-table {
+  width:100%; border-collapse:collapse; font-size:12px;
+}
+.intel-table th {
+  text-align:left; padding:9px 12px;
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--text3); border-bottom:1px solid var(--border);
+  white-space:nowrap; cursor:pointer; user-select:none;
+}
+.intel-table th:hover { color:var(--text); }
+.intel-table th.sorted { color:var(--accent); }
+.intel-table td {
+  padding:9px 12px; border-bottom:1px solid var(--border);
+  color:var(--text2); vertical-align:middle;
+}
+.intel-table td.lane-cell { color:var(--text); font-weight:600; font-family:'DM Mono',monospace; font-size:11px; }
+.intel-table td.domain-cell { color:var(--blue); font-weight:700; font-family:'DM Mono',monospace; }
+.intel-table td.num { font-family:'DM Mono',monospace; color:var(--text); font-weight:600; text-align:right; }
+.intel-table tr:hover td { background:var(--surface2); }
+.intel-rate-bar {
+  display:flex; align-items:center; gap:8px; min-width:100px;
+}
+.intel-rate-track {
+  flex:1; height:6px; border-radius:3px; background:var(--surface3);
+  overflow:hidden; min-width:50px;
+}
+.intel-rate-fill { height:100%; border-radius:3px; transition:width .3s; }
+.intel-rate-pct { font-size:11px; font-family:'DM Mono',monospace; font-weight:700; min-width:32px; text-align:right; }
+.intel-empty { color:var(--text3); font-size:13px; padding:48px 0; text-align:center; }
 /* ── REPLY ACTION BUTTONS ───────────────────────────────────────────── */
 .reply-actions { display: flex; gap: 7px; flex-wrap: wrap; }
 .rbtn {
@@ -729,45 +860,68 @@ tr:last-child td { border-bottom: none; }
     </div>
 
     <nav class="nav">
-      <div class="nav-section">Workspace</div>
+      <!-- PRIMARY: core workflow -->
+      <div class="nav-section">Workflow</div>
       <div class="nav-item active" onclick="nav('send',this)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send
-      </div>
-      <div class="nav-item" onclick="nav('stats',this)">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Statistics
-      </div>
-      <div class="nav-item" onclick="nav('log',this)">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Send Log
-      </div>
-      <div class="nav-item" onclick="nav('replies',this)">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Replies
-        <span id="repliesBadge" class="nav-badge" style="display:none">0</span>
-      </div>
-      <div class="nav-item" onclick="nav('pipeline',this)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="6" height="18" rx="1"/><rect x="9" y="8" width="6" height="13" rx="1"/><rect x="16" y="13" width="6" height="8" rx="1"/></svg>
-        Pipeline
-        <span id="pipelineBadge" class="nav-badge">0</span>
       </div>
       <div class="nav-item" onclick="nav('followup',this)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Follow-up
         <span id="fuBadge" class="nav-badge" style="display:none">0</span>
       </div>
-      <div class="nav-section">Config</div>
-      <div class="nav-item" onclick="nav('stop',this)">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Stop List
+      <div class="nav-item" onclick="nav('replies',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Replies
+        <span id="repliesBadge" class="nav-badge" style="display:none">0</span>
       </div>
-      <div class="nav-item" onclick="nav('templates',this)">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Templates
+      <div class="nav-item" onclick="nav('stats',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Analytics
+      </div>
+      <div class="nav-item" onclick="nav('intelligence',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Intelligence
+      </div>
+      <!-- SECONDARY: pipeline + config -->
+      <div class="nav-section">Pipeline & Config</div>
+      <div class="nav-item" onclick="nav('pipeline',this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="6" height="18" rx="1"/><rect x="9" y="8" width="6" height="13" rx="1"/><rect x="16" y="13" width="6" height="8" rx="1"/></svg>
+        Pipeline
+        <span id="pipelineBadge" class="nav-badge">0</span>
       </div>
       <div class="nav-item" onclick="nav('settings',this)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings
       </div>
+      <div class="nav-item" onclick="nav('templates',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Templates
+      </div>
+      <div class="nav-item" onclick="nav('stop',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Stop List
+      </div>
+      <div class="nav-item" onclick="nav('log',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Send Log
+      </div>
     </nav>
 
     <div class="sidebar-bottom">
+      <!-- Current user -->
+      <div class="sidebar-user" id="sidebarUser">
+        <div class="sidebar-user-avatar" id="sidebarAvatar">?</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebarUserName">Loading…</div>
+          <div class="sidebar-user-role" id="sidebarUserRole">User</div>
+        </div>
+      </div>
+      <!-- Theme toggle -->
       <div class="theme-toggle" onclick="toggleTheme()">
         <span id="themeLabel" style="font-size:11px">Dark mode</span>
         <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </div>
+      <!-- Logout -->
+      <div class="logout-btn" onclick="logout()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Sign out
       </div>
     </div>
   </aside>
@@ -861,6 +1015,23 @@ tr:last-child td { border-bottom: none; }
                 <div id="dsProgressPctLabel" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:var(--text);pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.2)">0%</div>
               </div>
               <div id="dsMotivation" style="font-size:10px;color:var(--text3);margin-top:5px;text-align:right"></div>
+            </div>
+
+            <!-- QUOTA WIDGET -->
+            <div id="quotaBlock" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);display:flex;align-items:center;gap:5px">
+                  <i class="ph-bold ph-gauge" style="font-size:13px;color:var(--blue)"></i>Daily Quota
+                </span>
+                <span id="quotaPlanBadge" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border-radius:99px;background:rgba(99,102,241,.12);color:#818cf8;border:1px solid rgba(99,102,241,.2)">free</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                <span id="quotaUsedLabel" style="font-size:13px;font-weight:800;color:var(--text)">0 / 50</span>
+                <span id="quotaRemLabel" style="font-size:10px;color:var(--text3)">50 remaining</span>
+              </div>
+              <div style="background:var(--surface2);border-radius:99px;height:6px;overflow:hidden;border:1px solid var(--border)">
+                <div id="quotaBarFill" style="height:100%;border-radius:99px;background:var(--blue);transition:width .6s ease;width:0%"></div>
+              </div>
             </div>
 
             <div id="progressIdle" style="color:var(--text3);font-size:12px;padding:10px 0;text-align:center">
@@ -963,8 +1134,8 @@ tr:last-child td { border-bottom: none; }
     <!-- STATS -->
     <div class="page" id="page-stats">
       <div class="page-header">
-        <div class="page-title">Statistics</div>
-        <div class="page-sub">Email send history overview</div>
+        <div class="page-title">Analytics</div>
+        <div class="page-sub">Sending performance, reply rates &amp; automation impact</div>
       </div>
 
       <!-- ── AUTOMATION IMPACT ANALYTICS ─────────────────────────────────── -->
@@ -1199,7 +1370,8 @@ tr:last-child td { border-bottom: none; }
         <div class="page-title">Follow-up</div>
         <div class="page-sub">Contacts who replied Interested — send follow-ups by level</div>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <!-- TOOLBAR ROW 1: level filter + select all -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:10px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <input id="fuSearch" placeholder="🔍 Search email or route..." style="width:220px;font-family:'Syne',sans-serif;font-size:12px" oninput="renderFollowups()">
           <div class="filter-bar">
@@ -1211,9 +1383,45 @@ tr:last-child td { border-bottom: none; }
           </div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost" onclick="fuSelectAll()" style="font-size:12px;padding:8px 14px">☑ Select All Pending</button>
+          <button class="btn btn-ghost" onclick="fuSelectAll()" style="font-size:12px;padding:8px 14px">☑ Select All Visible</button>
           <button class="btn btn-primary" id="fuAutoBtn" onclick="sendAutoFollowup()"><i class="ph-bold ph-calendar-plus" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Schedule for Tomorrow</button>
         </div>
+      </div>
+
+      <!-- TOOLBAR ROW 2: date filters + sort -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="fu-date-filters">
+          <span style="font-size:11px;color:var(--text3);font-weight:600;margin-right:2px">Date:</span>
+          <button class="fu-date-btn active" id="fudate-all"       onclick="setFuDateFilter('all')">All time</button>
+          <button class="fu-date-btn"        id="fudate-today"     onclick="setFuDateFilter('today')">Today</button>
+          <button class="fu-date-btn"        id="fudate-yesterday" onclick="setFuDateFilter('yesterday')">Yesterday</button>
+          <button class="fu-date-btn"        id="fudate-3d"        onclick="setFuDateFilter('3d')">Last 3 days</button>
+          <button class="fu-date-btn"        id="fudate-7d"        onclick="setFuDateFilter('7d')">Last 7 days</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="font-size:11px;color:var(--text3);font-weight:600">Sort:</span>
+          <button class="fu-sort-btn active" id="fusort-added"   onclick="setFuSort('added_at')">
+            Added <span id="fusort-added-dir">↓</span>
+          </button>
+          <button class="fu-sort-btn"        id="fusort-contact" onclick="setFuSort('last_contact')">
+            Last contact <span id="fusort-contact-dir">↓</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- BULK ACTION BAR -->
+      <div class="fu-bulk-bar" id="fuBulkBar">
+        <span class="fu-bulk-count" id="fuBulkCount">0</span>
+        <span class="fu-bulk-label">selected —</span>
+        <button class="btn btn-primary" style="font-size:12px;padding:7px 14px" onclick="sendBulkFu()">
+          <i class="ph-bold ph-paper-plane-right" style="font-size:13px;margin-right:5px;vertical-align:middle"></i>Send Now
+        </button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="closeBulkFu()">
+          ✓ Close All
+        </button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px;margin-left:auto" onclick="fuDeselectAll()">
+          ✕ Deselect
+        </button>
       </div>
 
       <!-- SCHEDULED BLOCK -->
@@ -1224,6 +1432,87 @@ tr:last-child td { border-bottom: none; }
       <div id="fuStats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>
       <div id="followupList"></div>
     </div>
+
+<!-- INTELLIGENCE -->
+<div class="page" id="page-intelligence">
+  <div class="page-header">
+    <div class="page-title">Outreach Intelligence</div>
+    <div class="page-subtitle">Efficiency metrics for your freight outreach</div>
+  </div>
+
+  <!-- KPI Cards -->
+  <!-- KPI funnel order: Sent → Replies → Rate Requests → Emails/RR -->
+  <div class="intel-kpi-row">
+    <div class="intel-kpi">
+      <div class="intel-kpi-label">Total Emails Sent</div>
+      <div class="intel-kpi-value" id="intel-total-sent">—</div>
+      <div class="intel-kpi-sub">across all lanes</div>
+    </div>
+    <div class="intel-kpi">
+      <div class="intel-kpi-label">Replies</div>
+      <div class="intel-kpi-value" id="intel-replies-total">—</div>
+      <div class="intel-kpi-sub">unique senders</div>
+    </div>
+    <div class="intel-kpi">
+      <div class="intel-kpi-label">Rate Requests</div>
+      <div class="intel-kpi-value" id="intel-rr-total">—</div>
+      <div class="intel-kpi-sub">keyword-detected</div>
+    </div>
+    <div class="intel-kpi">
+      <div class="intel-kpi-label">Emails per Rate Request</div>
+      <div class="intel-kpi-value" id="intel-eprr">—</div>
+      <div class="intel-kpi-sub" id="intel-eprr-sub">outreach efficiency</div>
+    </div>
+  </div>
+
+  <!-- Lane Performance -->
+  <div style="margin-bottom:28px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px">
+      Lane Performance
+    </div>
+    <div class="intel-table-wrap">
+      <table class="intel-table">
+        <thead>
+          <tr>
+            <th onclick="sortIntelTable('lanes','lane',this)">Lane ↕</th>
+            <th onclick="sortIntelTable('lanes','emails_sent',this)" class="sorted">Sent ↕</th>
+            <th onclick="sortIntelTable('lanes','replies',this)">Replies ↕</th>
+            <th onclick="sortIntelTable('lanes','reply_rate',this)">Reply Rate ↕</th>
+            <th onclick="sortIntelTable('lanes','rate_requests',this)">Rate Reqs ↕</th>
+            <th onclick="sortIntelTable('lanes','rate_request_rate',this)">RR Rate ↕</th>
+          </tr>
+        </thead>
+        <tbody id="intel-lanes-body">
+          <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Broker Response Profile -->
+  <div>
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px">
+      Broker Response Profile
+    </div>
+    <div class="intel-table-wrap">
+      <table class="intel-table">
+        <thead>
+          <tr>
+            <th onclick="sortIntelTable('brokers','domain',this)">Domain ↕</th>
+            <th onclick="sortIntelTable('brokers','emails_sent',this)" class="sorted">Sent ↕</th>
+            <th onclick="sortIntelTable('brokers','replies',this)">Replies ↕</th>
+            <th onclick="sortIntelTable('brokers','reply_rate',this)">Reply Rate ↕</th>
+            <th onclick="sortIntelTable('brokers','rate_requests',this)">Rate Reqs ↕</th>
+            <th onclick="sortIntelTable('brokers','interested',this)">Interested ↕</th>
+          </tr>
+        </thead>
+        <tbody id="intel-brokers-body">
+          <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <div class="page" id="page-stop">
       <div class="page-header">
@@ -1303,7 +1592,7 @@ tr:last-child td { border-bottom: none; }
     <div class="page" id="page-pipeline">
       <div class="page-header">
         <div class="page-title">Pipeline</div>
-        <div class="page-sub">CRM воронка — відстежуй кожен контакт від першого листа до deal</div>
+        <div class="page-sub">Track every contact from first outreach to closed deal.</div>
       </div>
 
       <!-- Stats bar -->
@@ -1430,6 +1719,27 @@ function toggleTheme() {
   });
 })();
 
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+async function logout() {
+  try { await fetch('/api/auth/logout', {method:'POST'}); } catch(e) {}
+  window.location = '/login';
+}
+
+async function loadCurrentUser() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) { window.location = '/login'; return; }
+    const d = await res.json();
+    const name = d.name || d.email || '?';
+    const initial = name.charAt(0).toUpperCase();
+    document.getElementById('sidebarAvatar').textContent = initial;
+    document.getElementById('sidebarUserName').textContent = name;
+    document.getElementById('sidebarUserRole').textContent = d.is_admin ? 'Admin' : 'User';
+  } catch(e) {
+    document.getElementById('sidebarUserName').textContent = '—';
+  }
+}
+
 // ── NAV ──────────────────────────────────────────────────────────────────────
 function nav(page, el) {
   // Save send page full state before leaving
@@ -1446,6 +1756,7 @@ function nav(page, el) {
   // Restore send page state when returning
   if (page === 'send') {
     loadDailyStats();
+    loadQuota();
     loadAutomationImpact();
     const saved = sessionStorage.getItem('dat_draft');
     if (saved && datTxt && !datTxt.value) datTxt.value = saved;
@@ -1464,14 +1775,15 @@ function nav(page, el) {
     // Restore progress if send was running
     if (pollInterval) pollStatus();
   }
-  if (page === 'stats')     loadStats();
-  if (page === 'log')       loadLog();
-  if (page === 'stop')      loadStop();
-  if (page === 'templates') loadTemplates();
-  if (page === 'settings')  loadSettings();
-  if (page === 'replies')   initReplies();
-  if (page === 'followup')  loadFollowups();
-  if (page === 'pipeline')  loadPipeline();
+  if (page === 'stats')         loadStats();
+  if (page === 'log')           loadLog();
+  if (page === 'stop')          loadStop();
+  if (page === 'templates')     loadTemplates();
+  if (page === 'settings')      loadSettings();
+  if (page === 'replies')       initReplies();
+  if (page === 'followup')      loadFollowups();
+  if (page === 'pipeline')      loadPipeline();
+  if (page === 'intelligence')  loadIntelligence();
 }
 
 
@@ -1810,7 +2122,41 @@ function editDailyTarget() {
   setTimeout(() => toast('💡 Change Daily Target in Settings'), 300);
 }
 
-// ── TOAST ────────────────────────────────────────────────────────────────────
+// ── QUOTA ─────────────────────────────────────────────────────────────────────
+async function loadQuota() {
+  try {
+    const res = await fetch('/api/quota');
+    if (!res.ok) return;
+    const q = await res.json();
+
+    const badge  = document.getElementById('quotaPlanBadge');
+    const used   = document.getElementById('quotaUsedLabel');
+    const rem    = document.getElementById('quotaRemLabel');
+    const bar    = document.getElementById('quotaBarFill');
+
+    if (badge) {
+      badge.textContent = q.plan;
+      const colors = {free:'rgba(99,102,241,.12)/rgba(99,102,241,.2)/#818cf8', starter:'rgba(5,150,105,.12)/rgba(5,150,105,.2)/var(--accent)', pro:'rgba(234,179,8,.12)/rgba(234,179,8,.2)/var(--yellow)'};
+      const [bg, border, color] = (colors[q.plan] || colors.free).split('/');
+      badge.style.background = bg; badge.style.borderColor = border; badge.style.color = color;
+    }
+    if (q.unlimited) {
+      if (used) used.textContent = q.used + ' / ∞';
+      if (rem)  rem.textContent  = 'Unlimited';
+      if (bar)  { bar.style.width = '100%'; bar.style.background = 'var(--accent)'; }
+    } else {
+      const pct = q.pct || 0;
+      if (used) used.textContent = q.used + ' / ' + q.limit;
+      if (rem)  rem.textContent  = q.remaining + ' remaining';
+      if (bar) {
+        bar.style.width = pct + '%';
+        bar.style.background = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--blue)';
+      }
+    }
+  } catch(e) { /* quota widget is non-critical */ }
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
 function toast(msg, isErr) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1960,6 +2306,98 @@ async function pollStatus() {
     document.getElementById('sendBtn').disabled = false;
     toast(`Done! Sent: ${s.sent}, Errors: ${s.errors}`);
     loadDailyStats();
+  }
+}
+
+// ── INTELLIGENCE ──────────────────────────────────────────────────────────────
+let _intelData = null;
+let _intelSort  = { lanes: { key: 'emails_sent', asc: false }, brokers: { key: 'emails_sent', asc: false } };
+
+function _rateBar(pct, color) {
+  const w = Math.min(pct, 100);
+  return `<div class="intel-rate-bar">
+    <div class="intel-rate-track"><div class="intel-rate-fill" style="width:${w}%;background:${color}"></div></div>
+    <span class="intel-rate-pct" style="color:${color}">${pct}%</span>
+  </div>`;
+}
+
+function _renderIntelLanes(lanes) {
+  const tbody = document.getElementById('intel-lanes-body');
+  if (!lanes || !lanes.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="intel-empty">No lane data yet — send some emails first</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lanes.map(l => `
+    <tr>
+      <td class="lane-cell">${l.lane}</td>
+      <td class="num">${l.emails_sent}</td>
+      <td class="num">${l.replies}</td>
+      <td>${_rateBar(l.reply_rate, 'var(--blue)')}</td>
+      <td class="num">${l.rate_requests}</td>
+      <td>${_rateBar(l.rate_request_rate, 'var(--accent)')}</td>
+    </tr>`).join('');
+}
+
+function _renderIntelBrokers(brokers) {
+  const tbody = document.getElementById('intel-brokers-body');
+  if (!brokers || !brokers.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="intel-empty">No broker data yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = brokers.map(b => `
+    <tr>
+      <td class="domain-cell">${b.domain}</td>
+      <td class="num">${b.emails_sent}</td>
+      <td class="num">${b.replies}</td>
+      <td>${_rateBar(b.reply_rate, 'var(--blue)')}</td>
+      <td class="num">${b.rate_requests}</td>
+      <td class="num" style="color:var(--accent)">${b.interested}</td>
+    </tr>`).join('');
+}
+
+function sortIntelTable(table, key, th) {
+  if (!_intelData) return;
+  const s = _intelSort[table];
+  s.asc = (s.key === key) ? !s.asc : false;
+  s.key = key;
+  // Update header highlights
+  const thead = th.closest('thead');
+  thead.querySelectorAll('th').forEach(t => t.classList.remove('sorted'));
+  th.classList.add('sorted');
+  const arr = [..._intelData[table]].sort((a, b) => {
+    const av = a[key], bv = b[key];
+    if (typeof av === 'string') return s.asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    return s.asc ? av - bv : bv - av;
+  });
+  if (table === 'lanes')   _renderIntelLanes(arr);
+  if (table === 'brokers') _renderIntelBrokers(arr);
+}
+
+async function loadIntelligence() {
+  try {
+    const res = await fetch('/api/intelligence');
+    if (!res.ok) throw new Error('API error');
+    const d = await res.json();
+    _intelData = d;
+
+    // KPIs — funnel order: Sent → Replies → Rate Requests → Emails/RR
+    document.getElementById('intel-total-sent').textContent    = d.total_sent ?? 0;
+    document.getElementById('intel-replies-total').textContent = d.replies_total ?? 0;
+    document.getElementById('intel-rr-total').textContent      = d.rate_requests_total ?? 0;
+
+    const eprr = d.emails_per_rate_request;
+    document.getElementById('intel-eprr').textContent = eprr !== null ? eprr : '—';
+    document.getElementById('intel-eprr-sub').textContent = eprr !== null
+      ? `${d.total_sent} sent / ${d.rate_requests_total} rate req.`
+      : 'No rate requests detected yet';
+
+    _renderIntelLanes(d.lanes);
+    _renderIntelBrokers(d.brokers);
+  } catch(e) {
+    document.getElementById('intel-lanes-body').innerHTML =
+      '<tr><td colspan="6" class="intel-empty">Failed to load intelligence data</td></tr>';
+    document.getElementById('intel-brokers-body').innerHTML =
+      '<tr><td colspan="6" class="intel-empty">Failed to load intelligence data</td></tr>';
   }
 }
 
@@ -2391,7 +2829,8 @@ async function markRStop(sid) {
 }
 
 // ── FOLLOW-UP ───────────────────────────────────────────────────────────────
-let allFollowups = [], fuFilter = 'all';
+let allFollowups = [], fuFilter = 'all', fuDateFilter = 'all';
+let fuSort = { by: 'added_at', dir: 'desc' };
 
 async function loadFollowups() {
   allFollowups = await (await fetch('/api/followups')).json();
@@ -2408,11 +2847,103 @@ function setFuFilter(f) {
   document.getElementById('fuf-' + f)?.classList.add('active');
   renderFollowups();
 }
+function setFuDateFilter(f) {
+  fuDateFilter = f;
+  document.querySelectorAll('[id^="fudate-"]').forEach(el => el.classList.remove('active'));
+  document.getElementById('fudate-' + f)?.classList.add('active');
+  renderFollowups();
+}
+function setFuSort(by) {
+  if (fuSort.by === by) {
+    fuSort.dir = fuSort.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    fuSort.by = by; fuSort.dir = 'desc';
+  }
+  document.querySelectorAll('[id^="fusort-"]').forEach(el => el.classList.remove('active'));
+  const key = by === 'added_at' ? 'added' : 'contact';
+  document.getElementById('fusort-' + key)?.classList.add('active');
+  const dir = fuSort.dir === 'desc' ? '↓' : '↑';
+  document.getElementById('fusort-added-dir').textContent   = fuSort.by === 'added_at'    ? dir : '↓';
+  document.getElementById('fusort-contact-dir').textContent = fuSort.by === 'last_contact' ? dir : '↓';
+  renderFollowups();
+}
+function _fuRelDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  const now = new Date();
+  const diffMs = now - d;
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7)  return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays/7)}w ago`;
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+}
+function _fuDateStart(filter) {
+  const now = new Date(); now.setHours(0,0,0,0);
+  if (filter === 'today')     return now;
+  if (filter === 'yesterday') { const d = new Date(now); d.setDate(d.getDate()-1); return d; }
+  if (filter === '3d')        { const d = new Date(now); d.setDate(d.getDate()-2); return d; }
+  if (filter === '7d')        { const d = new Date(now); d.setDate(d.getDate()-6); return d; }
+  return null;
+}
+function _fuDateEnd(filter) {
+  if (filter === 'yesterday') { const d = new Date(); d.setHours(0,0,0,0); return d; }
+  return null;
+}
 function fuSelectAll() {
-  document.querySelectorAll('.fu-check').forEach(cb => {
-    const fu = allFollowups.find(f => f.email === cb.dataset.email);
-    if (fu && fu.status !== 'closed') cb.checked = true;
+  document.querySelectorAll('.fu-check:not([disabled])').forEach(cb => {
+    cb.checked = true;
+    cb.closest('.fu-card')?.classList.add('fu-selected');
   });
+  updateFuBulkBar();
+}
+function fuDeselectAll() {
+  document.querySelectorAll('.fu-check').forEach(cb => {
+    cb.checked = false;
+    cb.closest('.fu-card')?.classList.remove('fu-selected');
+  });
+  updateFuBulkBar();
+}
+function onFuCheckChange(cb) {
+  const card = cb.closest('.fu-card');
+  if (card) card.classList.toggle('fu-selected', cb.checked);
+  updateFuBulkBar();
+}
+function updateFuBulkBar() {
+  const checked = document.querySelectorAll('.fu-check:checked').length;
+  const bar = document.getElementById('fuBulkBar');
+  const cnt = document.getElementById('fuBulkCount');
+  if (!bar || !cnt) return;
+  if (checked > 0) {
+    bar.classList.add('visible');
+    cnt.textContent = checked;
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+async function sendBulkFu() {
+  const emails = [...document.querySelectorAll('.fu-check:checked')].map(cb => cb.dataset.email);
+  if (!emails.length) { toast('Select contacts first', true); return; }
+  const btn = document.querySelector('#fuBulkBar .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const res = await fetch('/api/followups/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({emails})});
+  const data = await res.json();
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph-bold ph-paper-plane-right" style="font-size:13px;margin-right:5px;vertical-align:middle"></i>Send Now'; }
+  const ok = (data.results || []).filter(r => r.ok).length;
+  const fail = (data.results || []).filter(r => !r.ok).length;
+  toast(`✅ Sent ${ok}${fail ? ` · ❌ ${fail} errors` : ''}`);
+  await loadFollowups();
+}
+async function closeBulkFu() {
+  const emails = [...document.querySelectorAll('.fu-check:checked')].map(cb => cb.dataset.email);
+  if (!emails.length) { toast('Select contacts first', true); return; }
+  await Promise.all(emails.map(email =>
+    fetch('/api/followups/update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, status:'closed', level:'closed'})})
+  ));
+  toast(`✓ Closed ${emails.length} follow-up${emails.length>1?'s':''}`);
+  await loadFollowups();
 }
 function renderFollowups() {
   const search = (document.getElementById('fuSearch')?.value || '').toLowerCase();
@@ -2423,7 +2954,26 @@ function renderFollowups() {
     (f.email||'').toLowerCase().includes(search) ||
     (f.route||'').toLowerCase().includes(search)
   );
-  // Stats bar
+  // Date filter
+  if (fuDateFilter !== 'all') {
+    const start = _fuDateStart(fuDateFilter);
+    const end   = _fuDateEnd(fuDateFilter);
+    list = list.filter(f => {
+      const dateStr = f.last_contact || f.added_at;
+      if (!dateStr) return false;
+      const d = new Date(dateStr); d.setHours(0,0,0,0);
+      if (start && d < start) return false;
+      if (end   && d >= end)  return false;
+      return true;
+    });
+  }
+  // Sort
+  list = [...list].sort((a, b) => {
+    const av = a[fuSort.by] ? new Date(a[fuSort.by]).getTime() : 0;
+    const bv = b[fuSort.by] ? new Date(b[fuSort.by]).getTime() : 0;
+    return fuSort.dir === 'desc' ? bv - av : av - bv;
+  });
+  // Stats bar (always uses full allFollowups)
   const counts = {FU1:0, FU2:0, FU3:0, closed:0};
   allFollowups.forEach(f => { if(f.status==='closed') counts.closed++; else counts[f.level]=(counts[f.level]||0)+1; });
   document.getElementById('fuStats').innerHTML = [
@@ -2438,28 +2988,36 @@ function renderFollowups() {
   const el = document.getElementById('followupList');
   if (!list.length) {
     el.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:48px 0;text-align:center">
-      ${allFollowups.length === 0 ? 'No follow-ups yet — mark replies as Interested to add them here' : 'No contacts in this category'}
+      ${allFollowups.length === 0 ? 'No follow-ups yet — mark replies as Interested to add them here' : 'No contacts match the current filters'}
     </div>`; return;
   }
   const levelColors = {FU1:'fu-FU1', FU2:'fu-FU2', FU3:'fu-FU3', closed:'fu-closed'};
   el.innerHTML = list.map(f => {
     const lvlClass = levelColors[f.level] || 'fu-FU1';
     const isClosed = f.status === 'closed';
-    return `<div class="fu-card" style="${isClosed ? 'opacity:.5' : ''}">
-      <input type="checkbox" class="fu-check" data-email="${f.email}" ${isClosed ? 'disabled' : ''}>
+    return `<div class="fu-card fu-lv-${f.level}" style="${isClosed ? 'opacity:.45' : ''}">
+      <input type="checkbox" class="fu-check" data-email="${f.email}" ${isClosed ? 'disabled' : ''} onchange="onFuCheckChange(this)">
       <span class="fu-level ${lvlClass}">${f.level}</span>
       <div class="fu-main">
         <div class="fu-email">${f.email}</div>
         ${f.route ? `<div class="fu-route">📍 ${f.route}</div>` : ''}
-        <div class="fu-meta">Last contact: ${f.last_contact || '—'} · Added: ${f.added_at || '—'}</div>
+        <div class="fu-meta">Last contact: ${_fuRelDate(f.last_contact)} · Added: ${_fuRelDate(f.added_at)}</div>
       </div>
       <div class="fu-actions">
-        ${!isClosed ? `<button class="rbtn rbtn-yes" onclick="sendOneFu('${f.email}')">📤 Send ${f.level}</button>` : ''}
-        ${!isClosed ? `<button class="rbtn rbtn-stop" onclick="closeFu('${f.email}')">✓ Close</button>` : ''}
-        <button class="rbtn rbtn-reset" onclick="deleteFu('${f.email}')" style="font-size:10px">✕</button>
+        ${!isClosed ? `<button class="rbtn rbtn-yes" onclick="sendOneFu('${f.email}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send ${f.level}
+        </button>` : ''}
+        ${!isClosed ? `<button class="rbtn rbtn-stop" onclick="closeFu('${f.email}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>Close
+        </button>` : '<span style="font-size:10px;color:var(--green);padding:4px 8px;font-weight:700">✓ Done</span>'}
+        <button class="rbtn rbtn-reset" onclick="deleteFu('${f.email}')" title="Remove from list" style="font-size:11px;padding:5px 8px;margin-left:4px;opacity:.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
     </div>`;
   }).join('');
+  // Reset bulk bar after re-render (checkboxes are new DOM nodes)
+  updateFuBulkBar();
 }
 async function sendOneFu(email) {
   const res = await fetch('/api/followups/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({emails:[email]})});
@@ -2795,6 +3353,7 @@ function renderAiStats(tab) {
 
 // ── STARTUP ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  loadCurrentUser();
   loadSettings();
   loadReplies();
   loadFollowups();

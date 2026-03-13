@@ -108,7 +108,8 @@
 </div>
 
 <script>
-  const TOKEN = "{{ token }}";
+  const TOKEN      = "{{ token }}";
+  const CSRF_TOKEN = "{{ csrf_token }}";
 
   async function doRegister() {
     const name = document.getElementById('name').value.trim();
@@ -124,7 +125,7 @@
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
         body: JSON.stringify({ token: TOKEN, name, password })
       });
       const data = await res.json();

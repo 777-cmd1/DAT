@@ -2311,21 +2311,15 @@ def auto_create_admin():
         if existing:
             # Ensure workspace exists even for pre-existing admin
             get_or_create_workspace(existing.id, name='Admin Workspace')
-            # Ensure admin always has correct role + plan
-            changed = False
+            # Ensure admin always has correct role
             if getattr(existing, 'role', 'user') != 'admin':
                 existing.role = 'admin'
-                changed = True
-            if getattr(existing, 'plan', 'free') != 'pro':
-                existing.plan = 'pro'
-                changed = True
-            if changed:
                 db.session.commit()
             return
         user = UserModel(
             email=admin_email.lower(), name='Admin',
             password=hash_password(admin_password),
-            role='admin', plan='pro', invited_by='system',
+            role='admin', invited_by='system',
         )
         db.session.add(user)
         db.session.flush()   # populate user.id before creating workspace

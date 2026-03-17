@@ -2664,10 +2664,22 @@ async function loadSettings() {
 }
 
 async function connectGmail() {
-  const res = await fetch('/api/gmail/auth-url');
-  const data = await res.json();
-  if (data.url) window.location.href = data.url;
-  else toast('❌ ' + (data.error || 'Could not get auth URL'));
+  const btn = document.querySelector('#gmailNotConnected button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  try {
+    const res = await fetch('/api/gmail/auth-url');
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      const msg = data.error || 'Could not get auth URL';
+      alert('Gmail connection error:\n\n' + msg + '\n\nMake sure GOOGLE_CLIENT_ID is set in Railway Variables.');
+    }
+  } catch (e) {
+    alert('Gmail connection error: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect Gmail Account'; }
+  }
 }
 
 async function disconnectGmail() {

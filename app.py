@@ -887,8 +887,8 @@ def render_template_text(tmpl, load, cfg):
         phone=cfg.get("your_phone",""),origin=load.get("origin",""),
         destination=load.get("destination",""),date=load.get("date",""),equip=load.get("equip",""))
 
-def load_stop_list():
-    uid = current_user_id()
+def load_stop_list(uid=None):
+    if uid is None: uid = current_user_id()
     be, bd = set(), set()
     if not uid: return be, bd
     from app.models import StopListEntry
@@ -1234,29 +1234,50 @@ def get_automation_impact():
         'config': {'delay_min': cfg.get('delay_min', 20), 'delay_max': cfg.get('delay_max', 45), 'delay_avg': round(delay_avg, 1)},
     }
 
+_EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
+_DATE_RE  = re.compile(r'\d{1,2}/\d{1,2}(?:\s*-\s*\d{1,2}/\d{1,2})?')
+_LEN_RE   = re.compile(r'\d{2,3}\s*ft')
+_WT_RE    = re.compile(r'[\d,]+\s*lbs')
+_EQUIP_RE = re.compile(r'\b(VM|FD|SD|V|F|R)\b')
+
 def parse_dat_text(text):
-    loads = []
-    email_pattern = re.compile(r'[\w.+\-]+@[\w.\-]+\.\w+')
-    lines = text.strip().split('\n')
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        emails = email_pattern.findall(line)
-        if emails:
-            load = {'email': emails[0], 'origin': '', 'destination': '', 'date': '', 'equip': '', 'weight': '', 'length': '', 'company': ''}
-            context = '\n'.join(lines[max(0, i-5):i+3])
-            origin_match = re.search(r'([A-Z][a-zA-Z\s]+,\s*[A-Z]{2})\s*(?:to|→|->)\s*([A-Z][a-zA-Z\s]+,\s*[A-Z]{2})', context)
-            if origin_match:
-                load['origin'] = origin_match.group(1).strip()
-                load['destination'] = origin_match.group(2).strip()
-            date_match = re.search(r'\b(\d{1,2}/\d{1,2}(?:/\d{2,4})?)\b', context)
-            if date_match: load['date'] = date_match.group(1)
-            equip_match = re.search(r'\b(Van|Reefer|Flatbed|Step\s*Deck|RGN|Tanker|Auto|Dray|Power\s*Only)\b', context, re.I)
-            if equip_match: load['equip'] = equip_match.group(1)
-            weight_match = re.search(r'(\d[\d,]+)\s*(?:lbs?|pounds?)', context, re.I)
-            if weight_match: load['weight'] = weight_match.group(1).replace(',', '')
-            loads.append(load)
-        i += 1
+    # Expand tab-separated lines into individual tokens so both
+    # newline-per-field and tab-per-field DAT board formats work
+    raw_lines = text.strip().splitlines()
+    lines = []
+    for l in raw_lines:
+        if '\t' in l:
+            lines.extend([t.strip() for t in l.split('\t') if t.strip()])
+        elif l.strip():
+            lines.append(l.strip())
+    loads, seen = [], set()
+    for i, line in enumerate(lines):
+        m = _EMAIL_RE.search(line)
+        if not m: continue
+        email = m.group().lower()
+        block = lines[max(0, i-12):i]
+        block_text = " ".join(block)
+        date_m  = _DATE_RE.search(block_text)
+        len_m   = _LEN_RE.search(block_text)
+        wt_m    = _WT_RE.search(block_text)
+        eq_m    = _EQUIP_RE.search(block_text)
+        company = lines[i-1] if i > 0 else ""
+        cities  = [l for l in block if re.match(r'^[A-Z][a-zA-Z\s]+,?\s+[A-Z]{2}$', l.strip()) and len(l) < 35]
+        origin      = cities[0] if len(cities) > 0 else ""
+        destination = cities[1] if len(cities) > 1 else ""
+        if not origin:
+            for bl in block:
+                if re.match(r'^[A-Z][a-zA-Z\s]{2,25}$', bl) and bl not in ('Full', 'Partial', 'Canceled'):
+                    origin = bl; break
+        key = f"{email}|{origin}|{destination}"
+        if key in seen: continue
+        seen.add(key)
+        loads.append({"email": email, "origin": origin, "destination": destination,
+            "date":    date_m.group()  if date_m  else "",
+            "equip":   eq_m.group()    if eq_m    else "",
+            "length":  len_m.group()   if len_m   else "",
+            "weight":  wt_m.group()    if wt_m    else "",
+            "company": company})
     return loads
 
 _SMTP_RETRYABLE = (
@@ -1340,10 +1361,15 @@ def run_send_job(loads, cfg, templates, uid=None):
     state.update({"running":True,"done":False,"total":len(loads),"current":0,"sent":0,"errors":0,"skipped":0,"log":[]})
     with app.app_context():
         _, sent_today_set = load_sent_log(uid=uid)
+        be, bd = load_stop_list(uid=uid)
         session_sent = set()
         for i, load in enumerate(loads):
             state["current"] = i + 1
             em = load['email'].lower().strip()
+            if is_blocked(load['email'], be, bd):
+                state["skipped"] += 1
+                state["log"].append({"time":datetime.now().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"stop list"})
+                continue
             if em in sent_today_set or em in session_sent:
                 state["skipped"] += 1
                 state["log"].append({"time":datetime.now().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
@@ -1440,12 +1466,14 @@ def api_parse():
     all_loads = parse_dat_text(raw)
     be, bd = load_stop_list(); all_sent, sent_today = load_sent_log()
     result = []; stats = {"total":len(all_loads),"new":0,"skip_today":0,"skip_dup":0,"skip_stop":0}
+    seen_in_batch = set()  # within-batch deduplication (by email only, like v1)
     for l in all_loads:
-        key = f"{l['email']}|{l['origin']}|{l['destination']}"
+        em = l['email'].lower().strip()
+        key = f"{em}|{l['origin']}|{l['destination']}"
         if is_blocked(l['email'], be, bd): l['skip'] = 'stop_list'; stats["skip_stop"] += 1
-        elif l['email'].lower() in sent_today: l['skip'] = 'today'; stats["skip_today"] += 1
-        elif key in all_sent: l['skip'] = 'duplicate'; stats["skip_dup"] += 1
-        else: l['skip'] = None; stats["new"] += 1
+        elif em in sent_today: l['skip'] = 'today'; stats["skip_today"] += 1
+        elif em in seen_in_batch or key in all_sent: l['skip'] = 'duplicate'; stats["skip_dup"] += 1
+        else: l['skip'] = None; stats["new"] += 1; seen_in_batch.add(em)
         result.append(l)
     return jsonify({"loads": result, "stats": stats})
 

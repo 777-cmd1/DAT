@@ -1,6 +1,7 @@
 """DAT Mailer Web App v2 — with invite-only auth"""
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-import re, csv, os, json, smtplib, random, threading, time, imaplib, secrets
+import re, csv, os, json, smtplib, random, threading, time, imaplib, secrets, base64
+import urllib.parse, urllib.request
 import email as email_lib
 from datetime import datetime, date, timedelta
 from email.mime.text import MIMEText
@@ -8,6 +9,10 @@ from email.mime.multipart import MIMEMultipart
 from email.header import decode_header as decode_email_header
 from collections import Counter
 from functools import wraps
+
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request as GRequest
+from googleapiclient.discovery import build as gbuild
 
 import bcrypt
 from dotenv import load_dotenv
@@ -134,6 +139,39 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Your admin email
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'your@email.com')
+
+# ── Gmail API OAuth2 ───────────────────────────────────────────────────────────
+_GMAIL_SCOPES = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify',
+]
+
+def _get_gmail_service(uid):
+    """Return an authenticated Gmail API service for the given user.
+    Auto-refreshes the access token if expired. Raises RuntimeError if not connected."""
+    from app.models import EmailAccount
+    acct = EmailAccount.query.filter_by(user_id=uid).first()
+    if not acct or not acct.google_refresh_token:
+        raise RuntimeError('Gmail OAuth not connected — please connect in Settings')
+    refresh_token = decrypt_field(acct.google_refresh_token)
+    client_id     = os.environ.get('GOOGLE_CLIENT_ID', '')
+    client_secret = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+    creds = Credentials(
+        token=decrypt_field(acct.google_access_token) if acct.google_access_token else None,
+        refresh_token=refresh_token,
+        token_uri='https://oauth2.googleapis.com/token',
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=_GMAIL_SCOPES,
+    )
+    # Refresh if expired or no access token
+    if not creds.valid:
+        creds.refresh(GRequest())
+        acct.google_access_token = encrypt_field(creds.token)
+        acct.token_expiry = creds.expiry
+        db.session.commit()
+    return gbuild('gmail', 'v1', credentials=creds)
 
 # ── SaaS PLAN QUOTAS (emails/day; None = unlimited) ──────────────────────────
 PLAN_QUOTAS = {
@@ -1035,50 +1073,90 @@ def get_route_for_email(email_addr):
 _last_fetch_times: dict = {}   # per-user IMAP throttle: {user_id: timestamp}
 
 def fetch_replies_from_gmail():
-    cfg=load_config()
-    if not cfg.get('gmail_address') or not cfg.get('gmail_app_password'): return {'error':'Gmail not configured'}
     uid = current_user_id()
+    # Rate-limit: once per 60 s per user
     now = time.time()
     last = _last_fetch_times.get(uid, 0)
     if now - last < 60:
         wait = int(60 - (now - last))
         return {'error': f'Please wait {wait}s before checking again', 'rate_limited': True}
     _last_fetch_times[uid] = now
-    known=get_known_emails()
-    existing=load_replies()
-    existing_ids={r['msg_id'] for r in existing}
-    new_replies=[]
+
+    known        = get_known_emails()
+    existing     = load_replies()
+    existing_ids = {r['msg_id'] for r in existing}
+    new_replies  = []
+
     try:
-        mail=imaplib.IMAP4_SSL('imap.gmail.com')
-        mail.login(cfg['gmail_address'],cfg['gmail_app_password'])
-        mail.select('INBOX')
-        import email.utils
-        since_date = (datetime.now() - timedelta(days=30)).strftime('%d-%b-%Y')
-        _,data=mail.search(None, f'SINCE {since_date}')
-        msg_ids=data[0].split()[-100:]
-        for mid in reversed(msg_ids):
+        service = _get_gmail_service(uid)
+    except RuntimeError as e:
+        return {'error': str(e)}
+
+    try:
+        since_epoch = int((datetime.now() - timedelta(days=30)).timestamp())
+        results = service.users().messages().list(
+            userId='me', q=f'after:{since_epoch} in:inbox', maxResults=100
+        ).execute()
+        messages = results.get('messages', [])
+
+        for msg_ref in messages:
             try:
-                _,msg_data=mail.fetch(mid,'(BODY.PEEK[])')
-                if not msg_data or not msg_data[0]: continue
-                raw=msg_data[0][1]
-                msg=email_lib.message_from_bytes(raw)
-                msg_id=msg.get('Message-ID',str(mid))
-                if msg_id in existing_ids: continue
-                from_addr=decode_str(msg.get('From',''))
-                em=re.search(r'[\w.+\-]+@[\w.\-]+\.\w+',from_addr)
-                if not em: continue
-                sender=em.group().lower()
-                if sender not in known: continue
-                new_replies.append({'msg_id':msg_id,'email':sender,'from':from_addr,
-                    'subject':decode_str(msg.get('Subject','')),'date':msg.get('Date',''),
-                    'body':get_email_body(msg),'route':get_route_for_email(sender),
-                    'status':'new','received_at':datetime.now().strftime('%Y-%m-%d %H:%M')})
-            except Exception: continue
-        mail.logout()
-    except Exception as e: return {'error':str(e)}
-    all_replies=new_replies+existing
+                msg_data = service.users().messages().get(
+                    userId='me', id=msg_ref['id'], format='full'
+                ).execute()
+
+                # Extract headers
+                headers = {h['name']: h['value']
+                           for h in msg_data.get('payload', {}).get('headers', [])}
+                msg_id   = headers.get('Message-ID', msg_ref['id'])
+                if msg_id in existing_ids:
+                    continue
+
+                from_addr = headers.get('From', '')
+                em = re.search(r'[\w.+\-]+@[\w.\-]+\.\w+', from_addr)
+                if not em:
+                    continue
+                sender = em.group().lower()
+                if sender not in known:
+                    continue
+
+                # Extract plain-text body
+                body = _gmail_get_body(msg_data.get('payload', {}))
+
+                new_replies.append({
+                    'msg_id':      msg_id,
+                    'email':       sender,
+                    'from':        from_addr,
+                    'subject':     headers.get('Subject', ''),
+                    'date':        headers.get('Date', ''),
+                    'body':        body,
+                    'route':       get_route_for_email(sender),
+                    'status':      'new',
+                    'received_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                })
+            except Exception:
+                continue
+
+    except Exception as e:
+        return {'error': str(e)}
+
+    all_replies = new_replies + existing
     save_replies(all_replies)
-    return {'new':len(new_replies),'total':len(all_replies)}
+    return {'new': len(new_replies), 'total': len(all_replies)}
+
+
+def _gmail_get_body(payload):
+    """Recursively extract plain-text body from a Gmail API message payload."""
+    mime_type = payload.get('mimeType', '')
+    if mime_type == 'text/plain':
+        data = payload.get('body', {}).get('data', '')
+        if data:
+            return base64.urlsafe_b64decode(data + '==').decode('utf-8', errors='replace')
+    for part in payload.get('parts', []):
+        result = _gmail_get_body(part)
+        if result:
+            return result
+    return ''
 
 def get_stats():
     empty={"total":0,"sent":0,"errors":0,"today":0,"by_day":[],"by_variant":[],"by_hour":[],
@@ -1315,42 +1393,40 @@ def _smtp_send_with_retry(msg_obj, from_addr, to_addr, password, retries=3, base
     raise last_exc or RuntimeError('SMTP failed with no exception captured')
 
 
-def _send_via_brevo(to_email, subject, body, cfg):
-    """Send via Brevo HTTP API (works on Railway — no SMTP needed)."""
-    import urllib.request, json as _json
-    api_key = os.environ.get('BREVO_API_KEY', '')
-    if not api_key:
-        raise RuntimeError('BREVO_API_KEY not set')
-    sender_name = ' '.join(filter(None, [cfg.get('your_name',''), cfg.get('your_company','')])) or 'DAT Mailer'
-    payload = _json.dumps({
-        'sender':  {'name': sender_name, 'email': cfg['gmail_address']},
-        'to':      [{'email': to_email}],
-        'subject': subject,
-        'textContent': body,
-    }).encode('utf-8')
-    req = urllib.request.Request(
-        'https://api.brevo.com/v3/smtp/email',
-        data=payload,
-        headers={'api-key': api_key, 'Content-Type': 'application/json', 'Accept': 'application/json'},
-        method='POST',
-    )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        if resp.status not in (200, 201):
-            raise RuntimeError(f'Brevo HTTP {resp.status}: {resp.read().decode()}')
-
-
-def send_one_email(to_email, subject, body, cfg):
+def send_one_email(to_email, subject, body, cfg, uid=None):
+    """Send email via Gmail API (primary) or SMTP (legacy fallback).
+    uid is needed to load OAuth tokens; defaults to current_user_id() if not passed."""
+    if uid is None:
+        uid = current_user_id()
     try:
-        if os.environ.get('BREVO_API_KEY'):
-            _send_via_brevo(to_email, subject, body, cfg)
-        else:
-            msg = MIMEMultipart()
-            msg['From'] = cfg['gmail_address']
-            msg['To'] = to_email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain'))
-            _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, cfg['gmail_app_password'])
+        # ── Primary: Gmail API ────────────────────────────────────────────────
+        try:
+            service = _get_gmail_service(uid)
+            mime_msg = MIMEText(body, 'plain')
+            mime_msg['to']      = to_email
+            mime_msg['from']    = cfg.get('gmail_address', '')
+            mime_msg['subject'] = subject
+            raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
+            service.users().messages().send(userId='me', body={'raw': raw}).execute()
+            return True, None
+        except RuntimeError as gmail_err:
+            # Not connected via OAuth — fall through to SMTP legacy
+            if 'not connected' not in str(gmail_err).lower():
+                raise  # real Gmail API error — don't silently fall back
+            app.logger.warning(f'Gmail API not connected for uid={uid}, trying SMTP legacy')
+
+        # ── Fallback: legacy SMTP (App Password) ─────────────────────────────
+        passwd = cfg.get('gmail_app_password', '')
+        if not passwd:
+            raise RuntimeError('No sending method configured — connect Gmail in Settings')
+        msg = MIMEMultipart()
+        msg['From']    = cfg['gmail_address']
+        msg['To']      = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, passwd)
         return True, None
+
     except Exception as e:
         app.logger.error(f'send_one_email FAILED to={to_email}: {type(e).__name__}: {e}')
         return False, str(e)
@@ -1378,7 +1454,7 @@ def run_send_job(loads, cfg, templates, uid=None):
             body = render_template_text(tmpl, load, cfg)
             parts = [load['origin'], load['destination'], load['date'], load['equip'], load.get('length',''), load.get('weight','')]
             subject = " | ".join(p for p in parts if p)
-            ok, err = send_one_email(load['email'], subject, body, cfg)
+            ok, err = send_one_email(load['email'], subject, body, cfg, uid=uid)
             ts = datetime.now().strftime('%H:%M:%S'); st = 'sent' if ok else 'error'
             append_log(load, st, vi, uid=uid)
             if ok:
@@ -1396,13 +1472,152 @@ def run_send_job(loads, cfg, templates, uid=None):
             'errors': state['errors'], 'skipped': state['skipped'],
         })
 
+# ── Gmail OAuth2 Routes ───────────────────────────────────────────────────────
+
+@app.route('/api/gmail/auth-url')
+@login_required
+def api_gmail_auth_url():
+    """Return Google OAuth consent URL. Frontend redirects user there."""
+    client_id    = os.environ.get('GOOGLE_CLIENT_ID', '')
+    redirect_uri = os.environ.get('GOOGLE_REDIRECT_URI', request.host_url.rstrip('/') + '/api/gmail/callback')
+    if not client_id:
+        return jsonify({'error': 'GOOGLE_CLIENT_ID not configured'}), 500
+    state = secrets.token_urlsafe(32)
+    session['oauth_state'] = state
+    params = urllib.parse.urlencode({
+        'client_id':     client_id,
+        'redirect_uri':  redirect_uri,
+        'response_type': 'code',
+        'scope':         ' '.join(_GMAIL_SCOPES),
+        'access_type':   'offline',
+        'prompt':        'consent',   # force refresh_token every time
+        'state':         state,
+    })
+    return jsonify({'url': f'https://accounts.google.com/o/oauth2/v2/auth?{params}'})
+
+
+@app.route('/api/gmail/callback')
+def api_gmail_callback():
+    """Handle Google OAuth redirect. Exchanges code for tokens and saves them."""
+    error = request.args.get('error')
+    if error:
+        return redirect(f'/?gmail_error={urllib.parse.quote(error)}')
+
+    state = request.args.get('state', '')
+    if state != session.get('oauth_state', ''):
+        return redirect('/?gmail_error=state_mismatch')
+    session.pop('oauth_state', None)
+
+    code         = request.args.get('code', '')
+    client_id    = os.environ.get('GOOGLE_CLIENT_ID', '')
+    client_secret = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+    redirect_uri = os.environ.get('GOOGLE_REDIRECT_URI', request.host_url.rstrip('/') + '/api/gmail/callback')
+
+    # Exchange code for tokens
+    try:
+        token_data = urllib.parse.urlencode({
+            'code':          code,
+            'client_id':     client_id,
+            'client_secret': client_secret,
+            'redirect_uri':  redirect_uri,
+            'grant_type':    'authorization_code',
+        }).encode('utf-8')
+        req = urllib.request.Request(
+            'https://oauth2.googleapis.com/token',
+            data=token_data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            token_resp = json.loads(resp.read())
+    except Exception as e:
+        app.logger.error(f'Gmail OAuth token exchange failed: {e}')
+        return redirect(f'/?gmail_error={urllib.parse.quote(str(e))}')
+
+    refresh_token = token_resp.get('refresh_token', '')
+    access_token  = token_resp.get('access_token', '')
+    expires_in    = token_resp.get('expires_in', 3600)
+
+    if not refresh_token:
+        return redirect('/?gmail_error=no_refresh_token')
+
+    # Build temporary credentials to get the user's Gmail address
+    try:
+        creds = Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=_GMAIL_SCOPES,
+        )
+        svc     = gbuild('gmail', 'v1', credentials=creds)
+        profile = svc.users().getProfile(userId='me').execute()
+        gmail_address = profile.get('emailAddress', '')
+    except Exception as e:
+        app.logger.error(f'Gmail profile fetch failed: {e}')
+        return redirect(f'/?gmail_error={urllib.parse.quote(str(e))}')
+
+    # Save tokens to EmailAccount
+    uid = current_user_id()
+    if not uid:
+        return redirect('/login')
+    from app.models import EmailAccount
+    acct = EmailAccount.query.filter_by(user_id=uid).first()
+    if not acct:
+        acct = EmailAccount(user_id=uid)
+        db.session.add(acct)
+    acct.gmail_address       = gmail_address
+    acct.google_refresh_token = encrypt_field(refresh_token)
+    acct.google_access_token  = encrypt_field(access_token)
+    acct.token_expiry         = datetime.utcnow() + timedelta(seconds=expires_in)
+    db.session.commit()
+
+    audit_log('gmail_oauth_connect', resource_type='email_account', uid=uid,
+              detail={'email': gmail_address})
+    return redirect('/?gmail_connected=1')
+
+
+@app.route('/api/gmail/status')
+@login_required
+def api_gmail_status():
+    """Return Gmail OAuth connection status for current user."""
+    uid = current_user_id()
+    from app.models import EmailAccount
+    acct = EmailAccount.query.filter_by(user_id=uid).first()
+    connected = bool(acct and acct.google_refresh_token)
+    return jsonify({
+        'connected': connected,
+        'email': acct.gmail_address if (acct and connected) else None,
+    })
+
+
+@app.route('/api/gmail/disconnect', methods=['POST'])
+@login_required
+def api_gmail_disconnect():
+    """Clear Gmail OAuth tokens for current user."""
+    uid = current_user_id()
+    from app.models import EmailAccount
+    acct = EmailAccount.query.filter_by(user_id=uid).first()
+    if acct:
+        acct.google_refresh_token = None
+        acct.google_access_token  = None
+        acct.token_expiry         = None
+        db.session.commit()
+    audit_log('gmail_oauth_disconnect', resource_type='email_account', uid=uid)
+    return jsonify({'ok': True})
+
+
 # ─── API ROUTES (all protected) ───────────────────────────────────────────────
 
 @app.route('/api/config', methods=['GET'])
 @login_required
 def api_get_config():
-    cfg = load_config(); safe = {k:v for k,v in cfg.items() if k != 'gmail_app_password'}
-    safe['has_password'] = bool(cfg.get('gmail_app_password')); return jsonify(safe)
+    cfg = load_config()
+    safe = {k: v for k, v in cfg.items() if k != 'gmail_app_password'}
+    safe['has_password']    = bool(cfg.get('gmail_app_password'))
+    safe['gmail_connected'] = bool(cfg.get('gmail_connected'))
+    return jsonify(safe)
 
 @app.route('/api/config', methods=['POST'])
 @login_required
@@ -1524,45 +1739,34 @@ def api_quota():
 @app.route('/api/smtp-test', methods=['GET'])
 @login_required
 def api_smtp_test():
-    """Test email sending capability. Uses Brevo if BREVO_API_KEY set, else SMTP."""
-    cfg = load_config()
-    gmail = cfg.get('gmail_address', '')
-    if not gmail:
-        return jsonify({'ok': False, 'step': 'config', 'error': 'Gmail address not configured'})
-
-    brevo_key = os.environ.get('BREVO_API_KEY', '')
-    if brevo_key:
-        # Test Brevo API connectivity
-        try:
-            import urllib.request, json as _json
-            req = urllib.request.Request(
-                'https://api.brevo.com/v3/account',
-                headers={'api-key': brevo_key, 'Accept': 'application/json'},
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = _json.loads(resp.read())
-            return jsonify({'ok': True, 'method': 'brevo', 'sender': gmail,
-                            'plan': data.get('plan', [{}])[0].get('type', '?'),
-                            'credits': data.get('plan', [{}])[0].get('credits', '?')})
-        except Exception as e:
-            return jsonify({'ok': False, 'method': 'brevo', 'step': 'api_check', 'error': str(e)})
-    else:
-        # Test SMTP
-        passwd = cfg.get('gmail_app_password', '')
-        if not passwd:
-            return jsonify({'ok': False, 'step': 'config', 'error': 'App password not configured'})
-        steps = []
-        try:
-            steps.append('connect smtp.gmail.com:587')
-            import smtplib as _smtplib
-            s = _smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
-            steps.append('starttls'); s.ehlo(); s.starttls(); s.ehlo()
-            steps.append(f'login {gmail}'); s.login(gmail, passwd)
-            steps.append('quit'); s.quit()
-            return jsonify({'ok': True, 'method': 'smtp', 'steps': steps})
-        except Exception as e:
-            return jsonify({'ok': False, 'method': 'smtp', 'step': steps[-1] if steps else '?',
-                            'error': str(e), 'steps': steps})
+    """Test email sending — Gmail API primary, SMTP legacy fallback."""
+    uid = current_user_id()
+    try:
+        service = _get_gmail_service(uid)
+        profile = service.users().getProfile(userId='me').execute()
+        return jsonify({'ok': True, 'method': 'gmail_api', 'email': profile.get('emailAddress', '')})
+    except RuntimeError as e:
+        if 'not connected' not in str(e).lower():
+            return jsonify({'ok': False, 'method': 'gmail_api', 'error': str(e)})
+    # Fallback: test SMTP (legacy App Password)
+    cfg    = load_config()
+    gmail  = cfg.get('gmail_address', '')
+    passwd = cfg.get('gmail_app_password', '')
+    if not gmail or not passwd:
+        return jsonify({'ok': False, 'method': 'none',
+                        'error': 'Not configured — connect Gmail in Settings'})
+    steps = []
+    try:
+        steps.append('connect smtp.gmail.com:587')
+        s = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
+        steps.append('starttls'); s.ehlo(); s.starttls(); s.ehlo()
+        steps.append(f'login {gmail}'); s.login(gmail, passwd)
+        steps.append('quit'); s.quit()
+        return jsonify({'ok': True, 'method': 'smtp_legacy', 'steps': steps})
+    except Exception as e:
+        return jsonify({'ok': False, 'method': 'smtp_legacy',
+                        'step': steps[-1] if steps else '?',
+                        'error': str(e), 'steps': steps})
 
 @app.route('/api/stats', methods=['GET'])
 @login_required

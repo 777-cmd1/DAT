@@ -79,8 +79,11 @@ class EmailAccount(db.Model):
     id             = db.Column(db.String(36), primary_key=True, default=_uuid)
     user_id        = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     workspace_id   = db.Column(db.String(36), db.ForeignKey('workspaces.id'))
-    gmail_address  = db.Column(db.String(255), default='')
-    gmail_password = db.Column(db.Text, default='')   # stored Fernet-encrypted; decrypt via decrypt_field() in app.py
+    gmail_address        = db.Column(db.String(255), default='')
+    gmail_password       = db.Column(db.Text, default='')   # legacy App Password, Fernet-encrypted
+    google_refresh_token = db.Column(db.Text, nullable=True)  # OAuth2 refresh token, Fernet-encrypted
+    google_access_token  = db.Column(db.Text, nullable=True)  # OAuth2 access token, Fernet-encrypted
+    token_expiry         = db.Column(db.DateTime, nullable=True)  # UTC expiry of access token
     your_name      = db.Column(db.String(255), default='')
     your_company   = db.Column(db.String(255), default='')
     your_phone     = db.Column(db.String(100), default='')
@@ -95,6 +98,7 @@ class EmailAccount(db.Model):
         return {
             'gmail_address':      self.gmail_address,
             'gmail_app_password': self.gmail_password,
+            'gmail_connected':    bool(self.google_refresh_token),
             'your_name':          self.your_name,
             'your_company':       self.your_company,
             'your_phone':         self.your_phone,

@@ -1666,8 +1666,25 @@ tr:last-child td { border-bottom: none; }
       <div style="max-width:520px">
         <div class="card">
           <div class="card-label">Gmail Account</div>
-          <div class="field"><label>Gmail Address</label><input id="cfgEmail" placeholder="your@gmail.com"></div>
-          <div class="field"><label>App Password</label><input id="cfgPass" type="password" placeholder="xxxx xxxx xxxx xxxx"></div>
+          <!-- Connected state -->
+          <div id="gmailConnected" style="display:none">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 0 14px">
+              <span style="color:#10b981;font-size:18px">●</span>
+              <div>
+                <div style="font-weight:600;font-size:14px" id="gmailConnectedEmail"></div>
+                <div style="font-size:12px;color:var(--muted)">Connected via Google OAuth</div>
+              </div>
+            </div>
+            <button class="btn" style="background:var(--surface);border:1px solid var(--border);color:var(--text)" onclick="disconnectGmail()">Disconnect</button>
+          </div>
+          <!-- Not connected state -->
+          <div id="gmailNotConnected">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Connect your Gmail account to send emails via Gmail API.</div>
+            <button class="btn btn-primary" onclick="connectGmail()">Connect Gmail Account</button>
+            <div id="gmailMigrateNotice" style="display:none;margin-top:10px;padding:10px 12px;background:#fef3c7;border-radius:8px;font-size:12px;color:#92400e">
+              ⚠ You have a legacy App Password saved. Connect via OAuth to enable sending on Railway.
+            </div>
+          </div>
         </div>
         <div class="card">
           <div class="card-label">Sender Info</div>
@@ -2616,26 +2633,57 @@ async function saveFuTemplates() {
 // ── SETTINGS ─────────────────────────────────────────────────────────────────
 async function loadSettings() {
   const cfg = await (await fetch('/api/config')).json();
-  document.getElementById('cfgEmail').value    = cfg.gmail_address || '';
-  document.getElementById('cfgPass').placeholder = cfg.has_password ? '••••••••••••••••' : 'xxxx xxxx xxxx xxxx';
+  // Gmail OAuth status
+  const connected = cfg.gmail_connected;
+  document.getElementById('gmailConnected').style.display    = connected ? '' : 'none';
+  document.getElementById('gmailNotConnected').style.display = connected ? 'none' : '';
+  if (connected) {
+    document.getElementById('gmailConnectedEmail').textContent = cfg.gmail_address || '';
+  }
+  // Show migration notice for legacy app-password users who haven't connected OAuth yet
+  const notice = document.getElementById('gmailMigrateNotice');
+  if (notice) notice.style.display = (!connected && cfg.has_password) ? '' : 'none';
+
   document.getElementById('cfgName').value     = cfg.your_name || '';
   document.getElementById('cfgCompany').value  = cfg.your_company || '';
   document.getElementById('cfgPhone').value    = cfg.your_phone || '';
   document.getElementById('cfgDelayMin').value = cfg.delay_min || 20;
   document.getElementById('cfgDelayMax').value = cfg.delay_max || 45;
   document.getElementById('cfgDailyTarget').value = localStorage.getItem('daily_target') || 100;
+
+  // Handle ?gmail_connected=1 redirect from OAuth callback
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('gmail_connected')) {
+    toast('✅ Gmail connected successfully!');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+  if (params.has('gmail_error')) {
+    toast('❌ Gmail connection failed: ' + params.get('gmail_error'));
+    window.history.replaceState({}, '', window.location.pathname);
+  }
 }
+
+async function connectGmail() {
+  const res = await fetch('/api/gmail/auth-url');
+  const data = await res.json();
+  if (data.url) window.location.href = data.url;
+  else toast('❌ ' + (data.error || 'Could not get auth URL'));
+}
+
+async function disconnectGmail() {
+  await fetch('/api/gmail/disconnect', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+  toast('Gmail disconnected');
+  loadSettings();
+}
+
 async function saveSettings() {
   const data = {
-    gmail_address: document.getElementById('cfgEmail').value,
-    your_name:     document.getElementById('cfgName').value,
-    your_company:  document.getElementById('cfgCompany').value,
-    your_phone:    document.getElementById('cfgPhone').value,
-    delay_min: parseInt(document.getElementById('cfgDelayMin').value),
-    delay_max: parseInt(document.getElementById('cfgDelayMax').value),
+    your_name:    document.getElementById('cfgName').value,
+    your_company: document.getElementById('cfgCompany').value,
+    your_phone:   document.getElementById('cfgPhone').value,
+    delay_min:    parseInt(document.getElementById('cfgDelayMin').value),
+    delay_max:    parseInt(document.getElementById('cfgDelayMax').value),
   };
-  const pass = document.getElementById('cfgPass').value;
-  if (pass && !pass.startsWith('•')) data.gmail_app_password = pass;
   await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
   // Save daily target to localStorage
   const targetVal = parseInt(document.getElementById('cfgDailyTarget').value);

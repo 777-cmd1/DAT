@@ -2329,6 +2329,24 @@ def auto_create_admin():
 
 with app.app_context():
     db.create_all()   # Creates all tables if they don't exist (safe to run repeatedly)
+    # Inline migration: add Gmail OAuth columns if missing (safe on PostgreSQL + SQLite)
+    try:
+        with db.engine.connect() as _conn:
+            for _col, _type in [
+                ('google_refresh_token', 'TEXT'),
+                ('google_access_token',  'TEXT'),
+                ('token_expiry',         'TIMESTAMP'),
+            ]:
+                try:
+                    _conn.execute(db.text(
+                        f'ALTER TABLE email_accounts ADD COLUMN {_col} {_type}'
+                    ))
+                    _conn.commit()
+                    print(f'✓ Migration: added column email_accounts.{_col}')
+                except Exception:
+                    _conn.rollback()  # column already exists — ignore
+    except Exception as _e:
+        print(f'Migration check skipped: {_e}')
     auto_create_admin()
 
 # ── Start background follow-up scheduler ──────────────────────────────────────

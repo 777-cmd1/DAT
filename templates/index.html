@@ -3417,9 +3417,11 @@ document.addEventListener('DOMContentLoaded', () => {
   loadReplies();
   loadFollowups();
   loadDailyStats();
+  loadQuota();
   loadAutomationImpact();
   checkScheduledDue();
   setInterval(loadDailyStats, 120000);
+  setInterval(loadQuota, 60000);
 });
 </script>
 </body>

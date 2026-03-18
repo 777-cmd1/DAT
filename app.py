@@ -569,6 +569,25 @@ def api_admin_delete_user():
     db.session.commit()
     return jsonify({'ok': True})
 
+@app.route('/api/admin/users/plan', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_change_plan():
+    data = request.json or {}
+    email = (data.get('email') or '').lower()
+    plan  = (data.get('plan') or '').lower()
+    if plan not in ('free', 'starter', 'pro'):
+        return jsonify({'error': 'Invalid plan'}), 400
+    from app.models import User as UserModel, Workspace
+    user = UserModel.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    ws = Workspace.query.filter_by(owner_id=user.id).first()
+    if ws:
+        ws.plan = plan
+        db.session.commit()
+    return jsonify({'ok': True, 'email': email, 'plan': plan})
+
 @app.route('/api/admin/stats/overview', methods=['GET'])
 @login_required
 @admin_required

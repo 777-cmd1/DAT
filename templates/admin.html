@@ -167,6 +167,12 @@
   }
   .del-btn:hover { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
 
+  .plan-select {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); cursor: pointer; font-size: 12px; padding: 3px 6px;
+  }
+  .plan-select:focus { outline: none; border-color: var(--accent); }
+
   /* ── Modal ── */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200;
@@ -457,7 +463,13 @@ async function loadAccounts() {
         <tr onclick="openAccountModal('${a.user_id}')">
           <td class="mono">${esc(a.email)}</td>
           <td>${esc(a.workspace_name || '—')}</td>
-          <td><span class="badge-plan ${planClass}">${a.plan || 'free'}</span></td>
+          <td>
+            <select class="plan-select" onchange="event.stopPropagation();changePlan('${esc(a.email)}',this.value)" onclick="event.stopPropagation()">
+              <option value="free"    ${(a.plan||'free')==='free'    ? 'selected' : ''}>free</option>
+              <option value="starter" ${(a.plan||'free')==='starter' ? 'selected' : ''}>starter</option>
+              <option value="pro"     ${(a.plan||'free')==='pro'     ? 'selected' : ''}>pro</option>
+            </select>
+          </td>
           <td>
             <div style="font-size:12px;color:var(--muted)">${quotaLabel}</div>
             <div class="quota-bar"><div class="quota-fill ${fillClass}" style="width:${pct}%"></div></div>
@@ -710,6 +722,20 @@ function copyInviteLink(url, btn) {
   }).catch(() => {
     prompt('Copy this link:', url);
   });
+}
+
+async function changePlan(email, plan) {
+  const res = await fetch('/api/admin/users/plan', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ email, plan })
+  });
+  if (res.ok) {
+    toast(`${email} → ${plan}`, 'green');
+    accountsLoaded = false; loadAccounts();
+  } else {
+    toast('Failed to change plan', 'red');
+  }
 }
 
 async function deleteUser(email) {

@@ -2124,21 +2124,42 @@ def add_to_followups(reply):
         ))
     db.session.commit()
 
-def send_followup_email(fu, template_text, cfg):
+def send_followup_email(fu, template_text, cfg, uid=None):
     try:
-        msg = MIMEMultipart()
-        msg['From'] = cfg['gmail_address']; msg['To'] = fu['email']
-        msg['Subject'] = 'Re: ' + fu['reply_subject'] if fu.get('reply_subject') else 'Follow-up'
-        if fu.get('reply_msg_id'):
-            msg['In-Reply-To'] = fu['reply_msg_id']; msg['References'] = fu['reply_msg_id']
+        subject = ('Re: ' + fu['reply_subject']) if fu.get('reply_subject') else 'Follow-up'
         body = template_text.format(
             name=cfg.get('your_name',''), company=cfg.get('your_company',''),
             phone=cfg.get('your_phone',''), route=fu.get('route',''),
             origin=fu.get('route','').split('→')[0].strip() if '→' in fu.get('route','') else '',
             destination=fu.get('route','').split('→')[1].strip() if '→' in fu.get('route','') else '',
         )
+        # Try Gmail API OAuth first
+        _uid = uid or current_user_id()
+        if _uid:
+            try:
+                service = _get_gmail_service(_uid)
+                mime_msg = MIMEText(body, 'plain')
+                mime_msg['to'] = fu['email']
+                mime_msg['from'] = cfg.get('gmail_address', '')
+                mime_msg['subject'] = subject
+                if fu.get('reply_msg_id'):
+                    mime_msg['In-Reply-To'] = fu['reply_msg_id']
+                    mime_msg['References']  = fu['reply_msg_id']
+                import base64 as _b64
+                raw = _b64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
+                service.users().messages().send(userId='me', body={'raw': raw}).execute()
+                return True, None
+            except RuntimeError as _e:
+                if 'not connected' not in str(_e).lower():
+                    raise
+        # Fallback: SMTP
+        msg = MIMEMultipart()
+        msg['From'] = cfg['gmail_address']; msg['To'] = fu['email']
+        msg['Subject'] = subject
+        if fu.get('reply_msg_id'):
+            msg['In-Reply-To'] = fu['reply_msg_id']; msg['References'] = fu['reply_msg_id']
         msg.attach(MIMEText(body, 'plain'))
-        _smtp_send_with_retry(msg, cfg['gmail_address'], fu['email'], cfg['gmail_app_password'])
+        _smtp_send_with_retry(msg, cfg['gmail_address'], fu['email'], cfg.get('gmail_app_password',''))
         return True, None
     except Exception as e: return False, str(e)
 
@@ -2528,10 +2549,10 @@ with app.app_context():
         ('email_accounts', 'google_refresh_token', 'TEXT'),
         ('email_accounts', 'google_access_token',  'TEXT'),
         ('email_accounts', 'token_expiry',         'TIMESTAMP'),
-        ('follow_ups',     'auto_enabled',          'BOOLEAN DEFAULT 1'),
+        ('follow_ups',     'auto_enabled',          'BOOLEAN DEFAULT TRUE'),
         ('follow_ups',     'scheduled_at',          'TIMESTAMP'),
         ('follow_ups',     'last_error',            'TEXT'),
-        ('workspaces',     'fu_auto_enabled',       'BOOLEAN DEFAULT 1'),
+        ('workspaces',     'fu_auto_enabled',       'BOOLEAN DEFAULT TRUE'),
     ]
     try:
         with db.engine.connect() as _conn:
@@ -2544,7 +2565,10 @@ with app.app_context():
                     _conn.rollback()  # column already exists — ignore
     except Exception as _e:
         print(f'Migration check skipped: {_e}')
-    auto_create_admin()
+    try:
+        auto_create_admin()
+    except Exception as _e:
+        print(f'auto_create_admin skipped: {_e}')
 
 # ── Start background follow-up scheduler ──────────────────────────────────────
 _scheduler = threading.Thread(target=scheduled_followup_worker, daemon=True, name='fu-scheduler')

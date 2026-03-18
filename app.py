@@ -1398,37 +1398,44 @@ def send_one_email(to_email, subject, body, cfg, uid=None):
     uid is needed to load OAuth tokens; defaults to current_user_id() if not passed."""
     if uid is None:
         uid = current_user_id()
+    app.logger.info(f'send_one_email START uid={uid} to={to_email}')
     try:
         # ── Primary: Gmail API ────────────────────────────────────────────────
         try:
+            app.logger.info(f'send_one_email: attempting Gmail API for uid={uid}')
             service = _get_gmail_service(uid)
             mime_msg = MIMEText(body, 'plain')
             mime_msg['to']      = to_email
             mime_msg['from']    = cfg.get('gmail_address', '')
             mime_msg['subject'] = subject
             raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
-            service.users().messages().send(userId='me', body={'raw': raw}).execute()
+            result = service.users().messages().send(userId='me', body={'raw': raw}).execute()
+            app.logger.info(f'send_one_email: Gmail API SUCCESS uid={uid} to={to_email} msgId={result.get("id")}')
             return True, None
         except RuntimeError as gmail_err:
             # Not connected via OAuth — fall through to SMTP legacy
             if 'not connected' not in str(gmail_err).lower():
+                app.logger.error(f'send_one_email: Gmail API ERROR uid={uid} to={to_email}: {gmail_err}')
                 raise  # real Gmail API error — don't silently fall back
-            app.logger.warning(f'Gmail API not connected for uid={uid}, trying SMTP legacy')
+            app.logger.warning(f'send_one_email: Gmail OAuth not connected uid={uid}, trying SMTP legacy')
 
         # ── Fallback: legacy SMTP (App Password) ─────────────────────────────
         passwd = cfg.get('gmail_app_password', '')
         if not passwd:
             raise RuntimeError('No sending method configured — connect Gmail in Settings')
+        app.logger.info(f'send_one_email: attempting SMTP for uid={uid} to={to_email}')
         msg = MIMEMultipart()
         msg['From']    = cfg['gmail_address']
         msg['To']      = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
         _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, passwd)
+        app.logger.info(f'send_one_email: SMTP SUCCESS uid={uid} to={to_email}')
         return True, None
 
     except Exception as e:
-        app.logger.error(f'send_one_email FAILED to={to_email}: {type(e).__name__}: {e}')
+        import traceback
+        app.logger.error(f'send_one_email FAILED uid={uid} to={to_email}: {type(e).__name__}: {e}\n{traceback.format_exc()}')
         return False, str(e)
 
 def run_send_job(loads, cfg, templates, uid=None):
@@ -1608,6 +1615,39 @@ def api_gmail_disconnect():
     return jsonify({'ok': True})
 
 
+@app.route('/api/gmail/test-send', methods=['POST'])
+@login_required
+def api_gmail_test_send():
+    """Minimal test: bypass all DAT logic, send one plain email via Gmail API only."""
+    uid = current_user_id()
+    to_email = request.json.get('to', '')
+    if not to_email:
+        return jsonify({'ok': False, 'error': 'Missing "to" field'}), 400
+    from app.models import EmailAccount
+    acct = EmailAccount.query.filter_by(user_id=uid).first()
+    app.logger.info(f'gmail/test-send uid={uid} acct={acct} to={to_email}')
+    if not acct:
+        return jsonify({'ok': False, 'error': 'No email account row found for this user'}), 400
+    app.logger.info(f'gmail/test-send acct.gmail_address={acct.gmail_address} '
+                    f'has_refresh={bool(acct.google_refresh_token)} '
+                    f'has_access={bool(acct.google_access_token)}')
+    try:
+        service = _get_gmail_service(uid)
+        mime_msg = MIMEText('This is a test email from DAT Mailer Gmail OAuth.', 'plain')
+        mime_msg['to']      = to_email
+        mime_msg['from']    = acct.gmail_address or ''
+        mime_msg['subject'] = 'DAT Mailer — Gmail OAuth test'
+        raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
+        result = service.users().messages().send(userId='me', body={'raw': raw}).execute()
+        app.logger.info(f'gmail/test-send SUCCESS uid={uid} msgId={result.get("id")}')
+        return jsonify({'ok': True, 'message_id': result.get('id'), 'from': acct.gmail_address})
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        app.logger.error(f'gmail/test-send FAILED uid={uid}: {e}\n{tb}')
+        return jsonify({'ok': False, 'error': str(e), 'traceback': tb}), 500
+
+
 # ─── API ROUTES (all protected) ───────────────────────────────────────────────
 
 @app.route('/api/config', methods=['GET'])
@@ -1703,11 +1743,12 @@ def api_send():
     loads = request.json.get("loads", [])
     if not loads: return jsonify({"error": "No loads"}), 400
     cfg = load_config()
-    has_email = bool(cfg.get("gmail_address"))
-    has_pass  = bool(cfg.get("gmail_app_password"))
-    app.logger.info(f'API /api/send cfg — has_email={has_email} has_pass={has_pass}')
-    if not has_email or not has_pass:
-        return jsonify({"error": "Gmail not configured"}), 400
+    has_email   = bool(cfg.get("gmail_address"))
+    has_pass    = bool(cfg.get("gmail_app_password"))
+    has_oauth   = bool(cfg.get("gmail_connected"))   # OAuth2 token present
+    app.logger.info(f'API /api/send cfg — has_email={has_email} has_pass={has_pass} has_oauth={has_oauth}')
+    if not has_email or (not has_pass and not has_oauth):
+        return jsonify({"error": "Gmail not configured — connect Gmail in Settings"}), 400
     # ── Quota check ──────────────────────────────────────────────────────────
     quota = get_daily_quota(uid)
     if not quota['unlimited']:

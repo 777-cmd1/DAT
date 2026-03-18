@@ -2166,24 +2166,38 @@ def api_get_followups(): return jsonify(load_followups())
 @login_required
 def api_send_followup():
     data = request.json; emails = data.get('emails', [])
+    uid = current_user_id()
     cfg = load_config()
-    if not cfg.get('gmail_address') or not cfg.get('gmail_app_password'):
-        return jsonify({'error': 'Gmail not configured'}), 400
-    fu_templates = get_fu_templates(); fus = load_followups(); results = []
+    fu_templates = get_fu_templates()
+    from app.models import FollowUp
+    records = {fu.contact_email: fu for fu in FollowUp.query.filter_by(user_id=uid).all()}
+    fus = load_followups(); results = []
+    now = datetime.utcnow()
     for fu in fus:
         if fu['email'] not in emails: continue
         if fu['status'] == 'closed': continue
         level = fu.get('level', 'FU1')
         tmpl = fu_templates.get(level, fu_templates.get('FU1', ''))
-        ok, err = send_followup_email(fu, tmpl, cfg)
+        ok, err = send_followup_email(fu, tmpl, cfg, uid=uid)
+        db_fu = records.get(fu['email'])
         if ok:
-            fu['last_fu_sent'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+            fu['last_fu_sent'] = now.strftime('%Y-%m-%d %H:%M')
             fu['last_contact'] = fu['last_fu_sent']; fu['status'] = 'sent'
             next_level = LEVEL_PROGRESSION.get(level, 'closed')
             fu['level'] = next_level
             if next_level == 'closed': fu['status'] = 'closed'
+            if db_fu:
+                db_fu.last_fu_sent = now; db_fu.last_contact = now
+                db_fu.status = fu['status']; db_fu.level = fu['level']
+                db_fu.scheduled_at = None; db_fu.last_error = None
+        else:
+            if db_fu:
+                db_fu.status = 'failed'; db_fu.last_error = err or 'Unknown error'
         results.append({'email': fu['email'], 'ok': ok, 'error': err or '', 'new_level': fu.get('level')})
-    save_followups(fus)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
     sent_count = sum(1 for r in results if r['ok'])
     audit_log('followup_sent', resource_type='followup',
               detail={'sent': sent_count, 'total': len(results), 'emails': emails})
@@ -2211,6 +2225,107 @@ def api_delete_followup():
         FollowUp.query.filter_by(user_id=uid, contact_email=email).delete()
         db.session.commit()
     return jsonify({'ok': True})
+
+@app.route('/api/followups/toggle-auto', methods=['POST'])
+@login_required
+def api_followup_toggle_auto():
+    """Toggle auto_enabled for a single follow-up contact."""
+    data = request.json; email = (data.get('email') or '').lower().strip()
+    uid = current_user_id()
+    if not uid or not email:
+        return jsonify({'error': 'Missing params'}), 400
+    from app.models import FollowUp
+    fu = FollowUp.query.filter_by(user_id=uid, contact_email=email).first()
+    if not fu:
+        return jsonify({'error': 'Not found'}), 404
+    fu.auto_enabled = not fu.auto_enabled
+    if not fu.auto_enabled and fu.status not in ('closed',):
+        fu.status = 'paused'
+    elif fu.auto_enabled and fu.status == 'paused':
+        fu.status = 'pending'
+    db.session.commit()
+    return jsonify({'ok': True, 'auto_enabled': fu.auto_enabled, 'status': fu.status})
+
+@app.route('/api/followups/reschedule', methods=['POST'])
+@login_required
+def api_followup_reschedule():
+    """Set a manual scheduled_at override for one or more contacts."""
+    data = request.json
+    emails = data.get('emails') or ([data['email']] if data.get('email') else [])
+    date_str = data.get('date')  # 'YYYY-MM-DD' or None to clear
+    uid = current_user_id()
+    if not uid or not emails:
+        return jsonify({'error': 'Missing params'}), 400
+    from app.models import FollowUp
+    from datetime import date as _date
+    sched = None
+    if date_str:
+        try:
+            sched = datetime.strptime(date_str, '%Y-%m-%d').replace(hour=9, minute=0)
+        except ValueError:
+            return jsonify({'error': 'Invalid date format'}), 400
+    updated = 0
+    for email in emails:
+        fu = FollowUp.query.filter_by(user_id=uid, contact_email=email.lower().strip()).first()
+        if fu and fu.status not in ('closed',):
+            fu.scheduled_at = sched
+            if sched and fu.status == 'paused':
+                fu.status = 'pending'
+                fu.auto_enabled = True
+            updated += 1
+    db.session.commit()
+    return jsonify({'ok': True, 'updated': updated})
+
+@app.route('/api/followups/bulk-action', methods=['POST'])
+@login_required
+def api_followup_bulk_action():
+    """Bulk operations: pause, resume, close, reschedule-tomorrow."""
+    data = request.json
+    action = data.get('action')   # 'pause' | 'resume' | 'close' | 'reschedule'
+    emails = data.get('emails', [])
+    date_str = data.get('date')
+    uid = current_user_id()
+    if not uid or not action or not emails:
+        return jsonify({'error': 'Missing params'}), 400
+    from app.models import FollowUp
+    updated = 0
+    for email in emails:
+        fu = FollowUp.query.filter_by(user_id=uid, contact_email=email.lower().strip()).first()
+        if not fu: continue
+        if action == 'pause':
+            fu.auto_enabled = False
+            if fu.status not in ('closed',): fu.status = 'paused'
+        elif action == 'resume':
+            fu.auto_enabled = True
+            if fu.status == 'paused': fu.status = 'pending'
+        elif action == 'close':
+            fu.status = 'closed'; fu.level = 'closed'
+        elif action == 'reschedule' and date_str:
+            try:
+                fu.scheduled_at = datetime.strptime(date_str, '%Y-%m-%d').replace(hour=9, minute=0)
+                fu.auto_enabled = True
+                if fu.status == 'paused': fu.status = 'pending'
+            except ValueError:
+                pass
+        updated += 1
+    db.session.commit()
+    return jsonify({'ok': True, 'updated': updated})
+
+@app.route('/api/settings/fu-auto', methods=['GET', 'POST'])
+@login_required
+def api_fu_auto_setting():
+    """Global per-workspace auto follow-up toggle."""
+    uid = current_user_id()
+    from app.models import Workspace
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    if not ws:
+        return jsonify({'error': 'Workspace not found'}), 404
+    if request.method == 'POST':
+        enabled = request.json.get('enabled', True)
+        ws.fu_auto_enabled = bool(enabled)
+        db.session.commit()
+        return jsonify({'ok': True, 'fu_auto_enabled': ws.fu_auto_enabled})
+    return jsonify({'fu_auto_enabled': bool(getattr(ws, 'fu_auto_enabled', True))})
 
 @app.route('/api/fu-templates', methods=['GET'])
 @login_required
@@ -2309,7 +2424,7 @@ def _get_fu_templates_for_user(uid):
 
 def _run_scheduled_followups():
     """Find and auto-send all due follow-ups across all users. Called from daemon thread."""
-    from app.models import FollowUp, EmailAccount
+    from app.models import FollowUp, EmailAccount, Workspace
     now = datetime.utcnow()
     sent_total = 0
     pending = FollowUp.query.filter(
@@ -2317,34 +2432,53 @@ def _run_scheduled_followups():
         FollowUp.level.in_(['FU1', 'FU2', 'FU3']),
     ).all()
     for fu in pending:
-        delay_days = FU_AUTO_DELAYS.get(fu.level)
-        if not delay_days: continue
-        # Reference point: last_contact for FU1, last_fu_sent for FU2/FU3
-        ref = fu.last_fu_sent if fu.level != 'FU1' else (fu.last_contact or fu.added_at)
-        if not ref or (now - ref).days < delay_days:
+        # Skip if per-contact auto is disabled
+        if getattr(fu, 'auto_enabled', True) is False:
             continue
+        # Skip if workspace global auto is disabled
+        ws = Workspace.query.filter_by(owner_id=fu.user_id).first()
+        if ws and getattr(ws, 'fu_auto_enabled', True) is False:
+            continue
+        # Determine due date: manual schedule override takes precedence
+        scheduled_at = getattr(fu, 'scheduled_at', None)
+        if scheduled_at:
+            if now < scheduled_at:
+                continue   # not yet due
+        else:
+            delay_days = FU_AUTO_DELAYS.get(fu.level)
+            if not delay_days: continue
+            ref = fu.last_fu_sent if fu.level != 'FU1' else (fu.last_contact or fu.added_at)
+            if not ref or (now - ref).days < delay_days:
+                continue
         # Load user's Gmail config (no session — direct DB lookup)
         acct = EmailAccount.query.filter_by(user_id=fu.user_id).first()
-        if not acct or not acct.gmail_address or not acct.gmail_password:
+        if not acct:
             continue
         cfg = acct.to_config_dict()
-        cfg['gmail_app_password'] = decrypt_field(cfg['gmail_app_password'])
+        if acct.gmail_password:
+            cfg['gmail_app_password'] = decrypt_field(acct.gmail_password)
         tmpl = _get_fu_templates_for_user(fu.user_id).get(fu.level, '')
         if not tmpl: continue
-        ok, _ = send_followup_email(fu.to_dict(), tmpl, cfg)
+        ok, err = send_followup_email(fu.to_dict(), tmpl, cfg, uid=fu.user_id)
         if ok:
             fu.last_fu_sent = now
             fu.last_contact = now
             fu.status = 'sent'
+            fu.scheduled_at = None   # clear manual override after sending
+            fu.last_error = None
             next_level = LEVEL_PROGRESSION.get(fu.level, 'closed')
             fu.level = next_level
             if next_level == 'closed': fu.status = 'closed'
             sent_total += 1
-    if sent_total:
+        else:
+            fu.status = 'failed'
+            fu.last_error = err or 'Unknown error'
+    if pending:
         try:
             db.session.commit()
         except Exception:
             db.session.rollback()
+    if sent_total:
         app.logger.info(f'[scheduler] Auto-sent {sent_total} follow-up(s)')
     return sent_total
 
@@ -2389,20 +2523,23 @@ def auto_create_admin():
 
 with app.app_context():
     db.create_all()   # Creates all tables if they don't exist (safe to run repeatedly)
-    # Inline migration: add Gmail OAuth columns if missing (safe on PostgreSQL + SQLite)
+    # Inline migrations — safe to run on every startup (idempotent ADD COLUMN IF NOT EXISTS)
+    _migrations = [
+        ('email_accounts', 'google_refresh_token', 'TEXT'),
+        ('email_accounts', 'google_access_token',  'TEXT'),
+        ('email_accounts', 'token_expiry',         'TIMESTAMP'),
+        ('follow_ups',     'auto_enabled',          'BOOLEAN DEFAULT 1'),
+        ('follow_ups',     'scheduled_at',          'TIMESTAMP'),
+        ('follow_ups',     'last_error',            'TEXT'),
+        ('workspaces',     'fu_auto_enabled',       'BOOLEAN DEFAULT 1'),
+    ]
     try:
         with db.engine.connect() as _conn:
-            for _col, _type in [
-                ('google_refresh_token', 'TEXT'),
-                ('google_access_token',  'TEXT'),
-                ('token_expiry',         'TIMESTAMP'),
-            ]:
+            for _tbl, _col, _type in _migrations:
                 try:
-                    _conn.execute(db.text(
-                        f'ALTER TABLE email_accounts ADD COLUMN {_col} {_type}'
-                    ))
+                    _conn.execute(db.text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_type}'))
                     _conn.commit()
-                    print(f'✓ Migration: added column email_accounts.{_col}')
+                    print(f'✓ Migration: added {_tbl}.{_col}')
                 except Exception:
                     _conn.rollback()  # column already exists — ignore
     except Exception as _e:

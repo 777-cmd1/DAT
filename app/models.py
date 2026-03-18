@@ -37,11 +37,12 @@ class User(db.Model):
 class Workspace(db.Model):
     __tablename__ = 'workspaces'
 
-    id         = db.Column(db.String(36), primary_key=True, default=_uuid)
-    name       = db.Column(db.String(255), nullable=False)
-    owner_id   = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
-    plan       = db.Column(db.String(20), default='free')  # 'free' | 'starter' | 'pro'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id               = db.Column(db.String(36), primary_key=True, default=_uuid)
+    name             = db.Column(db.String(255), nullable=False)
+    owner_id         = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    plan             = db.Column(db.String(20), default='free')  # 'free' | 'starter' | 'pro'
+    fu_auto_enabled  = db.Column(db.Boolean, default=True, nullable=False, server_default='1')
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
 
     owner = db.relationship('User', backref='owned_workspaces')
 
@@ -186,15 +187,33 @@ class FollowUp(db.Model):
     reply_subject   = db.Column(db.String(512), default='')
     reply_msg_id    = db.Column(db.String(512), default='')
     level           = db.Column(db.String(10), default='FU1')   # 'FU1'|'FU2'|'FU3'|'closed'
-    status          = db.Column(db.String(20), default='pending')  # 'pending'|'sent'|'closed'
+    status          = db.Column(db.String(20), default='pending')  # 'pending'|'sent'|'paused'|'failed'|'closed'
     added_at        = db.Column(db.DateTime, default=datetime.utcnow)
     last_contact    = db.Column(db.DateTime)
     last_fu_sent    = db.Column(db.DateTime)
     notes           = db.Column(db.Text, default='')
+    auto_enabled    = db.Column(db.Boolean, default=True, nullable=False, server_default='1')
+    scheduled_at    = db.Column(db.DateTime, nullable=True)   # manual reschedule override
+    last_error      = db.Column(db.Text, nullable=True)
 
     user = db.relationship('User', backref='follow_ups')
 
+    def next_send_at(self):
+        """Compute expected next send datetime (UTC). Returns None if closed/paused."""
+        from datetime import timedelta
+        _delays = {'FU1': 3, 'FU2': 5, 'FU3': 7}
+        if self.status in ('closed', 'paused') or self.level == 'closed':
+            return None
+        if self.scheduled_at:
+            return self.scheduled_at
+        delay = _delays.get(self.level)
+        if not delay:
+            return None
+        ref = self.last_fu_sent if self.level != 'FU1' else (self.last_contact or self.added_at)
+        return (ref + timedelta(days=delay)) if ref else None
+
     def to_dict(self):
+        nsa = self.next_send_at()
         return {
             'id': self.id,
             'email': self.contact_email, 'from': self.contact_name,
@@ -204,6 +223,9 @@ class FollowUp(db.Model):
             'added_at': self.added_at.strftime('%Y-%m-%d %H:%M') if self.added_at else '',
             'last_contact': self.last_contact.strftime('%Y-%m-%d %H:%M') if self.last_contact else '',
             'last_fu_sent': self.last_fu_sent.strftime('%Y-%m-%d %H:%M') if self.last_fu_sent else None,
+            'next_send_at': nsa.strftime('%Y-%m-%d') if nsa else None,
+            'auto_enabled': bool(self.auto_enabled),
+            'last_error': self.last_error or None,
             'notes': self.notes or '',
         }
 

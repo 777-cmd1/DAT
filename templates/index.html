@@ -763,6 +763,54 @@ tr:last-child td { border-bottom: none; }
 .fu-bulk-count { font-size:13px; font-weight:800; color:var(--accent); margin-right:2px; font-family:'DM Mono',monospace; }
 .fu-bulk-label { font-size:12px; color:var(--text2); }
 
+/* ── FOLLOW-UP TABLE ─────────────────────────────────────────────────────── */
+.fu-table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.fu-table { width:100%; border-collapse:collapse; font-size:12px; }
+.fu-table th { padding:10px 14px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); border-bottom:1px solid var(--border); white-space:nowrap; background:var(--surface); }
+.fu-table th.th-center { text-align:center; }
+.fu-table td { padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.fu-table tr:last-child td { border-bottom:none; }
+.fu-table tr.fu-row-paused td { opacity:.55; }
+.fu-table tr.fu-row-closed td { opacity:.4; }
+.fu-table tr.fu-row-failed td .fu-email { color:var(--red); }
+.fu-table tr:hover td { background:rgba(255,255,255,.02); }
+.fu-table tr.fu-row-selected td { background:rgba(52,211,153,.04); }
+.fu-table td.td-center { text-align:center; }
+/* status badges */
+.fu-status { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:700; padding:3px 8px; border-radius:20px; letter-spacing:.04em; white-space:nowrap; }
+.fu-status-scheduled { background:rgba(59,130,246,.12); color:#60a5fa; border:1px solid rgba(59,130,246,.2); }
+.fu-status-sent      { background:var(--green-dim); color:var(--green); border:1px solid rgba(52,211,153,.2); }
+.fu-status-paused    { background:rgba(148,163,184,.1); color:#94a3b8; border:1px solid rgba(148,163,184,.2); }
+.fu-status-failed    { background:var(--red-dim); color:var(--red); border:1px solid rgba(255,92,108,.2); }
+.fu-status-closed    { background:var(--green-dim); color:var(--green); border:1px solid rgba(52,211,153,.15); }
+.fu-status-pending   { background:rgba(59,130,246,.1); color:#60a5fa; border:1px solid rgba(59,130,246,.15); }
+/* global toggle */
+.fu-global-toggle { display:flex; align-items:center; gap:10px; padding:10px 16px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+.fu-global-toggle-label { font-size:12px; font-weight:600; color:var(--text2); }
+.fu-global-toggle.active .fu-global-toggle-label { color:var(--accent); }
+/* ios-style toggle */
+.fu-switch { position:relative; display:inline-block; width:36px; height:20px; flex-shrink:0; }
+.fu-switch input { opacity:0; width:0; height:0; }
+.fu-switch-slider { position:absolute; cursor:pointer; inset:0; background:#334155; border-radius:20px; transition:.2s; }
+.fu-switch-slider:before { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+input:checked + .fu-switch-slider { background:var(--accent); }
+input:checked + .fu-switch-slider:before { transform:translateX(16px); }
+.fu-switch-sm { width:28px; height:16px; }
+.fu-switch-sm .fu-switch-slider:before { width:10px; height:10px; left:3px; top:3px; }
+input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12px); }
+/* reschedule picker */
+.fu-date-pill { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--blue); font-family:'DM Mono',monospace; cursor:pointer; padding:2px 6px; border-radius:6px; transition:background .15s; }
+.fu-date-pill:hover { background:rgba(59,130,246,.1); }
+.fu-date-pill.overdue { color:var(--red); }
+.fu-reschedule-popover { position:fixed; z-index:1000; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px; box-shadow:0 8px 32px rgba(0,0,0,.3); min-width:180px; }
+.fu-reschedule-popover .rp-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-bottom:10px; }
+.fu-reschedule-popover .rp-btn { display:block; width:100%; text-align:left; padding:7px 10px; font-size:12px; font-weight:600; color:var(--text); background:transparent; border:none; border-radius:6px; cursor:pointer; transition:background .12s; }
+.fu-reschedule-popover .rp-btn:hover { background:var(--surface2); color:var(--accent); }
+.fu-reschedule-popover input[type=date] { width:100%; margin-top:6px; padding:6px 8px; font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:inherit; }
+/* paused notice banner */
+.fu-paused-banner { display:flex; align-items:center; gap:10px; padding:10px 16px; background:rgba(148,163,184,.07); border:1px solid rgba(148,163,184,.18); border-radius:var(--radius); margin-bottom:14px; font-size:12px; color:#94a3b8; font-weight:600; }
+.fu-paused-banner svg { flex-shrink:0; }
+
 /* ── INTELLIGENCE PAGE ───────────────────────────────────────────────────── */
 .intel-kpi-row { display:flex; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
 .intel-kpi {
@@ -1365,48 +1413,45 @@ tr:last-child td { border-bottom: none; }
 
     <!-- FOLLOW-UP PAGE -->
     <div class="page" id="page-followup">
-      <div class="page-header">
-        <div class="page-title">Follow-up</div>
-        <div class="page-sub">Contacts who replied Interested — send follow-ups by level</div>
-      </div>
-      <!-- TOOLBAR ROW 1: level filter + select all -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:10px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input id="fuSearch" placeholder="🔍 Search email or route..." style="width:220px;font-family:'Syne',sans-serif;font-size:12px" oninput="renderFollowups()">
-          <div class="filter-bar">
-            <button class="fbtn active" id="fuf-all" onclick="setFuFilter('all')">All</button>
-            <button class="fbtn" id="fuf-FU1" onclick="setFuFilter('FU1')">FU1</button>
-            <button class="fbtn" id="fuf-FU2" onclick="setFuFilter('FU2')">FU2</button>
-            <button class="fbtn" id="fuf-FU3" onclick="setFuFilter('FU3')">FU3</button>
-            <button class="fbtn" id="fuf-closed" onclick="setFuFilter('closed')">✓ Closed</button>
-          </div>
+      <!-- HEADER -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="page-title">Follow-up</div>
+          <div class="page-sub">Automatic follow-up sequences — FU1 → FU2 → FU3</div>
         </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost" onclick="fuSelectAll()" style="font-size:12px;padding:8px 14px">☑ Select All Visible</button>
-          <button class="btn btn-primary" id="fuAutoBtn" onclick="sendAutoFollowup()"><i class="ph-bold ph-calendar-plus" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Schedule for Tomorrow</button>
+        <!-- GLOBAL AUTO TOGGLE -->
+        <div class="fu-global-toggle" id="fuGlobalToggleWrap">
+          <label class="fu-switch" title="Enable/disable automatic follow-ups for all contacts">
+            <input type="checkbox" id="fuGlobalToggle" checked onchange="setGlobalFuAuto(this.checked)">
+            <span class="fu-switch-slider"></span>
+          </label>
+          <span class="fu-global-toggle-label" id="fuGlobalToggleLabel">Auto Follow-ups ON</span>
         </div>
       </div>
 
-      <!-- TOOLBAR ROW 2: date filters + sort -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <div class="fu-date-filters">
-          <span style="font-size:11px;color:var(--text3);font-weight:600;margin-right:2px">Date:</span>
-          <button class="fu-date-btn active" id="fudate-all"       onclick="setFuDateFilter('all')">All time</button>
-          <button class="fu-date-btn"        id="fudate-today"     onclick="setFuDateFilter('today')">Today</button>
-          <button class="fu-date-btn"        id="fudate-yesterday" onclick="setFuDateFilter('yesterday')">Yesterday</button>
-          <button class="fu-date-btn"        id="fudate-3d"        onclick="setFuDateFilter('3d')">Last 3 days</button>
-          <button class="fu-date-btn"        id="fudate-7d"        onclick="setFuDateFilter('7d')">Last 7 days</button>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <span style="font-size:11px;color:var(--text3);font-weight:600">Sort:</span>
-          <button class="fu-sort-btn active" id="fusort-added"   onclick="setFuSort('added_at')">
-            Added <span id="fusort-added-dir">↓</span>
-          </button>
-          <button class="fu-sort-btn"        id="fusort-contact" onclick="setFuSort('last_contact')">
-            Last contact <span id="fusort-contact-dir">↓</span>
-          </button>
-        </div>
+      <!-- PAUSED BANNER (shown when global is OFF) -->
+      <div class="fu-paused-banner" id="fuPausedBanner" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Auto follow-ups are paused globally. New follow-ups will not be sent until re-enabled.
       </div>
+
+      <!-- TOOLBAR -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="fuSearch" placeholder="🔍 Search email or route..." style="width:210px;font-size:12px" oninput="renderFollowups()">
+          <div class="filter-bar">
+            <button class="fbtn active" id="fuf-all"    onclick="setFuFilter('all')">All</button>
+            <button class="fbtn"        id="fuf-FU1"    onclick="setFuFilter('FU1')">FU1</button>
+            <button class="fbtn"        id="fuf-FU2"    onclick="setFuFilter('FU2')">FU2</button>
+            <button class="fbtn"        id="fuf-FU3"    onclick="setFuFilter('FU3')">FU3</button>
+            <button class="fbtn"        id="fuf-closed" onclick="setFuFilter('closed')">✓ Closed</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost" onclick="fuSelectAll()" style="font-size:12px;padding:8px 14px">☑ Select All Visible</button>
+      </div>
+
+      <!-- STATS ROW -->
+      <div id="fuStats" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
 
       <!-- BULK ACTION BAR -->
       <div class="fu-bulk-bar" id="fuBulkBar">
@@ -1415,21 +1460,34 @@ tr:last-child td { border-bottom: none; }
         <button class="btn btn-primary" style="font-size:12px;padding:7px 14px" onclick="sendBulkFu()">
           <i class="ph-bold ph-paper-plane-right" style="font-size:13px;margin-right:5px;vertical-align:middle"></i>Send Now
         </button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="closeBulkFu()">
-          ✓ Close All
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkAction('pause')">⏸ Pause</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkAction('resume')">▶ Resume</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkReschedule()">
+          <i class="ph-bold ph-calendar" style="font-size:13px;margin-right:4px;vertical-align:middle"></i>Reschedule
         </button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px;margin-left:auto" onclick="fuDeselectAll()">
-          ✕ Deselect
-        </button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="closeBulkFu()">✓ Close</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px;margin-left:auto" onclick="fuDeselectAll()">✕ Deselect</button>
       </div>
 
-      <!-- SCHEDULED BLOCK -->
-      <div id="fuScheduledBlock" style="display:none;background:var(--surface);border:1px solid var(--blue);border-radius:12px;padding:14px 16px;margin-bottom:16px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin-bottom:10px">📅 Scheduled Follow-ups</div>
+      <!-- TABLE -->
+      <div class="fu-table-wrap">
+        <table class="fu-table">
+          <thead>
+            <tr>
+              <th style="width:34px"><input type="checkbox" id="fuCheckAll" onchange="fuToggleAll(this)" style="accent-color:var(--accent);cursor:pointer"></th>
+              <th>Contact</th>
+              <th>Route</th>
+              <th class="th-center">Stage</th>
+              <th class="th-center">Status</th>
+              <th>Next Send</th>
+              <th class="th-center">Auto</th>
+              <th class="th-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="followupList"></tbody>
+        </table>
       </div>
-
-      <div id="fuStats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>
-      <div id="followupList"></div>
+      <div id="fuEmptyState" style="display:none;padding:48px 0;text-align:center;color:var(--text3);font-size:13px"></div>
     </div>
 
 <!-- INTELLIGENCE -->
@@ -2887,350 +2945,358 @@ async function markRStop(sid) {
   r.status = 'not_interested'; renderReplies(); updateBadge(); toast('Added to Stop List');
 }
 
-// ── FOLLOW-UP ───────────────────────────────────────────────────────────────
-let allFollowups = [], fuFilter = 'all', fuDateFilter = 'all';
-let fuSort = { by: 'added_at', dir: 'desc' };
+// ── FOLLOW-UP ────────────────────────────────────────────────────────────────
+let allFollowups = [], fuFilter = 'all', fuGlobalAuto = true;
 
 async function loadFollowups() {
-  allFollowups = await (await fetch('/api/followups')).json();
-  renderFollowups(); updateFuBadge();
+  try {
+    const [fuRes, autoRes] = await Promise.all([
+      fetch('/api/followups'),
+      fetch('/api/settings/fu-auto'),
+    ]);
+    allFollowups = await fuRes.json();
+    const autoData = await autoRes.json();
+    fuGlobalAuto = autoData.fu_auto_enabled !== false;
+  } catch(e) {
+    allFollowups = [];
+  }
+  updateFuBadge();
+  renderFollowups();
+  _updateGlobalToggleUI();
 }
+
 function updateFuBadge() {
-  const n = allFollowups.filter(f => f.status === 'pending' && f.level !== 'closed').length;
+  const n = allFollowups.filter(f => f.status !== 'closed' && f.level !== 'closed').length;
   const b = document.getElementById('fuBadge');
   if (b) { b.textContent = n; b.style.display = n > 0 ? 'inline' : 'none'; }
 }
+
+function _updateGlobalToggleUI() {
+  const tog = document.getElementById('fuGlobalToggle');
+  const lbl = document.getElementById('fuGlobalToggleLabel');
+  const wrap = document.getElementById('fuGlobalToggleWrap');
+  const banner = document.getElementById('fuPausedBanner');
+  if (tog) tog.checked = fuGlobalAuto;
+  if (lbl) lbl.textContent = fuGlobalAuto ? 'Auto Follow-ups ON' : 'Auto Follow-ups OFF';
+  if (wrap) { wrap.classList.toggle('active', fuGlobalAuto); wrap.style.borderColor = fuGlobalAuto ? 'rgba(52,211,153,.3)' : 'var(--border)'; }
+  if (banner) banner.style.display = fuGlobalAuto ? 'none' : 'flex';
+}
+
+async function setGlobalFuAuto(enabled) {
+  fuGlobalAuto = enabled;
+  _updateGlobalToggleUI();
+  try {
+    await fetch('/api/settings/fu-auto', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({enabled})
+    });
+    toast(enabled ? '▶ Auto follow-ups enabled' : '⏸ Auto follow-ups paused');
+  } catch(e) { toast('Failed to update setting', true); }
+  renderFollowups();
+}
+
 function setFuFilter(f) {
   fuFilter = f;
   document.querySelectorAll('[id^="fuf-"]').forEach(el => el.classList.remove('active'));
   document.getElementById('fuf-' + f)?.classList.add('active');
   renderFollowups();
 }
-function setFuDateFilter(f) {
-  fuDateFilter = f;
-  document.querySelectorAll('[id^="fudate-"]').forEach(el => el.classList.remove('active'));
-  document.getElementById('fudate-' + f)?.classList.add('active');
-  renderFollowups();
-}
-function setFuSort(by) {
-  if (fuSort.by === by) {
-    fuSort.dir = fuSort.dir === 'desc' ? 'asc' : 'desc';
-  } else {
-    fuSort.by = by; fuSort.dir = 'desc';
-  }
-  document.querySelectorAll('[id^="fusort-"]').forEach(el => el.classList.remove('active'));
-  const key = by === 'added_at' ? 'added' : 'contact';
-  document.getElementById('fusort-' + key)?.classList.add('active');
-  const dir = fuSort.dir === 'desc' ? '↓' : '↑';
-  document.getElementById('fusort-added-dir').textContent   = fuSort.by === 'added_at'    ? dir : '↓';
-  document.getElementById('fusort-contact-dir').textContent = fuSort.by === 'last_contact' ? dir : '↓';
-  renderFollowups();
-}
-function _fuRelDate(dateStr) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
+
+function _fuFmtDate(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + (dateStr.length === 10 ? 'T12:00:00' : ''));
   if (isNaN(d)) return dateStr;
-  const now = new Date();
-  const diffMs = now - d;
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7)  return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays/7)}w ago`;
-  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  if (dd.getTime() === today.getTime()) return 'Today';
+  if (dd.getTime() === tomorrow.getTime()) return 'Tomorrow';
+  const diffDays = Math.round((dd - today) / 86400000);
+  if (diffDays < 0) return { text: d.toLocaleDateString('en-US',{month:'short',day:'numeric'}), overdue: true };
+  if (diffDays < 7) return 'in ' + diffDays + 'd';
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
-function _fuDateStart(filter) {
-  const now = new Date(); now.setHours(0,0,0,0);
-  if (filter === 'today')     return now;
-  if (filter === 'yesterday') { const d = new Date(now); d.setDate(d.getDate()-1); return d; }
-  if (filter === '3d')        { const d = new Date(now); d.setDate(d.getDate()-2); return d; }
-  if (filter === '7d')        { const d = new Date(now); d.setDate(d.getDate()-6); return d; }
-  return null;
+
+function _fuStatusBadge(f) {
+  const statusMap = {
+    scheduled: ['Scheduled','fu-status-scheduled','🕐'],
+    sent:      ['Sent','fu-status-sent','✓'],
+    paused:    ['Paused','fu-status-paused','⏸'],
+    failed:    ['Failed','fu-status-failed','✕'],
+    closed:    ['Closed','fu-status-closed','✓'],
+    pending:   ['Scheduled','fu-status-pending','🕐'],
+  };
+  const s = f.status || 'pending';
+  const [label, cls, icon] = statusMap[s] || statusMap.pending;
+  const title = f.last_error ? ` title="${f.last_error.replace(/"/g,"'")}"` : '';
+  return `<span class="fu-status ${cls}"${title}>${icon} ${label}</span>`;
 }
-function _fuDateEnd(filter) {
-  if (filter === 'yesterday') { const d = new Date(); d.setHours(0,0,0,0); return d; }
-  return null;
+
+function _fuLevelBadge(level) {
+  const colors = {FU1:'fu-FU1',FU2:'fu-FU2',FU3:'fu-FU3',closed:'fu-closed'};
+  return `<span class="fu-level ${colors[level]||'fu-FU1'}">${level}</span>`;
 }
+
 function fuSelectAll() {
-  document.querySelectorAll('.fu-check:not([disabled])').forEach(cb => {
-    cb.checked = true;
-    cb.closest('.fu-card')?.classList.add('fu-selected');
-  });
+  document.querySelectorAll('.fu-check:not([disabled])').forEach(cb => { cb.checked = true; });
+  const all = document.getElementById('fuCheckAll');
+  if (all) all.checked = true;
   updateFuBulkBar();
 }
 function fuDeselectAll() {
-  document.querySelectorAll('.fu-check').forEach(cb => {
-    cb.checked = false;
-    cb.closest('.fu-card')?.classList.remove('fu-selected');
-  });
+  document.querySelectorAll('.fu-check').forEach(cb => { cb.checked = false; });
+  const all = document.getElementById('fuCheckAll');
+  if (all) all.checked = false;
   updateFuBulkBar();
 }
-function onFuCheckChange(cb) {
-  const card = cb.closest('.fu-card');
-  if (card) card.classList.toggle('fu-selected', cb.checked);
+function fuToggleAll(master) {
+  document.querySelectorAll('.fu-check:not([disabled])').forEach(cb => { cb.checked = master.checked; });
   updateFuBulkBar();
 }
+function onFuCheckChange() { updateFuBulkBar(); }
+
 function updateFuBulkBar() {
   const checked = document.querySelectorAll('.fu-check:checked').length;
   const bar = document.getElementById('fuBulkBar');
   const cnt = document.getElementById('fuBulkCount');
-  if (!bar || !cnt) return;
-  if (checked > 0) {
-    bar.classList.add('visible');
-    cnt.textContent = checked;
-  } else {
-    bar.classList.remove('visible');
-  }
+  if (bar) bar.classList.toggle('visible', checked > 0);
+  if (cnt) cnt.textContent = checked;
 }
+
+function _getCheckedEmails() {
+  return [...document.querySelectorAll('.fu-check:checked')].map(cb => cb.dataset.email);
+}
+
 async function sendBulkFu() {
-  const emails = [...document.querySelectorAll('.fu-check:checked')].map(cb => cb.dataset.email);
+  const emails = _getCheckedEmails();
   if (!emails.length) { toast('Select contacts first', true); return; }
   const btn = document.querySelector('#fuBulkBar .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-  const res = await fetch('/api/followups/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({emails})});
-  const data = await res.json();
+  try {
+    const res = await fetch('/api/followups/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({emails})});
+    const data = await res.json();
+    const ok = (data.results||[]).filter(r=>r.ok).length;
+    const fail = (data.results||[]).filter(r=>!r.ok).length;
+    toast(`✅ Sent ${ok}${fail ? ` · ❌ ${fail} errors` : ''}`);
+  } catch(e) { toast('Send failed: ' + e.message, true); }
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph-bold ph-paper-plane-right" style="font-size:13px;margin-right:5px;vertical-align:middle"></i>Send Now'; }
-  const ok = (data.results || []).filter(r => r.ok).length;
-  const fail = (data.results || []).filter(r => !r.ok).length;
-  toast(`✅ Sent ${ok}${fail ? ` · ❌ ${fail} errors` : ''}`);
   await loadFollowups();
 }
+
 async function closeBulkFu() {
-  const emails = [...document.querySelectorAll('.fu-check:checked')].map(cb => cb.dataset.email);
+  const emails = _getCheckedEmails();
   if (!emails.length) { toast('Select contacts first', true); return; }
-  await Promise.all(emails.map(email =>
-    fetch('/api/followups/update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, status:'closed', level:'closed'})})
-  ));
+  await fetch('/api/followups/bulk-action', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'close', emails})});
   toast(`✓ Closed ${emails.length} follow-up${emails.length>1?'s':''}`);
   await loadFollowups();
 }
+
+async function fuBulkAction(action) {
+  const emails = _getCheckedEmails();
+  if (!emails.length) { toast('Select contacts first', true); return; }
+  await fetch('/api/followups/bulk-action', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action, emails})});
+  const labels = {pause:'⏸ Paused', resume:'▶ Resumed'};
+  toast(labels[action] + ' ' + emails.length + ' contact(s)');
+  await loadFollowups();
+}
+
+function fuBulkReschedule() {
+  const emails = _getCheckedEmails();
+  if (!emails.length) { toast('Select contacts first', true); return; }
+  _showReschedulePopover(null, emails, () => fuDeselectAll());
+}
+
+function _showReschedulePopover(anchorEl, emails, onDone) {
+  document.querySelectorAll('.fu-reschedule-popover').forEach(p => p.remove());
+  const today = new Date().toISOString().slice(0,10);
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const tmrStr = tomorrow.toISOString().slice(0,10);
+  const nextBiz = _nextBizDay().toISOString().slice(0,10);
+
+  const pop = document.createElement('div');
+  pop.className = 'fu-reschedule-popover';
+  pop.innerHTML = `
+    <div class="rp-title">Reschedule ${emails.length > 1 ? emails.length + ' contacts' : ''}</div>
+    <button class="rp-btn" data-date="${today}">📅 Today</button>
+    <button class="rp-btn" data-date="${tmrStr}">📅 Tomorrow</button>
+    ${nextBiz !== tmrStr ? `<button class="rp-btn" data-date="${nextBiz}">📅 Next business day</button>` : ''}
+    <hr style="border:none;border-top:1px solid var(--border);margin:8px 0">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Custom date:</div>
+    <input type="date" min="${today}" value="${tmrStr}">
+    <button class="rp-btn" style="margin-top:6px;color:var(--accent)" id="rpConfirm">Confirm →</button>
+  `;
+
+  // Position near anchor or center of screen
+  if (anchorEl) {
+    const r = anchorEl.getBoundingClientRect();
+    pop.style.top = (r.bottom + 6 + window.scrollY) + 'px';
+    pop.style.left = Math.min(r.left, window.innerWidth - 200) + 'px';
+  } else {
+    pop.style.top = '50%'; pop.style.left = '50%';
+    pop.style.transform = 'translate(-50%,-50%)';
+  }
+  document.body.appendChild(pop);
+
+  const doReschedule = async (date) => {
+    pop.remove();
+    await fetch('/api/followups/bulk-action', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'reschedule', emails, date})});
+    toast(`📅 Rescheduled ${emails.length} for ${date}`);
+    if (onDone) onDone();
+    await loadFollowups();
+  };
+
+  pop.querySelectorAll('[data-date]').forEach(btn => {
+    btn.onclick = () => doReschedule(btn.dataset.date);
+  });
+  pop.querySelector('#rpConfirm').onclick = () => {
+    const val = pop.querySelector('input[type=date]').value;
+    if (val) doReschedule(val);
+  };
+
+  const dismiss = (e) => { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', dismiss); } };
+  setTimeout(() => document.addEventListener('click', dismiss), 50);
+}
+
+function _nextBizDay() {
+  const d = new Date(); d.setDate(d.getDate()+1);
+  while (d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1);
+  return d;
+}
+
+async function toggleFuAuto(email, btn) {
+  try {
+    btn.disabled = true;
+    const res = await fetch('/api/followups/toggle-auto', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email})});
+    const data = await res.json();
+    if (data.ok) await loadFollowups();
+    else toast('Error: ' + (data.error||'unknown'), true);
+  } catch(e) { toast('Error: ' + e.message, true); }
+  btn.disabled = false;
+}
+
+function openReschedule(email, anchorEl) {
+  _showReschedulePopover(anchorEl, [email], null);
+}
+
 function renderFollowups() {
-  const search = (document.getElementById('fuSearch')?.value || '').toLowerCase();
+  const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
   let list = fuFilter === 'all' ? allFollowups : allFollowups.filter(f =>
-    fuFilter === 'closed' ? f.status === 'closed' : f.level === fuFilter && f.status !== 'closed'
+    fuFilter === 'closed' ? (f.status==='closed'||f.level==='closed') : (f.level===fuFilter && f.status!=='closed')
   );
   if (search) list = list.filter(f =>
-    (f.email||'').toLowerCase().includes(search) ||
-    (f.route||'').toLowerCase().includes(search)
+    (f.email||'').toLowerCase().includes(search)||(f.route||'').toLowerCase().includes(search)
   );
-  // Date filter
-  if (fuDateFilter !== 'all') {
-    const start = _fuDateStart(fuDateFilter);
-    const end   = _fuDateEnd(fuDateFilter);
-    list = list.filter(f => {
-      const dateStr = f.last_contact || f.added_at;
-      if (!dateStr) return false;
-      const d = new Date(dateStr); d.setHours(0,0,0,0);
-      if (start && d < start) return false;
-      if (end   && d >= end)  return false;
-      return true;
-    });
-  }
-  // Sort
-  list = [...list].sort((a, b) => {
-    const av = a[fuSort.by] ? new Date(a[fuSort.by]).getTime() : 0;
-    const bv = b[fuSort.by] ? new Date(b[fuSort.by]).getTime() : 0;
-    return fuSort.dir === 'desc' ? bv - av : av - bv;
+  list = [...list].sort((a,b) => new Date(b.added_at||0) - new Date(a.added_at||0));
+
+  // Stats
+  const counts = {FU1:0,FU2:0,FU3:0,closed:0,failed:0};
+  allFollowups.forEach(f => {
+    if (f.status==='closed'||f.level==='closed') counts.closed++;
+    else if (f.status==='failed') counts.failed++;
+    else counts[f.level] = (counts[f.level]||0)+1;
   });
-  // Stats bar (always uses full allFollowups)
-  const counts = {FU1:0, FU2:0, FU3:0, closed:0};
-  allFollowups.forEach(f => { if(f.status==='closed') counts.closed++; else counts[f.level]=(counts[f.level]||0)+1; });
-  document.getElementById('fuStats').innerHTML = [
+  const statsEl = document.getElementById('fuStats');
+  if (statsEl) statsEl.innerHTML = [
     ['FU1', counts.FU1, 'var(--blue)'],
     ['FU2', counts.FU2, 'var(--yellow)'],
     ['FU3', counts.FU3, 'var(--red)'],
     ['Closed', counts.closed, 'var(--green)'],
-  ].map(([label, n, color]) => `<div style="background:var(--surface);border:1px solid var(--border);padding:10px 16px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:10px">
-    <span style="font-size:20px;font-weight:800;color:${color};font-family:'DM Mono',monospace">${n}</span>
+    ...(counts.failed ? [['Failed', counts.failed, 'var(--red)']] : []),
+  ].map(([label,n,color]) => `<div style="background:var(--surface);border:1px solid var(--border);padding:8px 14px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px">
+    <span style="font-size:18px;font-weight:800;color:${color};font-family:'DM Mono',monospace">${n}</span>
     <span style="font-size:11px;color:var(--text2);font-weight:700">${label}</span>
   </div>`).join('');
-  const el = document.getElementById('followupList');
+
+  const tbody = document.getElementById('followupList');
+  const empty = document.getElementById('fuEmptyState');
+  const tableWrap = document.querySelector('.fu-table-wrap');
+
   if (!list.length) {
-    el.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:48px 0;text-align:center">
-      ${allFollowups.length === 0 ? 'No follow-ups yet — mark replies as Interested to add them here' : 'No contacts match the current filters'}
-    </div>`; return;
+    if (tableWrap) tableWrap.style.display = 'none';
+    if (empty) {
+      empty.style.display = '';
+      empty.textContent = allFollowups.length===0 ? 'No follow-ups yet — mark replies as Interested to add them here' : 'No contacts match the current filters';
+    }
+    updateFuBulkBar(); return;
   }
-  const levelColors = {FU1:'fu-FU1', FU2:'fu-FU2', FU3:'fu-FU3', closed:'fu-closed'};
-  el.innerHTML = list.map(f => {
-    const lvlClass = levelColors[f.level] || 'fu-FU1';
-    const isClosed = f.status === 'closed';
-    return `<div class="fu-card fu-lv-${f.level}" style="${isClosed ? 'opacity:.45' : ''}">
-      <input type="checkbox" class="fu-check" data-email="${f.email}" ${isClosed ? 'disabled' : ''} onchange="onFuCheckChange(this)">
-      <span class="fu-level ${lvlClass}">${f.level}</span>
-      <div class="fu-main">
-        <div class="fu-email">${f.email}</div>
-        ${f.route ? `<div class="fu-route">📍 ${f.route}</div>` : ''}
-        <div class="fu-meta">Last contact: ${_fuRelDate(f.last_contact)} · Added: ${_fuRelDate(f.added_at)}</div>
-      </div>
-      <div class="fu-actions">
-        ${!isClosed ? `<button class="rbtn rbtn-yes" onclick="sendOneFu('${f.email}')">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send ${f.level}
-        </button>` : ''}
-        ${!isClosed ? `<button class="rbtn rbtn-stop" onclick="closeFu('${f.email}')">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>Close
-        </button>` : '<span style="font-size:10px;color:var(--green);padding:4px 8px;font-weight:700">✓ Done</span>'}
-        <button class="rbtn rbtn-reset" onclick="deleteFu('${f.email}')" title="Remove from list" style="font-size:11px;padding:5px 8px;margin-left:4px;opacity:.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-    </div>`;
+  if (tableWrap) tableWrap.style.display = '';
+  if (empty) empty.style.display = 'none';
+
+  const today = new Date().toISOString().slice(0,10);
+  tbody.innerHTML = list.map(f => {
+    const isClosed  = f.status==='closed'||f.level==='closed';
+    const isPaused  = f.status==='paused';
+    const isFailed  = f.status==='failed';
+    const rowCls    = isClosed?'fu-row-closed':isPaused?'fu-row-paused':isFailed?'fu-row-failed':'';
+    const nsa       = f.next_send_at;
+    const nsaFmt    = _fuFmtDate(nsa);
+    const isOverdue = nsa && nsa < today && !isClosed && !isPaused;
+    const nsaHtml   = isClosed
+      ? '<span style="color:var(--text3);font-size:11px">—</span>'
+      : nsa
+        ? `<span class="fu-date-pill ${isOverdue?'overdue':''}" onclick="openReschedule('${f.email}',this)" title="Click to reschedule">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            ${typeof nsaFmt==='object'?nsaFmt.text:nsaFmt}
+           </span>`
+        : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+    const autoToggle = isClosed ? '' : `
+      <label class="fu-switch" title="${f.auto_enabled?'Auto ON — click to pause':'Paused — click to enable'}">
+        <input type="checkbox" ${f.auto_enabled?'checked':''} onchange="toggleFuAuto('${f.email}',this)" style="cursor:pointer">
+        <span class="fu-switch-slider"></span>
+      </label>`;
+
+    const errorTitle = f.last_error ? ` title="${f.last_error.replace(/"/g,"'")}"` : '';
+
+    return `<tr class="${rowCls}">
+      <td style="padding-left:14px"><input type="checkbox" class="fu-check" data-email="${f.email}" ${isClosed?'disabled':''} onchange="onFuCheckChange()" style="accent-color:var(--accent);cursor:pointer;width:14px;height:14px"></td>
+      <td>
+        <div class="fu-email" style="font-size:12px;font-weight:700;color:var(--blue);font-family:'DM Mono',monospace">${f.email}</div>
+        ${f.from ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.from}</div>` : ''}
+      </td>
+      <td style="color:var(--text2);font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.route||'—'}</td>
+      <td class="td-center">${_fuLevelBadge(f.level)}</td>
+      <td class="td-center">${_fuStatusBadge(f)}${isFailed&&f.last_error?`<div style="font-size:9px;color:var(--red);margin-top:3px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"${errorTitle}>${f.last_error}</div>`:''}
+      </td>
+      <td>${nsaHtml}</td>
+      <td class="td-center">${autoToggle}</td>
+      <td class="td-center">
+        <div style="display:flex;gap:5px;justify-content:center;align-items:center">
+          ${!isClosed ? `<button class="rbtn rbtn-yes" onclick="sendOneFu('${f.email}')" title="Send ${f.level} now" style="font-size:11px;padding:5px 9px">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>${f.level}
+          </button>` : '<span style="font-size:10px;color:var(--green);font-weight:700;padding:4px 8px">✓ Done</span>'}
+          ${!isClosed ? `<button class="rbtn rbtn-stop" onclick="closeFu('${f.email}')" title="Close follow-up" style="font-size:11px;padding:5px 8px">✓</button>` : ''}
+          <button class="rbtn rbtn-reset" onclick="deleteFu('${f.email}')" title="Remove" style="font-size:11px;padding:5px 7px;opacity:.5" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
   }).join('');
-  // Reset bulk bar after re-render (checkboxes are new DOM nodes)
   updateFuBulkBar();
 }
+
 async function sendOneFu(email) {
   const res = await fetch('/api/followups/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({emails:[email]})});
   const data = await res.json();
   const r = data.results?.[0];
   if (r?.ok) toast(`Follow-up sent → now ${r.new_level}`);
-  else toast('Error: ' + (r?.error || 'unknown'), true);
-  await loadFollowups();
-}
-// ── FOLLOWUP SCHEDULER ──────────────────────────────────────────────────────
-function nextBusinessDay() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  // Skip weekends
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  return d;
-}
-
-function fmtScheduleDate(d) {
-  return d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
-}
-
-function getScheduled() {
-  try { return JSON.parse(localStorage.getItem('fu_scheduled') || '[]'); } catch { return []; }
-}
-
-function saveScheduled(arr) {
-  localStorage.setItem('fu_scheduled', JSON.stringify(arr));
-}
-
-async function sendAutoFollowup() {
-  const checked = [...document.querySelectorAll('.fu-check:checked')].map(cb => cb.dataset.email);
-  if (!checked.length) { toast('Select contacts first', true); return; }
-
-  const nextDay = nextBusinessDay();
-  const dateStr = nextDay.toISOString().slice(0, 10);
-  const existing = getScheduled();
-
-  // Add to schedule (avoid duplicates)
-  const newEmails = checked.filter(e => !existing.find(s => s.email === e && s.date === dateStr));
-  const updated = [...existing, ...newEmails.map(email => ({email, date: dateStr, scheduledAt: new Date().toISOString()}))];
-  saveScheduled(updated);
-
-  toast('📅 Scheduled ' + newEmails.length + ' follow-ups for ' + fmtScheduleDate(nextDay));
-  renderScheduledBlock();
-  // Uncheck all
-  document.querySelectorAll('.fu-check:checked').forEach(cb => cb.checked = false);
-}
-
-function renderScheduledBlock() {
-  const scheduled = getScheduled();
-  const block = document.getElementById('fuScheduledBlock');
-  if (!block) return;
-  if (!scheduled.length) { block.style.display = 'none'; return; }
-  block.style.display = '';
-
-  const byDate = {};
-  scheduled.forEach(s => { if (!byDate[s.date]) byDate[s.date] = []; byDate[s.date].push(s); });
-
-  block.innerHTML = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin-bottom:10px">\uD83D\uDCC5 Scheduled Follow-ups</div>';
-
-  Object.entries(byDate).sort().forEach(([date, items]) => {
-    const d = new Date(date + 'T12:00:00');
-    const isPast = new Date(date) < new Date(new Date().toDateString());
-
-    const row = document.createElement('div');
-    row.style.marginBottom = '10px';
-
-    const top = document.createElement('div');
-    top.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px';
-
-    const lbl = document.createElement('span');
-    lbl.style.cssText = 'font-size:11px;font-weight:700;color:' + (isPast ? 'var(--red)' : 'var(--blue)');
-    lbl.textContent = (isPast ? '\u26A0\uFE0F Overdue: ' : '\uD83D\uDCC5 ') + fmtScheduleDate(d);
-
-    const bgroup = document.createElement('div');
-    bgroup.style.cssText = 'display:flex;gap:6px';
-    if (isPast) {
-      const sb = document.createElement('button');
-      sb.className = 'rbtn rbtn-yes';
-      sb.textContent = '\u25B6 Send Now';
-      sb.onclick = () => sendScheduledNow(date);
-      bgroup.appendChild(sb);
-    }
-    const cb = document.createElement('button');
-    cb.className = 'rbtn rbtn-stop';
-    cb.textContent = '\u2715 Cancel';
-    cb.onclick = () => cancelScheduled(date);
-    bgroup.appendChild(cb);
-
-    top.appendChild(lbl);
-    top.appendChild(bgroup);
-
-    const emails = document.createElement('div');
-    emails.style.cssText = 'font-size:11px;color:var(--text2);margin-top:4px';
-    items.forEach(s => {
-      const chip = document.createElement('span');
-      chip.style.cssText = 'display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;margin:2px;font-size:10px';
-      chip.textContent = s.email;
-      emails.appendChild(chip);
-    });
-
-    row.appendChild(top);
-    row.appendChild(emails);
-    block.appendChild(row);
-  });
-}
-
-
-async function sendScheduledNow(date) {
-  const scheduled = getScheduled();
-  const toSend = scheduled.filter(s => s.date === date).map(s => s.email);
-  if (!toSend.length) return;
-
-  const res = await fetch('/api/followups/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({emails: toSend})});
-  const data = await res.json();
-  const ok = data.results?.filter(r => r.ok).length || 0;
-  const err = data.results?.filter(r => !r.ok).length || 0;
-
-  // Remove sent from schedule
-  saveScheduled(getScheduled().filter(s => s.date !== date));
-  renderScheduledBlock();
-  toast('Sent: ' + ok + (err ? ', Errors: ' + err : ''));
+  else toast('Error: ' + (r?.error||'unknown'), true);
   await loadFollowups();
 }
 
-function cancelScheduled(date) {
-  saveScheduled(getScheduled().filter(s => s.date !== date));
-  renderScheduledBlock();
-  toast('🗑 Cancelled');
-}
-
-// Check on load if any scheduled FUs are due today
-function checkScheduledDue() {
-  const today = new Date().toISOString().slice(0, 10);
-  const scheduled = getScheduled();
-  const due = scheduled.filter(s => s.date <= today);
-  if (due.length > 0) {
-    const uniqueDates = [...new Set(due.map(s => s.date))];
-    uniqueDates.forEach(date => {
-      const items = due.filter(s => s.date === date);
-      toast('⏰ ' + items.length + ' follow-ups scheduled for ' + fmtScheduleDate(new Date(date + 'T12:00:00')) + ' — ready to send!');
-    });
-  }
-  renderScheduledBlock();
-}
 async function closeFu(email) {
-  await fetch('/api/followups/update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, status:'closed', level:'closed'})});
+  await fetch('/api/followups/bulk-action', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'close', emails:[email]})});
   await loadFollowups(); toast('Closed');
 }
 async function deleteFu(email) {
   await fetch('/api/followups/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email})});
   await loadFollowups();
 }
+
+// Legacy compat — kept for DOMContentLoaded reference
+function checkScheduledDue() {}
+function renderScheduledBlock() {}
 
 
 // ── AUTOMATION IMPACT ────────────────────────────────────────────────────────

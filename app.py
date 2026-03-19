@@ -1546,7 +1546,7 @@ def _build_subject(load):
     else:
         route = ''
 
-    parts = [p for p in [route, date, equip, length, weight] if p]
+    parts = [p for p in [route, date, equip, length] if p]
     return ', '.join(parts)
 
 def run_send_job(loads, cfg, templates, uid=None):

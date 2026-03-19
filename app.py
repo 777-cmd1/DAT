@@ -18,6 +18,18 @@ import bcrypt
 from dotenv import load_dotenv
 load_dotenv()
 
+# ── Sentry error tracking ──────────────────────────────────────────────────────
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+_sentry_dsn = os.environ.get('SENTRY_DSN')
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+
 # ── DB extensions (models imported after app is created) ──────────────────
 from app.extensions import db, migrate as flask_migrate
 from flask_limiter import Limiter
@@ -31,6 +43,10 @@ app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 _default_db = 'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dat_mailer_dev.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', _default_db)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,   # test connections before use (handles stale/dropped connections)
+    'pool_recycle': 300,     # recycle connections every 5 min (prevents Railway PG idle timeout)
+}
 
 # ── Session / Cookie security ───────────────────────────────────────────────
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -2039,8 +2055,13 @@ def health():
         db_ok = True
     except Exception:
         db_ok = False
-    status = 200 if db_ok else 503
-    return jsonify({'status': 'ok' if db_ok else 'degraded', 'db': db_ok}), status
+    scheduler_ok = _scheduler.is_alive() if '_scheduler' in globals() else True
+    ok = db_ok and scheduler_ok
+    return jsonify({
+        'status':    'ok' if ok else 'degraded',
+        'db':        db_ok,
+        'scheduler': scheduler_ok,
+    }), 200 if ok else 503
 
 # ── GLOBAL ERROR HANDLERS ────────────────────────────────────────────────────
 # Return clean JSON errors — never expose raw tracebacks to clients.
@@ -2494,7 +2515,7 @@ def _run_scheduled_followups():
         else:
             fu.status = 'failed'
             fu.last_error = err or 'Unknown error'
-    if pending:
+        # Commit per follow-up — prevents partial rollback if scheduler crashes mid-batch
         try:
             db.session.commit()
         except Exception:
@@ -2573,6 +2594,18 @@ with app.app_context():
 # ── Start background follow-up scheduler ──────────────────────────────────────
 _scheduler = threading.Thread(target=scheduled_followup_worker, daemon=True, name='fu-scheduler')
 _scheduler.start()
+
+# ── Legal pages ───────────────────────────────────────────────────────────────
+
+@app.route('/privacy')
+def privacy():
+    """Privacy Policy — public, no login required."""
+    return render_template('privacy.html')
+
+@app.route('/terms')
+def terms():
+    """Terms of Service — public, no login required."""
+    return render_template('terms.html')
 
 if __name__ == '__main__':
     os.makedirs('templates', exist_ok=True)

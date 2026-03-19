@@ -637,36 +637,125 @@ tr:last-child td { border-bottom: none; }
 }
 [data-theme="dark"] .fbtn.active { box-shadow: 0 0 12px rgba(52,211,153,.06); }
 
-/* ── REPLIES ────────────────────────────────────────────────────────── */
-.reply-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:8px; transition:all .2s var(--ease); overflow:hidden; }
-.reply-card:hover { border-color:var(--border2); }
-.reply-card.new { border-top:2px solid var(--red); }
-.reply-card.interested { border-top:2px solid var(--green); }
-.reply-card.not_interested { opacity:.6; }
-.reply-header-row { display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; user-select:none; }
-.reply-header-row:hover { background:var(--surface2); }
-.reply-row:hover td { background:var(--surface2); }
-.reply-row td { border-bottom: 1px solid var(--border); transition: background var(--transition); }
-.reply-chevron { font-size:11px; color:var(--text3); transition:transform .2s; flex-shrink:0; }
-.reply-card.expanded .reply-chevron { transform:rotate(90deg); }
-.reply-header-main { flex:1; min-width:0; }
-.reply-from-inline { font-size:13px; color:var(--blue); font-weight:700; font-family:'DM Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.reply-subject-inline { font-size:11px; color:var(--text2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.reply-body-wrap { padding:0 16px 14px; display:none; }
-.reply-card.expanded .reply-body-wrap { display:block; }
-.reply-body { font-size:12px; color:var(--text2); line-height:1.7; background:var(--surface2); padding:12px 14px; border-radius:var(--radius-sm); margin-bottom:12px; white-space:pre-wrap; max-height:180px; overflow-y:auto; font-family:'DM Mono',monospace; border:1px solid var(--border); }
+/* ── REPLIES TRIAGE QUEUE ───────────────────────────────────────────── */
+/* Progress bar */
+.tq-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:12px; }
+.tq-progress-wrap { display:flex; align-items:center; gap:10px; }
+.tq-progress-label { font-size:12px; color:var(--text2); white-space:nowrap; }
+.tq-progress-track { width:140px; height:5px; background:var(--surface2); border-radius:99px; overflow:hidden; }
+.tq-progress-fill { height:100%; background:var(--accent); border-radius:99px; transition:width .5s var(--ease); }
+.tq-inbox-zero { font-size:13px; color:var(--accent); font-weight:600; }
 
-/* ── ROW ANIMATION ─────────────────────────────────────────────────── */
-@keyframes rowFadeIn {
-  from { opacity: 0; transform: translateX(-6px); }
-  to   { opacity: 1; transform: translateX(0); }
+/* Filter tabs */
+.tq-filters { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.tq-tab { padding:6px 14px; border-radius:99px; font-size:12px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:transparent; color:var(--text2); transition:all .15s; display:inline-flex; align-items:center; gap:5px; font-family:'Plus Jakarta Sans',sans-serif; }
+.tq-tab:hover { border-color:var(--border2); color:var(--text); background:var(--surface2); }
+.tq-tab.active { background:var(--text); color:var(--bg); border-color:var(--text); }
+.tq-tab .tq-tab-count { font-size:10px; background:rgba(255,255,255,.18); color:inherit; padding:1px 6px; border-radius:99px; }
+.tq-tab.active .tq-tab-count { background:rgba(0,0,0,.18); }
+
+/* Section labels */
+.tq-section { margin-bottom:4px; }
+.tq-section-label { display:flex; align-items:center; gap:8px; padding:18px 0 8px; font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--text3); }
+.tq-section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+.tq-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.tq-dot-new { background:#f87171; box-shadow:0 0 6px rgba(248,113,113,.6); }
+.tq-dot-viewed { background:#60a5fa; }
+.tq-dot-followup { background:#fb923c; }
+.tq-dot-interested { background:var(--accent); }
+.tq-dot-ignored { background:var(--text3); }
+
+/* Queue card */
+.tq-card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  margin-bottom:8px;
+  border-left:4px solid transparent;
+  transition:border-color .2s, box-shadow .2s, opacity .2s, transform .2s;
+  overflow:hidden;
+  position:relative;
 }
-.reply-row { animation: rowFadeIn .3s var(--ease) both; }
-.reply-row:nth-child(2) { animation-delay: .02s; }
-.reply-row:nth-child(4) { animation-delay: .04s; }
-.reply-row:nth-child(6) { animation-delay: .06s; }
-.reply-row:nth-child(8) { animation-delay: .08s; }
-.reply-row:nth-child(10) { animation-delay: .1s; }
+.tq-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.06); border-color:var(--border2); }
+.tq-card.state-new    { border-left-color:#f87171; }
+.tq-card.state-viewed { border-left-color:#60a5fa; }
+.tq-card.state-follow_up { border-left-color:#fb923c; }
+.tq-card.state-interested { border-left-color:var(--accent); }
+.tq-card.state-ignored { border-left-color:var(--border); opacity:.55; }
+
+/* Card exit animation */
+@keyframes tqSlideOut {
+  0%   { opacity:1; transform:translateX(0) scaleY(1); max-height:300px; margin-bottom:8px; }
+  40%  { opacity:0; transform:translateX(32px) scaleY(1); }
+  100% { opacity:0; transform:translateX(32px) scaleY(0); max-height:0; margin-bottom:0; padding:0; }
+}
+.tq-card.exiting { animation:tqSlideOut .32s var(--ease) forwards; pointer-events:none; }
+
+/* Card enter */
+@keyframes tqSlideIn {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.tq-card { animation:tqSlideIn .25s var(--ease) both; }
+
+/* Card top row */
+.tq-card-top { display:flex; align-items:center; justify-content:space-between; padding:12px 16px 0; gap:8px; }
+.tq-state-pill { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; letter-spacing:.5px; padding:3px 8px; border-radius:99px; }
+.tq-state-pill.new        { background:rgba(248,113,113,.12); color:#f87171; }
+.tq-state-pill.viewed     { background:rgba(96,165,250,.12);  color:#60a5fa; }
+.tq-state-pill.follow_up  { background:rgba(251,146,60,.12);  color:#fb923c; }
+.tq-state-pill.interested { background:rgba(5,150,105,.1);    color:var(--accent); }
+.tq-state-pill.ignored    { background:var(--surface2);       color:var(--text3); }
+.tq-meta { display:flex; align-items:center; gap:10px; font-size:11px; color:var(--text3); }
+.tq-reply-badge { background:var(--surface2); border:1px solid var(--border); border-radius:99px; padding:2px 8px; font-size:10px; font-weight:700; color:var(--text2); }
+
+/* Card body */
+.tq-card-body { padding:8px 16px 0; }
+.tq-company { font-size:14px; font-weight:700; color:var(--text); line-height:1.3; }
+.tq-email   { font-size:11px; color:var(--text3); margin-top:1px; font-family:'DM Mono',monospace; }
+.tq-divider { height:1px; background:var(--border); margin:10px 0; }
+.tq-preview { font-size:12px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-style:italic; line-height:1.5; }
+.tq-route   { font-size:11px; color:var(--text3); margin-top:3px; }
+
+/* Expanded body */
+.tq-expanded-body { display:none; margin:10px 0 0; padding:10px 12px; background:var(--surface2); border-radius:var(--radius-sm); font-size:12px; color:var(--text2); line-height:1.7; white-space:pre-wrap; max-height:160px; overflow-y:auto; font-family:'DM Mono',monospace; border:1px solid var(--border); }
+.tq-card.expanded .tq-expanded-body { display:block; }
+
+/* Card actions */
+.tq-actions { display:flex; gap:0; padding:10px 16px 12px; margin-top:10px; }
+.tq-action {
+  flex:1; padding:9px 6px; border:1.5px solid var(--border); background:transparent;
+  font-size:12px; font-weight:700; font-family:'Plus Jakarta Sans',sans-serif;
+  cursor:pointer; transition:all .15s; display:flex; align-items:center; justify-content:center; gap:5px;
+  color:var(--text2);
+}
+.tq-action:first-child { border-radius:10px 0 0 10px; }
+.tq-action:last-child  { border-radius:0 10px 10px 0; border-left:none; }
+.tq-action:not(:first-child):not(:last-child) { border-left:none; border-right:none; }
+.tq-action-yes  { color:var(--accent); }
+.tq-action-yes:hover  { background:rgba(5,150,105,.1);  border-color:var(--accent);  box-shadow:0 2px 12px var(--accent-glow); z-index:1; }
+.tq-action-fu   { color:#fb923c; }
+.tq-action-fu:hover   { background:rgba(251,146,60,.1);  border-color:#fb923c; z-index:1; }
+.tq-action-no   { color:var(--text3); }
+.tq-action-no:hover   { background:var(--red-dim);       border-color:var(--red);     color:var(--red); z-index:1; }
+
+/* Compact row (processed items) */
+.tq-compact { display:flex; align-items:center; gap:10px; padding:8px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:5px; font-size:12px; color:var(--text2); opacity:.7; border-left:3px solid transparent; }
+.tq-compact.state-interested { border-left-color:var(--accent); }
+.tq-compact.state-follow_up  { border-left-color:#fb923c; }
+.tq-compact.state-ignored    { border-left-color:var(--border); opacity:.45; }
+.tq-compact-name { font-weight:600; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tq-compact-time { font-size:10px; color:var(--text3); white-space:nowrap; }
+.tq-compact-badge { font-size:10px; }
+.tq-compact-reset { margin-left:4px; background:none; border:none; cursor:pointer; color:var(--text3); font-size:11px; padding:2px 6px; border-radius:6px; transition:color .15s; font-family:'Plus Jakarta Sans',sans-serif; }
+.tq-compact-reset:hover { color:var(--text); background:var(--surface2); }
+
+/* Empty state */
+.tq-empty { text-align:center; padding:60px 0; color:var(--text3); font-size:13px; }
+.tq-empty-icon { font-size:40px; margin-bottom:12px; opacity:.4; }
+
+/* Existing reply-body kept for compat */
+.reply-body { font-size:12px; color:var(--text2); line-height:1.7; background:var(--surface2); padding:12px 14px; border-radius:var(--radius-sm); margin-bottom:12px; white-space:pre-wrap; max-height:180px; overflow-y:auto; font-family:'DM Mono',monospace; border:1px solid var(--border); }
 
 
 /* ── PIPELINE ─────────────────────────────────────────────────────── */
@@ -853,29 +942,12 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
 .intel-rate-fill { height:100%; border-radius:3px; transition:width .3s; }
 .intel-rate-pct { font-size:11px; font-family:'DM Mono',monospace; font-weight:700; min-width:32px; text-align:right; }
 .intel-empty { color:var(--text3); font-size:13px; padding:48px 0; text-align:center; }
-/* ── REPLY ACTION BUTTONS ───────────────────────────────────────────── */
-.reply-actions { display: flex; gap: 7px; flex-wrap: wrap; }
-.rbtn {
-  padding: 6px 16px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  border: 1px solid;
-  transition: all var(--transition);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.rbtn-yes  { background: var(--green-dim); color: var(--accent); border-color: rgba(52,211,153,.15); }
-.rbtn-yes:hover { background: rgba(52,211,153,.2); transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
-.rbtn-no   { background: var(--red-dim); color: var(--red); border-color: rgba(248,113,113,.15); }
-.rbtn-no:hover { background: rgba(248,113,113,.18); transform: translateY(-1px); box-shadow: 0 4px 12px var(--red-glow); }
-.rbtn-stop { background: transparent; color: var(--text2); border-color: var(--border2); }
-.rbtn-stop:hover { color: var(--red); border-color: rgba(248,113,113,.2); background: var(--red-dim); }
-.rbtn-reset{ background: transparent; color: var(--text3); border-color: var(--border); font-size: 11px; }
-.rbtn-reset:hover { color: var(--text2); border-color: var(--border2); background: var(--surface2); }
+/* ── REPLY ACTION BUTTONS (legacy compat) ───────────────────────────── */
+.rbtn { display:inline-flex; align-items:center; gap:4px; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; font-family:'Plus Jakarta Sans',sans-serif; border:1px solid; transition:all var(--transition); }
+.rbtn-yes  { background:var(--green-dim); color:var(--accent); border-color:rgba(52,211,153,.15); }
+.rbtn-no   { background:var(--red-dim); color:var(--red); border-color:rgba(248,113,113,.15); }
+.rbtn-stop { background:transparent; color:var(--text2); border-color:var(--border2); }
+.rbtn-reset{ background:transparent; color:var(--text3); border-color:var(--border); font-size:11px; }
 
 /* ── TOAST UPGRADE ─────────────────────────────────────────────────── */
 .toast {
@@ -1490,34 +1562,37 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
       <div style="display:flex;gap:8px;margin-top:14px;align-items:center;justify-content:center" id="logPager"></div>
     </div>
 
-    <!-- REPLIES -->
-        <!-- REPLIES PAGE -->
+    <!-- REPLIES TRIAGE QUEUE -->
     <div class="page" id="page-replies">
       <div class="page-header">
         <div class="page-title">Replies</div>
-        <div class="page-sub">Responses from brokers — auto-refreshes every 2 min</div>
+        <div class="page-sub" id="fetchStatus">Lead triage queue — classify each contact in one click</div>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input id="repliesSearch" placeholder="🔍 Search email or subject..." style="width:220px;font-size:12px" oninput="renderReplies()">
-          <div class="filter-bar">
-            <button class="fbtn active" id="fb-all" onclick="setFilter('all')">All</button>
-            <button class="fbtn" id="fb-new" onclick="setFilter('new')">🔴 New</button>
-            <button class="fbtn" id="fb-interested" onclick="setFilter('interested')">✅ Interested</button>
-            <button class="fbtn" id="fb-not_interested" onclick="setFilter('not_interested')">❌ Not int.</button>
-          </div>
-          <select id="repliesSort" onchange="renderReplies()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text)">
-            <option value="date_desc">🕐 Newest first</option>
-            <option value="date_asc">🕐 Oldest first</option>
-            <option value="status">📊 By status</option>
-            <option value="email">📧 By email</option>
-          </select>
+
+      <!-- Top bar: progress + check gmail -->
+      <div class="tq-header">
+        <div class="tq-progress-wrap" id="tqProgressWrap">
+          <span class="tq-progress-label" id="tqProgressLabel">Loading...</span>
+          <div class="tq-progress-track"><div class="tq-progress-fill" id="tqProgressFill" style="width:0%"></div></div>
+          <span class="tq-inbox-zero" id="tqInboxZero" style="display:none">✓ All clear</span>
         </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <span id="fetchStatus" style="font-size:11px;color:var(--text2)"></span>
-          <button class="btn btn-primary" id="fetchBtn" onclick="fetchReplies()"><i class="ph-bold ph-arrows-clockwise" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Check Gmail</button>
+        <button class="btn btn-primary" id="fetchBtn" onclick="fetchReplies()">
+          <i class="ph-bold ph-arrows-clockwise" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Check Gmail
+        </button>
+      </div>
+
+      <!-- Filters + search -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+        <input id="repliesSearch" placeholder="Search company or email..." style="width:200px;font-size:12px" oninput="renderReplies()">
+        <div class="tq-filters">
+          <button class="tq-tab active" id="tqf-all"      onclick="setFilter('all')">All <span class="tq-tab-count" id="tqc-all">0</span></button>
+          <button class="tq-tab" id="tqf-new"             onclick="setFilter('new')">● New <span class="tq-tab-count" id="tqc-new">0</span></button>
+          <button class="tq-tab" id="tqf-interested"      onclick="setFilter('interested')">✅ Interested <span class="tq-tab-count" id="tqc-interested">0</span></button>
+          <button class="tq-tab" id="tqf-follow_up"       onclick="setFilter('follow_up')">⏳ Follow-up <span class="tq-tab-count" id="tqc-follow_up">0</span></button>
+          <button class="tq-tab" id="tqf-ignored"         onclick="setFilter('ignored')">🚫 Ignored <span class="tq-tab-count" id="tqc-ignored">0</span></button>
         </div>
       </div>
+
       <div id="repliesList"></div>
     </div>
 
@@ -2809,171 +2884,307 @@ async function loadReplies() {
   renderReplies(); updateBadge();
 }
 function updateBadge() {
-  const n = allReplies.filter(r => r.status === 'new').length;
+  // Count unique contacts (not individual emails) with new status
+  const groups = buildContactGroups(allReplies);
+  const n = groups.filter(g => normalizeState(contactState(g)) === 'new').length;
   const b = document.getElementById('repliesBadge');
-  b.textContent = n; b.style.display = n > 0 ? 'inline' : 'none';
+  if (b) { b.textContent = n; b.style.display = n > 0 ? 'inline' : 'none'; }
 }
 function setFilter(f) {
   repliesFilter = f;
-  document.querySelectorAll('.fbtn').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tq-tab').forEach(el => el.classList.remove('active'));
+  const tab = document.getElementById('tqf-' + f);
+  if (tab) tab.classList.add('active');
   const btn = document.getElementById('fb-' + f);
-  if (btn) btn.classList.add('active');
   renderReplies();
 }
 async function fetchReplies(silent) {
   const btn = document.getElementById('fetchBtn');
-  const st  = document.getElementById('fetchStatus');
-  if (!silent) { btn.disabled = true; st.textContent = 'Checking Gmail...'; }
+  const sub = document.getElementById('fetchStatus');
+  if (!silent) { btn.disabled = true; if(sub) sub.textContent = 'Checking Gmail…'; }
   try {
     const data = await (await fetch('/api/replies/fetch', {method:'POST'})).json();
-    if (data.error) { st.textContent = '⚠️ ' + data.error; }
+    if (data.error) { if(sub) sub.textContent = '⚠️ ' + data.error; }
     else {
-      st.textContent = data.new > 0 ? `✅ ${data.new} new!` : 'Up to date';
-      if (data.new > 0) toast(data.new + ' new replies!');
+      if(sub) sub.textContent = data.new > 0 ? `✅ ${data.new} new reply${data.new>1?'s':''}` : 'Up to date — Lead triage queue';
+      if (data.new > 0) toast(data.new + ' new repl' + (data.new>1?'ies':'y') + '!');
       await loadReplies();
     }
-  } catch(e) { st.textContent = 'Error'; }
+  } catch(e) { if(sub) sub.textContent = 'Error checking Gmail'; }
   btn.disabled = false;
 }
-function setSortReplies(val) {
-  const el = document.getElementById('repliesSort');
-  if (el) { el.value = val; renderReplies(); }
-}
-
 function parseReplyDate(r) {
   return new Date(r.received_at || r.date || '2000-01-01');
 }
 
-function renderReplies() {
-  const search = (document.getElementById('repliesSearch')?.value || '').toLowerCase();
-  const sortBy = document.getElementById('repliesSort')?.value || 'date_desc';
-  let list = repliesFilter === 'all' ? allReplies : allReplies.filter(r => r.status === repliesFilter);
-  if (search) list = list.filter(r =>
-    (r.email||'').toLowerCase().includes(search) ||
-    (r.subject||'').toLowerCase().includes(search) ||
-    (r.route||'').toLowerCase().includes(search)
-  );
-
-  // Group by email, sort groups by latest date, sort threads within group by date
+// Build contact groups from raw replies
+function buildContactGroups(replies) {
   const groups = {};
-  list.forEach(r => {
-    const key = (r.email||'').toLowerCase();
+  replies.forEach(r => {
+    const key = (r.email || '').toLowerCase().trim();
+    if (!key) return;
     if (!groups[key]) groups[key] = [];
     groups[key].push(r);
   });
-  // Sort threads within each group newest first
+  // Sort each group's messages newest first
   Object.values(groups).forEach(g => g.sort((a,b) => parseReplyDate(b) - parseReplyDate(a)));
-  // Sort groups by their latest thread
-  let groupList = Object.values(groups).sort((a,b) => parseReplyDate(b[0]) - parseReplyDate(a[0]));
-  
-  // Apply secondary sort
-  if (sortBy === 'date_asc') {
-    groupList = Object.values(groups).sort((a,b) => parseReplyDate(a[0]) - parseReplyDate(b[0]));
-    groupList.forEach(g => g.sort((a,b) => parseReplyDate(a) - parseReplyDate(b)));
-  } else if (sortBy === 'status') {
-    const order = {new:0, interested:1, not_interested:2};
-    const bestStatus = g => Math.min(...g.map(r => order[r.status]||0));
-    groupList.sort((a,b) => bestStatus(a) - bestStatus(b));
-  } else if (sortBy === 'email') {
-    groupList.sort((a,b) => (a[0].email||'').localeCompare(b[0].email||''));
-  }
-  // Flatten back for table rendering but keep groups together
-  list = groupList.flat();
+  return Object.values(groups);
+}
+
+// Derive contact state from its messages
+// Priority: new > viewed > follow_up > interested > not_interested/ignored
+function contactState(msgs) {
+  const stateOrder = ['new','viewed','follow_up','interested','not_interested','ignored'];
+  let best = 'ignored';
+  msgs.forEach(r => {
+    const s = r.status || 'new';
+    if (stateOrder.indexOf(s) < stateOrder.indexOf(best)) best = s;
+  });
+  return best;
+}
+
+// Normalize: treat not_interested as ignored for display
+function normalizeState(s) {
+  return s === 'not_interested' ? 'ignored' : (s || 'new');
+}
+
+// Relative time display
+function relTime(r) {
+  const d = parseReplyDate(r);
+  const diff = Date.now() - d.getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1)  return 'just now';
+  if (min < 60) return min + 'm ago';
+  const h = Math.floor(min / 60);
+  if (h < 24)   return h + 'h ago';
+  const days = Math.floor(h / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7)  return days + 'd ago';
+  return (r.received_at || r.date || '').slice(5,10);
+}
+
+// Parse company name from "from" field
+function parseCompany(r) {
+  const from = r.from || '';
+  // Try "Company Name <email@domain.com>"
+  const m = from.match(/^"?([^"<]+)"?\s*</);
+  if (m && m[1].trim()) return m[1].trim();
+  // Fall back to domain of email
+  const email = r.email || '';
+  const domain = email.split('@')[1] || '';
+  return domain.split('.')[0] || email;
+}
+
+// State pill HTML
+function tqStatePill(state) {
+  const labels = { new:'● NEW', viewed:'◐ VIEWED', follow_up:'⏳ FOLLOW-UP', interested:'✅ INTERESTED', ignored:'— IGNORED' };
+  return '<span class="tq-state-pill ' + state + '">' + (labels[state] || state.toUpperCase()) + '</span>';
+}
+
+// Full triage card HTML
+function tqCard(msgs) {
+  const latest = msgs[0];
+  const state = normalizeState(contactState(msgs));
+  const email = (latest.email || '').replace(/'/g, "\\'");
+  const emailSafe = latest.email || '';
+  const company = parseCompany(latest);
+  const preview = (latest.body || latest.subject || '(no message)').replace(/\s+/g,' ').trim().slice(0, 100);
+  const route = latest.route ? '📍 ' + latest.route : (latest.subject || '');
+  const replyCount = msgs.length;
+  const time = relTime(latest);
+  const cardId = 'tqc_' + emailSafe.replace(/[^a-zA-Z0-9]/g,'_');
+
+  const showActions = (state === 'new' || state === 'viewed');
+  const actionsHtml = showActions
+    ? '<div class="tq-actions">' +
+        '<button class="tq-action tq-action-yes" onclick="event.stopPropagation();markContact(\'' + email + '\',\'interested\')" title="I - Interested">✅ Interested</button>' +
+        '<button class="tq-action tq-action-fu"  onclick="event.stopPropagation();markContact(\'' + email + '\',\'follow_up\')"  title="F - Follow-up">⏳ Follow-up</button>' +
+        '<button class="tq-action tq-action-no"  onclick="event.stopPropagation();markContact(\'' + email + '\',\'not_interested\')" title="X - Ignore">🚫 Ignore</button>' +
+      '</div>'
+    : '<div style="padding:8px 16px 12px;display:flex;gap:8px;align-items:center">' +
+        '<button class="tq-compact-reset" onclick="event.stopPropagation();markContact(\'' + email + '\',\'new\')" title="Reset to New">↩ Reset</button>' +
+        (state !== 'interested' ? '<button class="tq-compact-reset" style="color:var(--accent)" onclick="event.stopPropagation();markContact(\'' + email + '\',\'interested\')">✅ Interested</button>' : '') +
+        '<button class="tq-compact-reset" style="color:var(--red)" onclick="event.stopPropagation();markContactStop(\'' + email + '\')">🚫 Block</button>' +
+      '</div>';
+
+  const expandId = 'tqexp_' + emailSafe.replace(/[^a-zA-Z0-9]/g,'_');
+
+  return '<div class="tq-card state-' + state + '" id="' + cardId + '" onclick="tqToggleExpand(\'' + expandId + '\')">' +
+    '<div class="tq-card-top">' +
+      tqStatePill(state) +
+      '<div class="tq-meta">' +
+        (replyCount > 1 ? '<span class="tq-reply-badge">' + replyCount + ' replies</span>' : '<span class="tq-reply-badge">1 reply</span>') +
+        '<span>' + time + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="tq-card-body">' +
+      '<div class="tq-company">' + esc(company) + '</div>' +
+      '<div class="tq-email">' + esc(emailSafe) + '</div>' +
+      '<div class="tq-divider"></div>' +
+      '<div class="tq-preview">"' + esc(preview) + (preview.length >= 100 ? '…' : '') + '"</div>' +
+      (route ? '<div class="tq-route">' + esc(route) + '</div>' : '') +
+      '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' + esc(latest.body || '(empty)') + '</div>' +
+    '</div>' +
+    actionsHtml +
+  '</div>';
+}
+
+// Compact row (for processed contacts)
+function tqCompactRow(msgs) {
+  const latest = msgs[0];
+  const state = normalizeState(contactState(msgs));
+  const email = (latest.email || '').replace(/'/g, "\\'");
+  const company = parseCompany(latest);
+  const time = relTime(latest);
+  const stateIcon = { interested:'✅', follow_up:'⏳', ignored:'🚫' }[state] || '';
+  return '<div class="tq-compact state-' + state + '">' +
+    '<div class="tq-compact-name">' + esc(company) + ' <span style="font-weight:400;color:var(--text3);font-size:10px">' + esc(latest.email||'') + '</span></div>' +
+    '<span class="tq-compact-badge">' + stateIcon + '</span>' +
+    '<span class="tq-compact-time">' + time + '</span>' +
+    '<button class="tq-compact-reset" onclick="markContact(\'' + email + '\',\'new\')" title="Reset">↩</button>' +
+  '</div>';
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function tqToggleExpand(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+function renderReplies() {
+  const search = (document.getElementById('repliesSearch')?.value || '').toLowerCase();
   const el = document.getElementById('repliesList');
-  if (!list.length) {
-    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:48px 0;text-align:center">' +
-      (repliesFilter === 'all' && !search ? "No replies yet — click Check Gmail to load" : 'No replies found') +
-      '</div>'; return;
+  if (!el) return;
+
+  // Build all groups from allReplies
+  let source = allReplies;
+  if (search) source = source.filter(r =>
+    (r.email||'').toLowerCase().includes(search) ||
+    (parseCompany(r)||'').toLowerCase().includes(search) ||
+    (r.subject||'').toLowerCase().includes(search)
+  );
+
+  const allGroups = buildContactGroups(source);
+
+  // Count per state for tabs
+  const counts = { new:0, viewed:0, follow_up:0, interested:0, ignored:0, all:0 };
+  allGroups.forEach(g => {
+    const s = normalizeState(contactState(g));
+    counts[s] = (counts[s]||0) + 1;
+    counts.all++;
+  });
+  ['all','new','interested','follow_up','ignored'].forEach(k => {
+    const el = document.getElementById('tqc-' + k);
+    if (el) el.textContent = counts[k] || 0;
+  });
+
+  // Update progress bar
+  const unprocessed = (counts.new || 0) + (counts.viewed || 0);
+  const total = counts.all || 0;
+  const done = total - unprocessed;
+  const pct = total > 0 ? Math.round(done / total * 100) : 100;
+  const fill = document.getElementById('tqProgressFill');
+  const label = document.getElementById('tqProgressLabel');
+  const zero = document.getElementById('tqInboxZero');
+  if (fill) fill.style.width = pct + '%';
+  if (label) label.textContent = unprocessed > 0 ? unprocessed + ' need' + (unprocessed>1?'s':'') + ' a decision · ' + done + ' processed' : done + ' processed';
+  if (zero) zero.style.display = unprocessed === 0 && total > 0 ? 'inline' : 'none';
+
+  // Filter by active tab
+  let filtered = allGroups;
+  if (repliesFilter !== 'all') {
+    filtered = allGroups.filter(g => normalizeState(contactState(g)) === repliesFilter);
   }
 
-  const thStyle = 'padding:10px 12px;font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;user-select:none';
-  const thStyleCenter = thStyle + ';text-align:center';
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-    '<thead><tr style="border-bottom:2px solid var(--border);text-align:left">' +
-    '<th style="' + thStyle + '" onclick="setSortReplies(\'email\')" >↕ From</th>' +
-    '<th style="' + thStyle + '">Subject / Route</th>' +
-    '<th style="' + thStyle + '" onclick="setSortReplies(\'date_desc\')">Date ↕</th>' +
-    '<th style="' + thStyle + '" onclick="setSortReplies(\'status\')">Status ↕</th>' +
-    '<th style="' + thStyleCenter + '">Actions</th>' +
-    '</tr></thead><tbody>';
+  if (!filtered.length) {
+    el.innerHTML = '<div class="tq-empty"><div class="tq-empty-icon">📭</div>' +
+      (repliesFilter === 'all' && !search ? 'No replies yet — click <b>Check Gmail</b>' : 'Nothing here') +
+      '</div>';
+    return;
+  }
 
-  let lastEmail = null;
-  html += list.map(r => {
-    const sid = 'sid_' + r.msg_id.replace(/[^a-zA-Z0-9]/g,'_');
-    const showEmailHeader = r.email !== lastEmail;
-    lastEmail = r.email;
-    const groupHeaderRow = showEmailHeader
-      ? '<tr style="background:var(--surface2)"><td colspan="5" style="padding:8px 12px 4px;font-size:11px;font-weight:700;color:var(--text2);border-top:2px solid var(--border)">' +
-        '📧 ' + r.email + '</td></tr>'
-      : '';
-    const badge = r.status === 'new'
-      ? '<span class="chip chip-error" style="font-size:10px">🔴 New</span>'
-      : r.status === 'interested'
-      ? '<span class="chip chip-sent" style="font-size:10px">✅ Interested</span>'
-      : '<span class="chip chip-dup" style="font-size:10px">❌ Not int.</span>';
+  // Sort: new first, then viewed, then follow_up, then interested, then ignored
+  const stateSort = { new:0, viewed:1, follow_up:2, interested:3, ignored:4 };
+  filtered.sort((a,b) => {
+    const sa = stateSort[normalizeState(contactState(a))] || 5;
+    const sb = stateSort[normalizeState(contactState(b))] || 5;
+    if (sa !== sb) return sa - sb;
+    return parseReplyDate(b[0]) - parseReplyDate(a[0]);
+  });
 
-    const eSafe = r.email.replace(/'/g,'');
-    const pipeBtn = '<button class="rbtn" style="background:rgba(96,165,250,.1);color:var(--blue);border-color:rgba(96,165,250,.3)" onclick="event.stopPropagation();addReplyToPipeline(\'' + eSafe + '\')" title="Add to Pipeline">📋</button>';
-    let actionBtns = '';
-    if (r.status === 'new') {
-      actionBtns =
-        '<button class="rbtn rbtn-yes" onclick="event.stopPropagation();markR(\'' + sid + '\',\'interested\')" title="Interested">✅</button>' +
-        '<button class="rbtn rbtn-no" onclick="event.stopPropagation();markR(\'' + sid + '\',\'not_interested\')" title="Not Interested">❌</button>' +
-        '<button class="rbtn rbtn-stop" onclick="event.stopPropagation();markRStop(\'' + sid + '\')" title="Not Interested + Stop">🚫</button>' +
-        pipeBtn;
-    } else {
-      actionBtns = '<button class="rbtn rbtn-reset" onclick="event.stopPropagation();markR(\'' + sid + '\',\'new\')" title="Reset">↩</button>' + pipeBtn;
-    }
+  // Split into sections
+  const sections = [
+    { key:'new',        label:'New',       dot:'tq-dot-new',      full:true  },
+    { key:'viewed',     label:'Needs action', dot:'tq-dot-viewed', full:true  },
+    { key:'follow_up',  label:'Follow-up', dot:'tq-dot-followup',  full:false },
+    { key:'interested', label:'Interested',dot:'tq-dot-interested', full:false },
+    { key:'ignored',    label:'Ignored',   dot:'tq-dot-ignored',   full:false },
+  ];
 
-    const rowOpacity = r.status === 'not_interested' ? 'opacity:.5;' : '';
-    const borderLeft = r.status === 'new' ? 'border-left:3px solid var(--red);'
-      : r.status === 'interested' ? 'border-left:3px solid var(--green);'
-      : 'border-left:3px solid var(--text3);';
-    const fromName = (r.from||'').replace(/<[^>]+>/g,'').replace(/"/g,'').trim();
+  let html = '';
+  sections.forEach(sec => {
+    const groups = filtered.filter(g => normalizeState(contactState(g)) === sec.key);
+    if (!groups.length) return;
+    html += '<div class="tq-section">';
+    html += '<div class="tq-section-label"><span class="tq-dot ' + sec.dot + '"></span>' + sec.label + ' (' + groups.length + ')</div>';
+    groups.forEach(g => {
+      html += sec.full ? tqCard(g) : tqCompactRow(g);
+    });
+    html += '</div>';
+  });
 
-    return groupHeaderRow + '<tr id="rc_' + sid + '" class="reply-row" style="' + borderLeft + rowOpacity + 'cursor:pointer" onclick="toggleReplyBody(\'' + sid + '\')">' +
-      '<td style="padding:10px 12px;white-space:nowrap">' +
-        '<div style="font-size:13px;color:var(--blue);font-weight:700;font-family:\'DM Mono\',monospace">' + r.email + '</div>' +
-        '<div style="font-size:10px;color:var(--text3)">' + fromName + '</div>' +
-      '</td>' +
-      '<td style="padding:10px 12px;max-width:350px">' +
-        '<div style="font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (r.subject || '(no subject)') + '</div>' +
-        '<div style="font-size:10px;color:var(--text2)">' + (r.route ? '📍 ' + r.route : '') + '</div>' +
-      '</td>' +
-      '<td style="padding:10px 12px;font-size:11px;color:var(--text3);white-space:nowrap">' + (r.received_at||r.date||'').slice(0,16) + '</td>' +
-      '<td style="padding:10px 12px">' + badge + '</td>' +
-      '<td style="padding:10px 12px;text-align:center">' +
-        '<div style="display:flex;gap:5px;justify-content:center" onclick="event.stopPropagation()">' + actionBtns + '</div>' +
-      '</td>' +
-    '</tr>' +
-    '<tr id="body_' + sid + '" class="reply-body-row" style="display:none">' +
-      '<td colspan="5" style="padding:0 12px 14px 20px;background:var(--surface2)">' +
-        '<div class="reply-body" style="font-size:12px;color:var(--text2);line-height:1.7;background:var(--surface);padding:12px 14px;border-radius:var(--radius-sm);margin:8px 0;white-space:pre-wrap;max-height:180px;overflow-y:auto;font-family:\'DM Mono\',monospace;border:1px solid var(--border)">' + (r.body || '(empty)') + '</div>' +
-      '</td>' +
-    '</tr>';
-  }).join('');
-
-  html += '</tbody></table>';
   el.innerHTML = html;
 }
 
-function toggleReplyBody(sid) {
-  const bodyRow = document.getElementById('body_' + sid);
-  if (bodyRow) bodyRow.style.display = bodyRow.style.display === 'none' ? 'table-row' : 'none';
+function tqAnimateOut(emailKey, callback) {
+  const id = 'tqc_' + emailKey.replace(/[^a-zA-Z0-9]/g,'_');
+  const card = document.getElementById(id);
+  if (card) {
+    card.classList.add('exiting');
+    setTimeout(callback, 340);
+  } else {
+    callback();
+  }
 }
-function toggleReply(sid) { toggleReplyBody(sid); }
+
+async function markContact(email, status, addToStop) {
+  const msgs = allReplies.filter(r => (r.email||'').toLowerCase().trim() === email.toLowerCase().trim());
+  if (!msgs.length) return;
+  // Optimistic update
+  msgs.forEach(r => r.status = status);
+  // Animate card out then re-render
+  tqAnimateOut(email, async () => {
+    renderReplies(); updateBadge();
+    if (status === 'interested') { await loadFollowups(); toast('✅ Added to pipeline!'); }
+    if (addToStop) toast('🚫 Added to Stop List');
+  });
+  // API calls (fire and forget)
+  msgs.forEach(r => fetch('/api/replies/status', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({msg_id: r.msg_id, status, add_to_stop: !!addToStop})
+  }));
+}
+
+async function markContactStop(email) {
+  await markContact(email, 'not_interested', true);
+}
+
+// Legacy compat
+function toggleReplyBody(sid) {}
+function toggleReply(sid) {}
+function setSortReplies(val) { renderReplies(); }
 function findReply(sid) { const clean = sid.replace(/^sid_/,''); return allReplies.find(r => r.msg_id.replace(/[^a-zA-Z0-9]/g,'_') === clean); }
 async function markR(sid, status) {
   const r = findReply(sid); if (!r) return;
-  await fetch('/api/replies/status', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({msg_id: r.msg_id, status})});
-  r.status = status;
-  renderReplies(); updateBadge();
-  if (status === 'interested') { await loadFollowups(); toast('✅ Added to Follow-up!'); }
+  await markContact(r.email, status);
 }
 async function markRStop(sid) {
   const r = findReply(sid); if (!r) return;
-  await fetch('/api/replies/status', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({msg_id: r.msg_id, status:'not_interested', add_to_stop: true})});
-  r.status = 'not_interested'; renderReplies(); updateBadge(); toast('Added to Stop List');
+  await markContactStop(r.email);
 }
 
 // ── FOLLOW-UP ────────────────────────────────────────────────────────────────

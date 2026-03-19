@@ -1156,13 +1156,13 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
       <div class="nav-item active" onclick="nav('send',this)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send
       </div>
-      <div class="nav-item" onclick="nav('followup',this)">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Follow-up
-        <span id="fuBadge" class="nav-badge" style="display:none">0</span>
-      </div>
       <div class="nav-item" onclick="nav('replies',this)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Replies
         <span id="repliesBadge" class="nav-badge" style="display:none">0</span>
+      </div>
+      <div class="nav-item" onclick="nav('followup',this)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Follow-up
+        <span id="fuBadge" class="nav-badge" style="display:none">0</span>
       </div>
       <div class="nav-item" onclick="nav('stats',this)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Analytics
@@ -1679,22 +1679,24 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
       </div>
 
       <!-- TOOLBAR -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input id="fuSearch" placeholder="🔍 Search email or route..." style="width:210px;font-size:12px" oninput="renderFollowups()">
-          <div class="filter-bar">
-            <button class="fbtn active" id="fuf-all"    onclick="setFuFilter('all')">All</button>
-            <button class="fbtn"        id="fuf-FU1"    onclick="setFuFilter('FU1')">FU1</button>
-            <button class="fbtn"        id="fuf-FU2"    onclick="setFuFilter('FU2')">FU2</button>
-            <button class="fbtn"        id="fuf-FU3"    onclick="setFuFilter('FU3')">FU3</button>
-            <button class="fbtn"        id="fuf-closed" onclick="setFuFilter('closed')">✓ Closed</button>
+          <input id="fuSearch" placeholder="Search email or route..." style="width:200px;font-size:12px" oninput="renderFollowups()">
+          <div class="tq-filters">
+            <button class="tq-tab active" id="fuf-all"    onclick="setFuFilter('all')">All</button>
+            <button class="tq-tab"        id="fuf-FU1"    onclick="setFuFilter('FU1')"><span style="color:var(--blue)">●</span> FU1</button>
+            <button class="tq-tab"        id="fuf-FU2"    onclick="setFuFilter('FU2')"><span style="color:var(--yellow)">●</span> FU2</button>
+            <button class="tq-tab"        id="fuf-FU3"    onclick="setFuFilter('FU3')"><span style="color:var(--red)">●</span> FU3</button>
+            <button class="tq-tab"        id="fuf-closed" onclick="setFuFilter('closed')"><i class="ph-bold ph-check" style="font-size:10px"></i> Closed</button>
           </div>
         </div>
-        <button class="btn btn-ghost" onclick="fuSelectAll()" style="font-size:12px;padding:8px 14px">☑ Select All Visible</button>
+        <button class="tq-tab" onclick="fuSelectAll()" style="gap:6px">
+          <i class="ph-bold ph-checks" style="font-size:12px"></i> Select All Visible
+        </button>
       </div>
 
       <!-- STATS ROW -->
-      <div id="fuStats" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
+      <div id="fuStats" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"></div>
 
       <!-- BULK ACTION BAR -->
       <div class="fu-bulk-bar" id="fuBulkBar">
@@ -1703,13 +1705,21 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
         <button class="btn btn-primary" style="font-size:12px;padding:7px 14px" onclick="sendBulkFu()">
           <i class="ph-bold ph-paper-plane-right" style="font-size:13px;margin-right:5px;vertical-align:middle"></i>Send Now
         </button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkAction('pause')">⏸ Pause</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkAction('resume')">▶ Resume</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkReschedule()">
-          <i class="ph-bold ph-calendar" style="font-size:13px;margin-right:4px;vertical-align:middle"></i>Reschedule
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkAction('pause')">
+          <i class="ph-bold ph-pause" style="font-size:12px;margin-right:4px;vertical-align:middle"></i>Pause
         </button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="closeBulkFu()">✓ Close</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px;margin-left:auto" onclick="fuDeselectAll()">✕ Deselect</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkAction('resume')">
+          <i class="ph-bold ph-play" style="font-size:12px;margin-right:4px;vertical-align:middle"></i>Resume
+        </button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="fuBulkReschedule()">
+          <i class="ph-bold ph-calendar" style="font-size:12px;margin-right:4px;vertical-align:middle"></i>Reschedule
+        </button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px" onclick="closeBulkFu()">
+          <i class="ph-bold ph-check" style="font-size:12px;margin-right:4px;vertical-align:middle"></i>Close
+        </button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px;margin-left:auto;color:var(--text3)" onclick="fuDeselectAll()">
+          <i class="ph-bold ph-x" style="font-size:12px;margin-right:4px;vertical-align:middle"></i>Deselect
+        </button>
       </div>
 
       <!-- TABLE -->
@@ -3356,12 +3366,12 @@ function _fuFmtDate(dateStr) {
 
 function _fuStatusBadge(f) {
   const statusMap = {
-    scheduled: ['Scheduled','fu-status-scheduled','🕐'],
-    sent:      ['Sent','fu-status-sent','✓'],
-    paused:    ['Paused','fu-status-paused','⏸'],
-    failed:    ['Failed','fu-status-failed','✕'],
-    closed:    ['Closed','fu-status-closed','✓'],
-    pending:   ['Scheduled','fu-status-pending','🕐'],
+    scheduled: ['Scheduled','fu-status-scheduled','<i class="ph-bold ph-clock" style="font-size:10px"></i>'],
+    sent:      ['Sent',     'fu-status-sent',      '<i class="ph-bold ph-check" style="font-size:10px"></i>'],
+    paused:    ['Paused',   'fu-status-paused',    '<i class="ph-bold ph-pause" style="font-size:10px"></i>'],
+    failed:    ['Failed',   'fu-status-failed',    '<i class="ph-bold ph-warning" style="font-size:10px"></i>'],
+    closed:    ['Closed',   'fu-status-closed',    '<i class="ph-bold ph-check-circle" style="font-size:10px"></i>'],
+    pending:   ['Scheduled','fu-status-pending',   '<i class="ph-bold ph-clock" style="font-size:10px"></i>'],
   };
   const s = f.status || 'pending';
   const [label, cls, icon] = statusMap[s] || statusMap.pending;
@@ -3533,16 +3543,27 @@ function renderFollowups() {
     else counts[f.level] = (counts[f.level]||0)+1;
   });
   const statsEl = document.getElementById('fuStats');
-  if (statsEl) statsEl.innerHTML = [
-    ['FU1', counts.FU1, 'var(--blue)'],
-    ['FU2', counts.FU2, 'var(--yellow)'],
-    ['FU3', counts.FU3, 'var(--red)'],
-    ['Closed', counts.closed, 'var(--green)'],
-    ...(counts.failed ? [['Failed', counts.failed, 'var(--red)']] : []),
-  ].map(([label,n,color]) => `<div style="background:var(--surface);border:1px solid var(--border);padding:8px 14px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px">
-    <span style="font-size:18px;font-weight:800;color:${color};font-family:'DM Mono',monospace">${n}</span>
-    <span style="font-size:11px;color:var(--text2);font-weight:700">${label}</span>
-  </div>`).join('');
+  if (statsEl) {
+    const total = (counts.FU1||0)+(counts.FU2||0)+(counts.FU3||0);
+    const statItems = [
+      { label:'Active', n: total, color:'var(--accent)', icon:'ph-lightning', bg:'rgba(5,150,105,.07)' },
+      { label:'FU1', n: counts.FU1||0, color:'var(--blue)', icon:'ph-number-circle-one', bg:'rgba(96,165,250,.07)' },
+      { label:'FU2', n: counts.FU2||0, color:'var(--yellow)', icon:'ph-number-circle-two', bg:'rgba(250,204,21,.07)' },
+      { label:'FU3', n: counts.FU3||0, color:'var(--red)', icon:'ph-number-circle-three', bg:'rgba(248,113,113,.07)' },
+      { label:'Closed', n: counts.closed||0, color:'var(--text3)', icon:'ph-check-circle', bg:'transparent' },
+      ...(counts.failed ? [{ label:'Failed', n: counts.failed, color:'var(--red)', icon:'ph-warning-circle', bg:'rgba(248,113,113,.07)' }] : []),
+    ];
+    statsEl.innerHTML = statItems.map(s => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;display:flex;align-items:center;gap:10px;min-width:90px">
+        <div style="width:32px;height:32px;border-radius:8px;background:${s.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="ph-bold ${s.icon}" style="font-size:16px;color:${s.color}"></i>
+        </div>
+        <div>
+          <div style="font-size:20px;font-weight:800;color:${s.color};font-family:'DM Mono',monospace;line-height:1">${s.n}</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-top:2px;letter-spacing:.4px;text-transform:uppercase">${s.label}</div>
+        </div>
+      </div>`).join('');
+  }
 
   const tbody = document.getElementById('followupList');
   const empty = document.getElementById('fuEmptyState');
@@ -3585,11 +3606,22 @@ function renderFollowups() {
 
     const errorTitle = f.last_error ? ` title="${f.last_error.replace(/"/g,"'")}"` : '';
 
+    // Avatar for contact cell
+    const fuEmail = f.email || '';
+    const fuFrom  = (f.from || fuEmail).replace(/<[^>]+>/g,'').replace(/"/g,'').trim();
+    const fuIni   = fuFrom.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || fuEmail.slice(0,2).toUpperCase();
+    const fuAvatarColor = avatarColor(fuEmail);
+
     return `<tr class="${rowCls}">
       <td style="padding-left:14px"><input type="checkbox" class="fu-check" data-email="${f.email}" ${isClosed?'disabled':''} onchange="onFuCheckChange()" style="accent-color:var(--accent);cursor:pointer;width:14px;height:14px"></td>
       <td>
-        <div class="fu-email" style="font-size:12px;font-weight:700;color:var(--blue);font-family:'DM Mono',monospace">${f.email}</div>
-        ${f.from ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.from}</div>` : ''}
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="width:30px;height:30px;border-radius:8px;background:${fuAvatarColor};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0">${fuIni}</div>
+          <div style="min-width:0">
+            <div class="fu-email" style="font-size:12px;font-weight:700;color:var(--text)">${fuFrom !== fuEmail ? fuFrom : fuEmail.split('@')[0]}</div>
+            <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${fuEmail}</div>
+          </div>
+        </div>
       </td>
       <td style="color:var(--text2);font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.route||'—'}</td>
       <td class="td-center">${_fuLevelBadge(f.level)}</td>
@@ -3598,13 +3630,15 @@ function renderFollowups() {
       <td>${nsaHtml}</td>
       <td class="td-center">${autoToggle}</td>
       <td class="td-center">
-        <div style="display:flex;gap:5px;justify-content:center;align-items:center">
-          ${!isClosed ? `<button class="rbtn rbtn-yes" onclick="sendOneFu('${f.email}')" title="Send ${f.level} now" style="font-size:11px;padding:5px 9px">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>${f.level}
-          </button>` : '<span style="font-size:10px;color:var(--green);font-weight:700;padding:4px 8px">✓ Done</span>'}
-          ${!isClosed ? `<button class="rbtn rbtn-stop" onclick="closeFu('${f.email}')" title="Close follow-up" style="font-size:11px;padding:5px 8px">✓</button>` : ''}
-          <button class="rbtn rbtn-reset" onclick="deleteFu('${f.email}')" title="Remove" style="font-size:11px;padding:5px 7px;opacity:.5" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <div style="display:flex;gap:4px;justify-content:center;align-items:center">
+          ${!isClosed ? `<button class="rbtn rbtn-yes" onclick="sendOneFu('${f.email}')" title="Send ${f.level} now" style="font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:4px">
+            <i class="ph-bold ph-paper-plane-right" style="font-size:11px"></i>${f.level}
+          </button>` : '<span style="font-size:10px;color:var(--accent);font-weight:700;padding:4px 8px;display:inline-flex;align-items:center;gap:3px"><i class="ph-bold ph-check-circle"></i> Done</span>'}
+          ${!isClosed ? `<button class="rbtn rbtn-stop" onclick="closeFu('${f.email}')" title="Mark as closed" style="font-size:11px;padding:5px 8px;display:inline-flex;align-items:center">
+            <i class="ph-bold ph-check" style="font-size:12px"></i>
+          </button>` : ''}
+          <button class="rbtn rbtn-reset" onclick="deleteFu('${f.email}')" title="Remove" style="font-size:11px;padding:5px 7px;display:inline-flex;align-items:center;opacity:.45" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.45">
+            <i class="ph-bold ph-trash" style="font-size:12px"></i>
           </button>
         </div>
       </td>

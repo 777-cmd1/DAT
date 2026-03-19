@@ -774,7 +774,8 @@ tr:last-child td { border-bottom: none; }
 .tq-action-yes { }
 .tq-action-yes:hover { background:rgba(5,150,105,.08); color:var(--accent); }
 .tq-action-fu:hover  { background:rgba(251,146,60,.08); color:#fb923c; }
-.tq-action-no:hover  { background:rgba(248,113,113,.08); color:#f87171; }
+.tq-action-no:hover    { background:rgba(248,113,113,.08); color:#f87171; }
+.tq-action-block:hover { background:rgba(248,113,113,.14); color:#ef4444; font-weight:700; }
 
 /* Card exit / enter animations */
 @keyframes tqSlideOut {
@@ -3080,6 +3081,8 @@ function tqCard(msgs) {
           '<i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-action-key">F</span></button>' +
         '<button class="tq-action tq-action-no"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
           '<i class="ph-bold ph-x"></i> Ignore <span class="tq-action-key">X</span></button>' +
+        '<button class="tq-action tq-action-block" onclick="markContactStop(\'' + emailEsc + '\')" title="Block + Stop List [B]">' +
+          '<i class="ph-bold ph-prohibit"></i> Block <span class="tq-action-key">B</span></button>' +
       '</div>'
     : '<div class="tq-card-right" onclick="event.stopPropagation()" style="justify-content:center;align-items:center;gap:6px;padding:10px 10px;display:flex;flex-direction:column;">' +
         '<button class="tq-compact-reset" style="width:100%;text-align:center" onclick="markContact(\'' + emailEsc + '\',\'new\')"><i class="ph-bold ph-arrow-counter-clockwise"></i> Reset</button>' +

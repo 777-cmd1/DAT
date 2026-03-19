@@ -665,94 +665,151 @@ tr:last-child td { border-bottom: none; }
 .tq-dot-interested { background:var(--accent); }
 .tq-dot-ignored { background:var(--text3); }
 
-/* Queue card */
+/* ── QUEUE CARD — 2-column layout ─────────────────────────────────── */
 .tq-card {
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:var(--radius);
-  margin-bottom:8px;
+  margin-bottom:7px;
   border-left:4px solid transparent;
-  transition:border-color .2s, box-shadow .2s, opacity .2s, transform .2s;
+  transition:box-shadow .18s, border-color .18s, opacity .2s, transform .2s;
   overflow:hidden;
   position:relative;
 }
-.tq-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.06); border-color:var(--border2); }
-.tq-card.state-new    { border-left-color:#f87171; }
-.tq-card.state-viewed { border-left-color:#60a5fa; }
+.tq-card:hover { box-shadow:0 2px 14px rgba(0,0,0,.07); }
+.tq-card.state-new       { border-left-color:#f87171; }
+.tq-card.state-viewed    { border-left-color:#60a5fa; }
 .tq-card.state-follow_up { border-left-color:#fb923c; }
-.tq-card.state-interested { border-left-color:var(--accent); }
-.tq-card.state-ignored { border-left-color:var(--border); opacity:.55; }
+.tq-card.state-interested{ border-left-color:var(--accent); }
+.tq-card.state-ignored   { border-left-color:var(--border); opacity:.5; }
 
-/* Card exit animation */
-@keyframes tqSlideOut {
-  0%   { opacity:1; transform:translateX(0) scaleY(1); max-height:300px; margin-bottom:8px; }
-  40%  { opacity:0; transform:translateX(32px) scaleY(1); }
-  100% { opacity:0; transform:translateX(32px) scaleY(0); max-height:0; margin-bottom:0; padding:0; }
+/* 2-column inner */
+.tq-card-inner { display:flex; min-height:90px; }
+
+/* Left — contact info */
+.tq-card-left {
+  flex:1; min-width:0; padding:12px 14px 12px 14px;
+  display:flex; gap:12px; align-items:flex-start;
+  cursor:pointer;
+  transition:background .12s;
 }
-.tq-card.exiting { animation:tqSlideOut .32s var(--ease) forwards; pointer-events:none; }
+.tq-card-left:hover { background:rgba(0,0,0,.018); }
+[data-theme=dark] .tq-card-left:hover { background:rgba(255,255,255,.025); }
 
-/* Card enter */
-@keyframes tqSlideIn {
-  from { opacity:0; transform:translateY(8px); }
-  to   { opacity:1; transform:translateY(0); }
+/* Avatar with initials */
+.tq-avatar {
+  width:38px; height:38px; border-radius:10px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:800; color:#fff; letter-spacing:.3px;
+  margin-top:1px; position:relative;
 }
-.tq-card { animation:tqSlideIn .25s var(--ease) both; }
+.tq-avatar-dot {
+  position:absolute; bottom:-2px; right:-2px;
+  width:10px; height:10px; border-radius:50%; border:2px solid var(--surface);
+}
+.tq-avatar-dot.new      { background:#f87171; box-shadow:0 0 5px rgba(248,113,113,.5); }
+.tq-avatar-dot.viewed   { background:#60a5fa; }
+.tq-avatar-dot.follow_up{ background:#fb923c; }
+.tq-avatar-dot.interested{background:var(--accent); }
 
-/* Card top row */
-.tq-card-top { display:flex; align-items:center; justify-content:space-between; padding:12px 16px 0; gap:8px; }
-.tq-state-pill { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; letter-spacing:.5px; padding:3px 8px; border-radius:99px; }
+/* Contact content */
+.tq-card-content { flex:1; min-width:0; }
+.tq-card-meta { display:flex; align-items:center; gap:7px; margin-bottom:5px; flex-wrap:wrap; }
+.tq-state-pill {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:9px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+  padding:2px 7px; border-radius:99px;
+}
 .tq-state-pill.new        { background:rgba(248,113,113,.12); color:#f87171; }
 .tq-state-pill.viewed     { background:rgba(96,165,250,.12);  color:#60a5fa; }
 .tq-state-pill.follow_up  { background:rgba(251,146,60,.12);  color:#fb923c; }
 .tq-state-pill.interested { background:rgba(5,150,105,.1);    color:var(--accent); }
 .tq-state-pill.ignored    { background:var(--surface2);       color:var(--text3); }
-.tq-meta { display:flex; align-items:center; gap:10px; font-size:11px; color:var(--text3); }
-.tq-reply-badge { background:var(--surface2); border:1px solid var(--border); border-radius:99px; padding:2px 8px; font-size:10px; font-weight:700; color:var(--text2); }
-
-/* Card body */
-.tq-card-body { padding:8px 16px 0; }
-.tq-company { font-size:14px; font-weight:700; color:var(--text); line-height:1.3; }
-.tq-email   { font-size:11px; color:var(--text3); margin-top:1px; font-family:'DM Mono',monospace; }
-.tq-divider { height:1px; background:var(--border); margin:10px 0; }
-.tq-preview { font-size:12px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-style:italic; line-height:1.5; }
-.tq-route   { font-size:11px; color:var(--text3); margin-top:3px; }
-
-/* Expanded body */
-.tq-expanded-body { display:none; margin:10px 0 0; padding:10px 12px; background:var(--surface2); border-radius:var(--radius-sm); font-size:12px; color:var(--text2); line-height:1.7; white-space:pre-wrap; max-height:160px; overflow-y:auto; font-family:'DM Mono',monospace; border:1px solid var(--border); }
-.tq-card.expanded .tq-expanded-body { display:block; }
-
-/* Card actions */
-.tq-actions { display:flex; gap:0; padding:10px 16px 12px; margin-top:10px; }
-.tq-action {
-  flex:1; padding:9px 6px; border:1.5px solid var(--border); background:transparent;
-  font-size:12px; font-weight:700; font-family:'Plus Jakarta Sans',sans-serif;
-  cursor:pointer; transition:all .15s; display:flex; align-items:center; justify-content:center; gap:5px;
-  color:var(--text2);
+.tq-reply-badge {
+  font-size:10px; font-weight:600; color:var(--text3);
+  display:inline-flex; align-items:center; gap:3px;
 }
-.tq-action:first-child { border-radius:10px 0 0 10px; }
-.tq-action:last-child  { border-radius:0 10px 10px 0; border-left:none; }
-.tq-action:not(:first-child):not(:last-child) { border-left:none; border-right:none; }
-.tq-action-yes  { color:var(--accent); }
-.tq-action-yes:hover  { background:rgba(5,150,105,.1);  border-color:var(--accent);  box-shadow:0 2px 12px var(--accent-glow); z-index:1; }
-.tq-action-fu   { color:#fb923c; }
-.tq-action-fu:hover   { background:rgba(251,146,60,.1);  border-color:#fb923c; z-index:1; }
-.tq-action-no   { color:var(--text3); }
-.tq-action-no:hover   { background:var(--red-dim);       border-color:var(--red);     color:var(--red); z-index:1; }
+.tq-time { font-size:10px; color:var(--text3); margin-left:auto; white-space:nowrap; }
+.tq-company { font-size:14px; font-weight:700; color:var(--text); line-height:1.25; margin-bottom:1px; }
+.tq-email   { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; margin-bottom:7px; }
+.tq-preview {
+  font-size:12.5px; color:var(--text2); line-height:1.45;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  margin-bottom:3px;
+}
+.tq-route   { font-size:11px; color:var(--text3); display:flex; align-items:center; gap:4px; }
 
-/* Compact row (processed items) */
-.tq-compact { display:flex; align-items:center; gap:10px; padding:8px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:5px; font-size:12px; color:var(--text2); opacity:.7; border-left:3px solid transparent; }
+/* Expanded full body (click to expand) */
+.tq-expanded-body {
+  display:none; margin-top:9px; padding:10px 12px;
+  background:var(--surface2); border-radius:var(--radius-sm);
+  font-size:12px; color:var(--text2); line-height:1.7;
+  white-space:pre-wrap; max-height:180px; overflow-y:auto;
+  font-family:'DM Mono',monospace; border:1px solid var(--border);
+}
+.tq-expanded-body.open { display:block; }
+
+/* Right — action column */
+.tq-card-right {
+  width:148px; flex-shrink:0;
+  border-left:1px solid var(--border);
+  display:flex; flex-direction:column;
+}
+.tq-action {
+  flex:1; display:flex; align-items:center; gap:8px;
+  padding:0 14px;
+  background:transparent; border:none; border-bottom:1px solid var(--border);
+  font-size:12px; font-weight:600; font-family:'Plus Jakarta Sans',sans-serif;
+  cursor:pointer; color:var(--text3);
+  transition:background .13s, color .13s;
+  white-space:nowrap;
+  position:relative;
+}
+.tq-action:last-child { border-bottom:none; }
+.tq-action i { font-size:14px; flex-shrink:0; }
+.tq-action-key {
+  margin-left:auto; font-size:9px; font-weight:700; letter-spacing:.5px;
+  opacity:.35; font-family:'DM Mono',monospace;
+}
+.tq-action-yes { }
+.tq-action-yes:hover { background:rgba(5,150,105,.08); color:var(--accent); }
+.tq-action-fu:hover  { background:rgba(251,146,60,.08); color:#fb923c; }
+.tq-action-no:hover  { background:rgba(248,113,113,.08); color:#f87171; }
+
+/* Card exit / enter animations */
+@keyframes tqSlideOut {
+  0%   { opacity:1; transform:translateX(0);  max-height:200px; margin-bottom:7px; }
+  45%  { opacity:0; transform:translateX(28px); }
+  100% { opacity:0; transform:translateX(28px); max-height:0; margin-bottom:0; border-width:0; }
+}
+@keyframes tqSlideIn {
+  from { opacity:0; transform:translateY(6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.tq-card { animation:tqSlideIn .22s var(--ease) both; }
+.tq-card.exiting { animation:tqSlideOut .3s var(--ease) forwards; pointer-events:none; overflow:hidden; }
+
+/* Compact row (processed) */
+.tq-compact {
+  display:flex; align-items:center; gap:10px;
+  padding:7px 12px; background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--radius-sm);
+  margin-bottom:4px; border-left:3px solid transparent; opacity:.65;
+}
 .tq-compact.state-interested { border-left-color:var(--accent); }
 .tq-compact.state-follow_up  { border-left-color:#fb923c; }
-.tq-compact.state-ignored    { border-left-color:var(--border); opacity:.45; }
-.tq-compact-name { font-weight:600; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.tq-compact-time { font-size:10px; color:var(--text3); white-space:nowrap; }
-.tq-compact-badge { font-size:10px; }
-.tq-compact-reset { margin-left:4px; background:none; border:none; cursor:pointer; color:var(--text3); font-size:11px; padding:2px 6px; border-radius:6px; transition:color .15s; font-family:'Plus Jakarta Sans',sans-serif; }
+.tq-compact.state-ignored    { opacity:.38; }
+.tq-compact-avatar { width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:#fff; flex-shrink:0; }
+.tq-compact-name { font-size:12px; font-weight:600; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tq-compact-email { font-size:10px; color:var(--text3); font-family:'DM Mono',monospace; }
+.tq-compact-time  { font-size:10px; color:var(--text3); white-space:nowrap; }
+.tq-compact-icon  { font-size:13px; }
+.tq-compact-reset { background:none; border:none; cursor:pointer; color:var(--text3); font-size:11px; padding:3px 8px; border-radius:6px; transition:all .12s; font-family:'Plus Jakarta Sans',sans-serif; }
 .tq-compact-reset:hover { color:var(--text); background:var(--surface2); }
 
 /* Empty state */
 .tq-empty { text-align:center; padding:60px 0; color:var(--text3); font-size:13px; }
-.tq-empty-icon { font-size:40px; margin-bottom:12px; opacity:.4; }
+.tq-empty-icon { font-size:36px; margin-bottom:10px; opacity:.35; }
 
 /* Existing reply-body kept for compat */
 .reply-body { font-size:12px; color:var(--text2); line-height:1.7; background:var(--surface2); padding:12px 14px; border-radius:var(--radius-sm); margin-bottom:12px; white-space:pre-wrap; max-height:180px; overflow-y:auto; font-family:'DM Mono',monospace; border:1px solid var(--border); }
@@ -2975,73 +3032,108 @@ function parseCompany(r) {
   return domain.split('.')[0] || email;
 }
 
-// State pill HTML
+// Avatar color — unique per email (hash-based)
+function avatarColor(email) {
+  let h = 0;
+  for (let i = 0; i < email.length; i++) h = ((h << 5) - h + email.charCodeAt(i)) | 0;
+  const palette = ['#059669','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#ec4899','#0ea5e9','#f97316','#14b8a6','#a855f7'];
+  return palette[Math.abs(h) % palette.length];
+}
+
+// Initials from company name or email
+function initials(company, email) {
+  const src = (company && company !== email.split('@')[1]?.split('.')[0]) ? company : email;
+  const words = src.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return src.slice(0, 2).toUpperCase();
+}
+
+// State pill
 function tqStatePill(state) {
-  const labels = { new:'● NEW', viewed:'◐ VIEWED', follow_up:'⏳ FOLLOW-UP', interested:'✅ INTERESTED', ignored:'— IGNORED' };
+  const labels = { new:'NEW', viewed:'VIEWED', follow_up:'FOLLOW-UP', interested:'INTERESTED', ignored:'IGNORED' };
   return '<span class="tq-state-pill ' + state + '">' + (labels[state] || state.toUpperCase()) + '</span>';
 }
 
-// Full triage card HTML
+// Full triage card — 2-column layout
 function tqCard(msgs) {
   const latest = msgs[0];
   const state = normalizeState(contactState(msgs));
-  const email = (latest.email || '').replace(/'/g, "\\'");
-  const emailSafe = latest.email || '';
-  const company = parseCompany(latest);
-  const preview = (latest.body || latest.subject || '(no message)').replace(/\s+/g,' ').trim().slice(0, 100);
-  const route = latest.route ? '📍 ' + latest.route : (latest.subject || '');
+  const emailRaw = latest.email || '';
+  const emailEsc = emailRaw.replace(/'/g, "\\'");
+  const company  = parseCompany(latest);
+  const avatarBg = avatarColor(emailRaw);
+  const ini      = initials(company, emailRaw);
+  const preview  = (latest.body || latest.subject || '(no message)').replace(/\s+/g,' ').trim().slice(0, 110);
+  const route    = latest.route || '';
   const replyCount = msgs.length;
-  const time = relTime(latest);
-  const cardId = 'tqc_' + emailSafe.replace(/[^a-zA-Z0-9]/g,'_');
+  const time     = relTime(latest);
+  const cardId   = 'tqc_' + emailRaw.replace(/[^a-zA-Z0-9]/g,'_');
+  const expandId = 'tqexp_' + emailRaw.replace(/[^a-zA-Z0-9]/g,'_');
 
+  // Right column: show actions only for unprocessed states; otherwise show reset
   const showActions = (state === 'new' || state === 'viewed');
-  const actionsHtml = showActions
-    ? '<div class="tq-actions">' +
-        '<button class="tq-action tq-action-yes" onclick="event.stopPropagation();markContact(\'' + email + '\',\'interested\')" title="I - Interested">✅ Interested</button>' +
-        '<button class="tq-action tq-action-fu"  onclick="event.stopPropagation();markContact(\'' + email + '\',\'follow_up\')"  title="F - Follow-up">⏳ Follow-up</button>' +
-        '<button class="tq-action tq-action-no"  onclick="event.stopPropagation();markContact(\'' + email + '\',\'not_interested\')" title="X - Ignore">🚫 Ignore</button>' +
+  const rightHtml = showActions
+    ? '<div class="tq-card-right" onclick="event.stopPropagation()">' +
+        '<button class="tq-action tq-action-yes" onclick="markContact(\'' + emailEsc + '\',\'interested\')" title="Interested [I]">' +
+          '<i class="ph-bold ph-check"></i> Interested <span class="tq-action-key">I</span></button>' +
+        '<button class="tq-action tq-action-fu"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
+          '<i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-action-key">F</span></button>' +
+        '<button class="tq-action tq-action-no"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
+          '<i class="ph-bold ph-x"></i> Ignore <span class="tq-action-key">X</span></button>' +
       '</div>'
-    : '<div style="padding:8px 16px 12px;display:flex;gap:8px;align-items:center">' +
-        '<button class="tq-compact-reset" onclick="event.stopPropagation();markContact(\'' + email + '\',\'new\')" title="Reset to New">↩ Reset</button>' +
-        (state !== 'interested' ? '<button class="tq-compact-reset" style="color:var(--accent)" onclick="event.stopPropagation();markContact(\'' + email + '\',\'interested\')">✅ Interested</button>' : '') +
-        '<button class="tq-compact-reset" style="color:var(--red)" onclick="event.stopPropagation();markContactStop(\'' + email + '\')">🚫 Block</button>' +
+    : '<div class="tq-card-right" onclick="event.stopPropagation()" style="justify-content:center;align-items:center;gap:6px;padding:10px 10px;display:flex;flex-direction:column;">' +
+        '<button class="tq-compact-reset" style="width:100%;text-align:center" onclick="markContact(\'' + emailEsc + '\',\'new\')"><i class="ph-bold ph-arrow-counter-clockwise"></i> Reset</button>' +
+        (state !== 'interested' ? '<button class="tq-compact-reset" style="color:var(--accent);width:100%;text-align:center" onclick="markContact(\'' + emailEsc + '\',\'interested\')"><i class="ph-bold ph-check"></i> Interested</button>' : '') +
+        '<button class="tq-compact-reset" style="color:#f87171;width:100%;text-align:center" onclick="markContactStop(\'' + emailEsc + '\')"><i class="ph-bold ph-prohibit"></i> Block</button>' +
       '</div>';
 
-  const expandId = 'tqexp_' + emailSafe.replace(/[^a-zA-Z0-9]/g,'_');
+  // Avatar dot for state
+  const dotHtml = (state === 'new' || state === 'viewed' || state === 'follow_up')
+    ? '<span class="tq-avatar-dot ' + state + '"></span>' : '';
 
-  return '<div class="tq-card state-' + state + '" id="' + cardId + '" onclick="tqToggleExpand(\'' + expandId + '\')">' +
-    '<div class="tq-card-top">' +
-      tqStatePill(state) +
-      '<div class="tq-meta">' +
-        (replyCount > 1 ? '<span class="tq-reply-badge">' + replyCount + ' replies</span>' : '<span class="tq-reply-badge">1 reply</span>') +
-        '<span>' + time + '</span>' +
+  return '<div class="tq-card state-' + state + '" id="' + cardId + '">' +
+    '<div class="tq-card-inner">' +
+      // Left content (click = expand)
+      '<div class="tq-card-left" onclick="tqToggleExpand(\'' + expandId + '\')">' +
+        '<div class="tq-avatar" style="background:' + avatarBg + '">' + esc(ini) + dotHtml + '</div>' +
+        '<div class="tq-card-content">' +
+          '<div class="tq-card-meta">' +
+            tqStatePill(state) +
+            '<span class="tq-reply-badge"><i class="ph-bold ph-chat-dots" style="font-size:10px"></i> ' + replyCount + '</span>' +
+            '<span class="tq-time">' + time + '</span>' +
+          '</div>' +
+          '<div class="tq-company">' + esc(company) + '</div>' +
+          '<div class="tq-email">' + esc(emailRaw) + '</div>' +
+          '<div class="tq-preview">' + esc(preview) + (preview.length >= 110 ? '…' : '') + '</div>' +
+          (route ? '<div class="tq-route"><i class="ph-bold ph-map-pin" style="font-size:10px"></i> ' + esc(route) + '</div>' : '') +
+          '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' + esc(latest.body || '(empty)') + '</div>' +
+        '</div>' +
       '</div>' +
+      rightHtml +
     '</div>' +
-    '<div class="tq-card-body">' +
-      '<div class="tq-company">' + esc(company) + '</div>' +
-      '<div class="tq-email">' + esc(emailSafe) + '</div>' +
-      '<div class="tq-divider"></div>' +
-      '<div class="tq-preview">"' + esc(preview) + (preview.length >= 100 ? '…' : '') + '"</div>' +
-      (route ? '<div class="tq-route">' + esc(route) + '</div>' : '') +
-      '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' + esc(latest.body || '(empty)') + '</div>' +
-    '</div>' +
-    actionsHtml +
   '</div>';
 }
 
-// Compact row (for processed contacts)
+// Compact row (processed contacts — follow-up / interested / ignored)
 function tqCompactRow(msgs) {
   const latest = msgs[0];
-  const state = normalizeState(contactState(msgs));
-  const email = (latest.email || '').replace(/'/g, "\\'");
-  const company = parseCompany(latest);
-  const time = relTime(latest);
-  const stateIcon = { interested:'✅', follow_up:'⏳', ignored:'🚫' }[state] || '';
+  const state   = normalizeState(contactState(msgs));
+  const emailRaw = latest.email || '';
+  const emailEsc = emailRaw.replace(/'/g, "\\'");
+  const company  = parseCompany(latest);
+  const avatarBg = avatarColor(emailRaw);
+  const ini      = initials(company, emailRaw);
+  const time     = relTime(latest);
+  const stateIcon = { interested:'<i class="ph-bold ph-check" style="color:var(--accent)"></i>', follow_up:'<i class="ph-bold ph-clock-countdown" style="color:#fb923c"></i>', ignored:'<i class="ph-bold ph-x" style="color:var(--text3)"></i>' }[state] || '';
   return '<div class="tq-compact state-' + state + '">' +
-    '<div class="tq-compact-name">' + esc(company) + ' <span style="font-weight:400;color:var(--text3);font-size:10px">' + esc(latest.email||'') + '</span></div>' +
-    '<span class="tq-compact-badge">' + stateIcon + '</span>' +
+    '<div class="tq-compact-avatar" style="background:' + avatarBg + '">' + esc(ini) + '</div>' +
+    '<div style="flex:1;min-width:0">' +
+      '<div class="tq-compact-name">' + esc(company) + '</div>' +
+      '<div class="tq-compact-email">' + esc(emailRaw) + '</div>' +
+    '</div>' +
+    '<span class="tq-compact-icon">' + stateIcon + '</span>' +
     '<span class="tq-compact-time">' + time + '</span>' +
-    '<button class="tq-compact-reset" onclick="markContact(\'' + email + '\',\'new\')" title="Reset">↩</button>' +
+    '<button class="tq-compact-reset" onclick="markContact(\'' + emailEsc + '\',\'new\')" title="Move back to queue"><i class="ph-bold ph-arrow-counter-clockwise"></i></button>' +
   '</div>';
 }
 
@@ -3052,7 +3144,7 @@ function esc(s) {
 function tqToggleExpand(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+  el.classList.toggle('open');
 }
 
 function renderReplies() {

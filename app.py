@@ -1517,6 +1517,39 @@ def send_one_email(to_email, subject, body, cfg, uid=None):
         app.logger.error(f'send_one_email FAILED uid={uid} to={to_email}: {type(e).__name__}: {e}\n{traceback.format_exc()}')
         return False, str(e)
 
+_EQUIP_LABELS = {
+    'V': 'Van', 'F': 'Flatbed', 'R': 'Reefer', 'SD': 'Step Deck',
+    'DD': 'Double Drop', 'RGN': 'RGN', 'LB': 'Lowboy', 'MX': 'Maxi',
+    'HS': 'Hot Shot', 'AC': 'Auto Carrier', 'TN': 'Tanker', 'PO': 'Power Only',
+    'FD': 'Flat/Drop', 'FSD': 'Flat/Step', 'C': 'Conestoga', 'B': 'Bulk',
+}
+
+def _build_subject(load):
+    """Build a clean, human-readable email subject from a parsed load dict.
+    Example: Laredo, TX → Conroe, TX • 3/19 • Van • 53 ft • 40,913 lbs
+    Missing fields are skipped — no double separators, no trailing separators."""
+    origin      = (load.get('origin') or '').strip()
+    destination = (load.get('destination') or '').strip()
+    date        = (load.get('date') or '').strip()
+    equip_raw   = (load.get('equip') or '').strip()
+    length      = (load.get('length') or '').strip()
+    weight      = (load.get('weight') or '').strip()
+
+    equip = _EQUIP_LABELS.get(equip_raw.upper(), equip_raw)  # map code → full name
+
+    # Route: "Origin → Destination" or just one city if the other is missing
+    if origin and destination:
+        route = f'{origin} → {destination}'
+    elif origin:
+        route = origin
+    elif destination:
+        route = destination
+    else:
+        route = ''
+
+    parts = [p for p in [route, date, equip, length, weight] if p]
+    return ' • '.join(parts)
+
 def run_send_job(loads, cfg, templates, uid=None):
     """Run in a background thread. uid must be passed explicitly — no session in threads."""
     state = _user_send_state(uid)
@@ -1545,8 +1578,7 @@ def run_send_job(loads, cfg, templates, uid=None):
                 continue
             tmpl = random.choice(templates); vi = templates.index(tmpl) + 1
             body = render_template_text(tmpl, load, cfg)
-            parts = [load['origin'], load['destination'], load['date'], load['equip'], load.get('length',''), load.get('weight','')]
-            subject = " | ".join(p for p in parts if p)
+            subject = _build_subject(load)
             ok, err = send_one_email(load['email'], subject, body, cfg, uid=uid)
             ts = datetime.now().strftime('%H:%M:%S'); st = 'sent' if ok else 'error'
             append_log(load, st, vi, uid=uid)

@@ -3535,7 +3535,7 @@ function renderAnAi() {
   setEl2('anAiEmails',    d.emails_sent || 0);
   setEl2('anAiTimeSaved', d.time_saved_fmt || '\u2014');
   setEl2('anAiActions',   d.manual_actions_avoided || 0);
-  setEl2('anAiMult',      d.speed_multiplier ? '~' + d.speed_multiplier + '\u00d7' : '\u2014');
+  setEl2('anAiMult',      d.speed_multiplier ? Math.abs(d.speed_multiplier).toFixed(2) + '\u00d7' : '\u2014');
   setEl2('anAiAutoSpeed', d.auto_speed ? d.auto_speed + '/min' : '\u2014');
   setEl2('anAiManSpeed',  d.manual_speed ? d.manual_speed + '/min' : '\u2014');
   setEl2('anAiDays',      d.working_days_saved != null ? d.working_days_saved.toFixed(1) : '\u2014');

@@ -933,10 +933,24 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
 .an-list-muted { color:var(--text3); font-size:10px; }
 
 /* Volume Chart */
-.an-chart-wrap { display:flex; align-items:flex-end; gap:3px; height:80px; }
-.an-bar-col { display:flex; flex-direction:column; align-items:center; flex:1; height:100%; }
-.an-bar-fill { width:100%; border-radius:3px 3px 0 0; background:var(--accent); opacity:.7; transition:height .4s; min-height:2px; }
-.an-bar-label { font-size:8px; color:var(--text3); margin-top:3px; }
+.an-chart-outer { display:flex; flex-direction:column; gap:0; }
+.an-chart-grid { position:relative; height:140px; display:flex; align-items:flex-end; }
+.an-chart-gridlines { position:absolute; inset:0; pointer-events:none; display:flex; flex-direction:column; justify-content:space-between; }
+.an-chart-gridlines span { display:block; border-top:1px dashed rgba(0,0,0,.07); width:100%; }
+[data-theme=dark] .an-chart-gridlines span { border-top-color:rgba(255,255,255,.07); }
+.an-chart-wrap { display:flex; align-items:flex-end; gap:4px; height:140px; width:100%; position:relative; z-index:1; }
+.an-bar-col { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; flex:1; height:100%; gap:0; }
+.an-bar-count { font-size:9px; font-weight:700; color:var(--accent); margin-bottom:3px; min-height:12px; line-height:12px; font-family:'JetBrains Mono',monospace; }
+.an-bar-count.zero { color:var(--text3); font-weight:400; }
+.an-bar-fill {
+  width:100%; border-radius:5px 5px 0 0;
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  transition: height .5s cubic-bezier(.4,0,.2,1);
+  min-height:3px;
+  position:relative;
+}
+.an-bar-fill:hover { filter:brightness(1.1); cursor:default; }
+.an-bar-label { font-size:9px; color:var(--text3); margin-top:5px; white-space:nowrap; }
 
 /* Hour chart */
 .an-hour-list { display:flex; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto; }
@@ -1366,7 +1380,12 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
     <div class="an-two-col">
       <div class="an-col-block">
         <div class="an-col-head">Volume — Last 14 Days</div>
-        <div class="an-chart-wrap" id="anVolumeChart"></div>
+        <div class="an-chart-outer">
+          <div class="an-chart-grid">
+            <div class="an-chart-gridlines"><span></span><span></span><span></span><span></span></div>
+            <div class="an-chart-wrap" id="anVolumeChart"></div>
+          </div>
+        </div>
       </div>
       <div class="an-col-block">
         <div class="an-col-head">Best Hours</div>
@@ -3501,8 +3520,11 @@ function renderAnWhatWorks() {
   }
 }
 
-function anBarCol(pct, label) {
-  return '<div class="an-bar-col"><div class="an-bar-fill" style="height:' + Math.max(pct, 2) + '%"></div><div class="an-bar-label">' + label + '</div></div>';
+function anBarCol(pct, label, count) {
+  const countHtml = count > 0
+    ? '<div class="an-bar-count">' + count + '</div>'
+    : '<div class="an-bar-count zero">·</div>';
+  return '<div class="an-bar-col">' + countHtml + '<div class="an-bar-fill" style="height:' + Math.max(pct, 2) + '%"></div><div class="an-bar-label">' + label + '</div></div>';
 }
 
 function anHourRow(label, pct, count) {
@@ -3515,7 +3537,7 @@ function renderAnTiming() {
   if (chartEl && s.by_day && s.by_day.length) {
     const days = s.by_day.slice(-14);
     const max = Math.max.apply(null, days.map(function(d){ return d.count; }).concat([1]));
-    setHtml('anVolumeChart', days.map(d => anBarCol(Math.round(d.count / max * 100), (d.date || '').slice(5))).join(''));
+    setHtml('anVolumeChart', days.map(d => anBarCol(Math.round(d.count / max * 100), (d.date || '').slice(5), d.count)).join(''));
   }
   const hourEl = document.getElementById('anHourChart');
   if (hourEl && s.by_hour && s.by_hour.length) {

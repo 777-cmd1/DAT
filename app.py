@@ -30,6 +30,28 @@ if _sentry_dsn:
         send_default_pii=False,
     )
 
+# ── Structured JSON logging (Railway-friendly) ────────────────────────────────
+import logging
+
+class _JsonFormatter(logging.Formatter):
+    """Emit one JSON object per log line — parseable by Railway log viewer."""
+    def format(self, record):
+        entry = {
+            'ts':    self.formatTime(record, '%Y-%m-%dT%H:%M:%S'),
+            'level': record.levelname,
+            'msg':   record.getMessage(),
+            'src':   f'{record.filename}:{record.lineno}',
+        }
+        if record.exc_info:
+            entry['exc'] = self.formatException(record.exc_info)
+        return json.dumps(entry)
+
+if os.environ.get('DATABASE_URL'):   # production only (Railway has DATABASE_URL set)
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(_JsonFormatter())
+    logging.root.handlers = [_handler]
+    logging.root.setLevel(logging.INFO)
+
 # ── DB extensions (models imported after app is created) ──────────────────
 from app.extensions import db, migrate as flask_migrate
 from flask_limiter import Limiter
@@ -2529,14 +2551,22 @@ def _get_fu_templates_for_user(uid):
     return {r.level: r.body for r in rows if r.level}
 
 def _run_scheduled_followups():
-    """Find and auto-send all due follow-ups across all users. Called from daemon thread."""
+    """Find and auto-send all due follow-ups across all users. Called from daemon thread.
+    Uses SELECT FOR UPDATE SKIP LOCKED on PostgreSQL to prevent duplicate sends when
+    multiple instances or rapid restarts race against the same follow-up rows."""
     from app.models import FollowUp, EmailAccount, Workspace
     now = datetime.utcnow()
     sent_total = 0
-    pending = FollowUp.query.filter(
+    base_query = FollowUp.query.filter(
         FollowUp.status.in_(['pending', 'sent']),
         FollowUp.level.in_(['FU1', 'FU2', 'FU3']),
-    ).all()
+    )
+    # SKIP LOCKED: if another scheduler instance already holds a row lock, skip it
+    # Graceful fallback to plain query on SQLite (no FOR UPDATE support)
+    try:
+        pending = base_query.with_for_update(skip_locked=True).all()
+    except Exception:
+        pending = base_query.all()
     for fu in pending:
         # Skip if per-contact auto is disabled
         if getattr(fu, 'auto_enabled', True) is False:

@@ -363,6 +363,23 @@ class PasswordResetToken(db.Model):
     used_at    = db.Column(db.DateTime, nullable=True)   # NULL = not yet used
 
 
+# ── SEND JOBS ─────────────────────────────────────────────────────────────────
+
+class SendJob(db.Model):
+    __tablename__ = 'send_jobs'
+
+    id          = db.Column(db.String(36), primary_key=True, default=_uuid)
+    user_id     = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    status      = db.Column(db.String(20), default='running')  # running|done|interrupted
+    total       = db.Column(db.Integer, default=0)
+    sent        = db.Column(db.Integer, default=0)
+    errors      = db.Column(db.Integer, default=0)
+    skipped     = db.Column(db.Integer, default=0)
+    started_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    finished_at = db.Column(db.DateTime, nullable=True)
+    error_msg   = db.Column(db.Text, nullable=True)
+
+
 # ── PERFORMANCE INDEXES ───────────────────────────────────────────────────────
 # Applied via db.create_all() on first run; for existing DBs run flask db migrate.
 

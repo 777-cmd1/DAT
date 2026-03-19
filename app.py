@@ -1428,6 +1428,28 @@ def _smtp_send_with_retry(msg_obj, from_addr, to_addr, password, retries=3, base
     raise last_exc or RuntimeError('SMTP failed with no exception captured')
 
 
+def _gmail_send_with_retry(service, raw_message, max_retries=3):
+    """Send via Gmail API with exponential backoff on transient errors."""
+    from googleapiclient.errors import HttpError
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            return service.users().messages().send(
+                userId='me', body={'raw': raw_message}
+            ).execute()
+        except HttpError as e:
+            status_code = e.resp.status
+            # Retry on 429 (rate limit), 500, 502, 503, 504
+            if status_code in (429, 500, 502, 503, 504) and attempt < max_retries - 1:
+                wait = (2 ** attempt) + random.uniform(0, 1)
+                app.logger.warning(f'Gmail API {status_code} on attempt {attempt+1}, retrying in {wait:.1f}s')
+                time.sleep(wait)
+                last_exc = e
+                continue
+            raise  # non-retryable or final attempt
+    raise last_exc  # should not reach here
+
+
 def send_one_email(to_email, subject, body, cfg, uid=None):
     """Send email via Gmail API (primary) or SMTP (legacy fallback).
     uid is needed to load OAuth tokens; defaults to current_user_id() if not passed."""
@@ -1444,7 +1466,7 @@ def send_one_email(to_email, subject, body, cfg, uid=None):
             mime_msg['from']    = cfg.get('gmail_address', '')
             mime_msg['subject'] = subject
             raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
-            result = service.users().messages().send(userId='me', body={'raw': raw}).execute()
+            result = _gmail_send_with_retry(service, raw)
             app.logger.info(f'send_one_email: Gmail API SUCCESS uid={uid} to={to_email} msgId={result.get("id")}')
             return True, None
         except RuntimeError as gmail_err:
@@ -1478,6 +1500,13 @@ def run_send_job(loads, cfg, templates, uid=None):
     state = _user_send_state(uid)
     state.update({"running":True,"done":False,"total":len(loads),"current":0,"sent":0,"errors":0,"skipped":0,"log":[]})
     with app.app_context():
+        from app.models import SendJob
+        # Create DB record at job start
+        job = SendJob(user_id=uid, status='running', total=len(loads))
+        db.session.add(job)
+        db.session.commit()
+        state['job_id'] = job.id
+
         _, sent_today_set = load_sent_log(uid=uid)
         be, bd = load_stop_list(uid=uid)
         session_sent = set()
@@ -1506,9 +1535,30 @@ def run_send_job(loads, cfg, templates, uid=None):
             else:
                 state["errors"] += 1
             state["log"].append({"time":ts,"status":st,"variant":vi,"email":load["email"],"error":err or ""})
+            # Persist progress to DB every 10 emails
+            if (i + 1) % 10 == 0:
+                try:
+                    job.sent    = state["sent"]
+                    job.errors  = state["errors"]
+                    job.skipped = state["skipped"]
+                    db.session.commit()
+                except Exception as _pe:
+                    app.logger.warning(f'run_send_job: DB progress update failed: {_pe}')
+                    db.session.rollback()
             if i < len(loads) - 1:
                 time.sleep(random.randint(cfg.get("delay_min", 20), cfg.get("delay_max", 45)))
         state.update({"running": False, "done": True})
+        # Mark job as done in DB
+        try:
+            job.status      = 'done'
+            job.sent        = state["sent"]
+            job.errors      = state["errors"]
+            job.skipped     = state["skipped"]
+            job.finished_at = datetime.utcnow()
+            db.session.commit()
+        except Exception as _fe:
+            app.logger.warning(f'run_send_job: DB final update failed: {_fe}')
+            db.session.rollback()
         audit_log('send_batch', resource_type='send', uid=uid, detail={
             'total': state['total'], 'sent': state['sent'],
             'errors': state['errors'], 'skipped': state['skipped'],
@@ -1800,7 +1850,21 @@ def api_send():
 
 @app.route('/api/send-status', methods=['GET'])
 @login_required
-def api_send_status(): return jsonify(_user_send_state(current_user_id()))
+def api_send_status():
+    uid = current_user_id()
+    state = _user_send_state(uid)
+    # If no active in-memory job, check DB for latest job (covers post-restart case)
+    if not state.get('running') and not state.get('done'):
+        from app.models import SendJob
+        job = SendJob.query.filter_by(user_id=uid).order_by(SendJob.started_at.desc()).first()
+        if job:
+            return jsonify({
+                'running': False, 'done': job.status == 'done',
+                'total': job.total, 'current': job.sent + job.errors + job.skipped,
+                'sent': job.sent, 'errors': job.errors, 'skipped': job.skipped,
+                'log': [], 'status': job.status,
+            })
+    return jsonify(state)
 
 @app.route('/api/automation-impact', methods=['GET'])
 @login_required
@@ -2168,7 +2232,7 @@ def send_followup_email(fu, template_text, cfg, uid=None):
                     mime_msg['References']  = fu['reply_msg_id']
                 import base64 as _b64
                 raw = _b64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
-                service.users().messages().send(userId='me', body={'raw': raw}).execute()
+                _gmail_send_with_retry(service, raw)
                 return True, None
             except RuntimeError as _e:
                 if 'not connected' not in str(_e).lower():
@@ -2586,6 +2650,18 @@ with app.app_context():
                     _conn.rollback()  # column already exists — ignore
     except Exception as _e:
         print(f'Migration check skipped: {_e}')
+    # Mark any DB jobs still "running" as "interrupted" (handles deploy mid-send)
+    try:
+        from app.models import SendJob
+        stale = SendJob.query.filter_by(status='running').all()
+        if stale:
+            for _j in stale:
+                _j.status = 'interrupted'
+                _j.finished_at = datetime.utcnow()
+            db.session.commit()
+            print(f'✓ Marked {len(stale)} stale send job(s) as interrupted')
+    except Exception as _e:
+        print(f'Stale job cleanup skipped: {_e}')
     try:
         auto_create_admin()
     except Exception as _e:

@@ -495,7 +495,123 @@ tr:last-child td { border-bottom: none; }
 .chip-today  { background: rgba(255,216,77,.07); color: var(--yellow); border: 1px solid rgba(255,216,77,.15); }
 
 /* ── SEND PAGE ──────────────────────────────────────────────────────── */
-.send-layout { display: grid; grid-template-columns: 1fr 360px; gap: 16px; }
+.send-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+
+/* ── DAT TEXTAREA — terminal style ─────────────────────────────────── */
+.dat-input-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.dat-input-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.dat-input-title { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); }
+.dat-input-hint { font-size:10px; color:var(--text3); font-family:'DM Mono',monospace; }
+.dat-input-status { display:flex; align-items:center; gap:6px; }
+.dat-parse-dot { width:7px; height:7px; border-radius:50%; background:var(--border); transition:background .3s; flex-shrink:0; }
+.dat-parse-dot.ready   { background:var(--accent); box-shadow:0 0 6px rgba(5,150,105,.5); }
+.dat-parse-dot.parsing { background:var(--yellow); animation:dotPulse 1s ease-in-out infinite; }
+@keyframes dotPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+#datText {
+  width: 100%;
+  min-height: 200px;
+  padding: 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--text);
+  background: var(--surface);
+  border: none;
+  border-radius: 0;
+  resize: vertical;
+  outline: none;
+  box-shadow: none;
+  display: block;
+  box-sizing: border-box;
+}
+#datText::placeholder { color: var(--text3); font-style: italic; }
+#datText:focus { background: var(--surface); outline: none; box-shadow: none; border: none; }
+
+.dat-input-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+.dat-line-count { font-size:10px; color:var(--text3); font-family:'DM Mono',monospace; }
+
+/* ── PARSED LOADS CARD ─────────────────────────────────────────────── */
+.loads-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); margin-top: 12px; }
+.loads-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.loads-card-title { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); }
+.loads-stats-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); border-bottom:1px solid var(--border); }
+.loads-stat {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:14px 8px; background:var(--surface); gap:3px;
+  transition: background .15s;
+}
+.loads-stat:hover { background:var(--surface2); }
+.loads-stat-val { font-size:24px; font-weight:800; line-height:1; font-family:'DM Mono',monospace; }
+.loads-stat-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); }
+.loads-stat-sub { font-size:9px; color:var(--text3); }
+
+/* Email progress bar in stats strip */
+.loads-email-bar { height:3px; border-radius:99px; margin-top:4px; width:100%; }
+
+/* Loads table */
+#loadsTable { width:100%; border-collapse:collapse; font-size:12px; }
+#loadsTable thead tr { background:var(--surface2); border-bottom:1px solid var(--border); }
+#loadsTable th {
+  padding:9px 12px; text-align:left; font-size:9px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.08em; color:var(--text3);
+  white-space:nowrap;
+}
+#loadsTable tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
+#loadsTable tbody tr:last-child { border-bottom:none; }
+#loadsTable tbody tr:hover td { background:var(--surface2); }
+#loadsTable tbody tr.row-skip td { opacity:.45; }
+#loadsTable tbody tr.row-stop td { opacity:.3; }
+#loadsTable td { padding:10px 12px; vertical-align:middle; }
+
+/* Send CTA bar */
+.send-cta-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  gap: 12px;
+}
+.send-cta-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  border: none; cursor: pointer;
+  transition: all .15s;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+.send-cta-btn:hover:not(:disabled) { background:#047857; box-shadow:0 4px 18px var(--accent-glow); transform:translateY(-1px); }
+.send-cta-btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+.send-cta-btn i { font-size:16px; }
+.send-kbd { font-size:10px; color:var(--text3); display:flex;align-items:center;gap:4px; }
+.send-kbd kbd { background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-family:'DM Mono',monospace;font-size:10px; }
+.send-selected-count { font-size:12px; font-weight:600; color:var(--text2); }
+
+/* parseResults animation */
+@keyframes parseReveal {
+  from { opacity:0; transform:translateY(10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+#parseResults.visible { animation:parseReveal .3s var(--ease) both; }
 
 /* ── PARSE BADGES ───────────────────────────────────────────────────── */
 .parse-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -537,15 +653,15 @@ tr:last-child td { border-bottom: none; }
 }
 .progress-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 10px; }
 .live-log {
-  background: var(--surface2);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 12px;
-  max-height: 240px;
+  padding: 10px 14px;
+  max-height: 220px;
   overflow-y: auto;
   font-size: 11px;
   font-family: 'DM Mono', monospace;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 .live-log::-webkit-scrollbar { width: 4px; }
 .live-log::-webkit-scrollbar-track { background: transparent; }
@@ -1229,38 +1345,75 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
 
       <div class="send-layout">
         <div>
-          <div class="card">
-            <div class="card-label" style="display:flex;align-items:center;gap:7px"><i class="ph-bold ph-file-text" style="font-size:15px;color:var(--blue)"></i>DAT Text Input</div>
-            <div class="field">
-              <textarea id="datText" placeholder="Paste copied text from DAT One here..." style="min-height:180px" oninput="debounceParse()"></textarea>
+
+          <!-- DAT INPUT CARD -->
+          <div class="dat-input-card">
+            <div class="dat-input-header">
+              <div class="dat-input-title">
+                <i class="ph-bold ph-terminal" style="font-size:14px;color:var(--blue)"></i>
+                DAT Text Input
+              </div>
+              <div class="dat-input-status">
+                <div class="dat-parse-dot" id="datParseDot"></div>
+                <span class="dat-input-hint" id="datParseHint">paste to auto-parse</span>
+              </div>
             </div>
-            <div class="btn-row">
-              <button class="btn btn-outline" onclick="document.getElementById('datText').value=''">Clear</button>
+            <textarea id="datText"
+              placeholder="Paste copied loads from DAT One here…&#10;&#10;The app will automatically detect routes, dates, equipment and broker emails."
+              oninput="debounceParse(); updateDatMeta()"></textarea>
+            <div class="dat-input-footer">
+              <span class="dat-line-count" id="datLineMeta">0 lines</span>
+              <button class="btn btn-outline" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('datText').value='';updateDatMeta();document.getElementById('parseResults').style.display='none';document.getElementById('datParseDot').className='dat-parse-dot';document.getElementById('datParseHint').textContent='paste to auto-parse'">
+                <i class="ph-bold ph-x" style="font-size:12px;margin-right:3px;vertical-align:middle"></i>Clear
+              </button>
             </div>
           </div>
+
+          <!-- PARSED LOADS CARD -->
           <div id="parseResults" style="display:none">
-            <div class="card">
-              <div class="card-label" style="display:flex;align-items:center;gap:7px"><i class="ph-bold ph-list-checks" style="font-size:15px;color:var(--accent)"></i>Parsed Loads</div>
-              <div class="parse-stats" id="parseStats"></div>
-              <div class="btn-row" id="topSendRow" style="display:none;margin-bottom:8px">
-                <button class="btn btn-primary" onclick="startSend()"><i class="ph-bold ph-paper-plane-tilt" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Send Selected</button>
-                <span id="selectedCountTop" style="font-size:11px;color:var(--text2)"></span>
+            <div class="loads-card">
+              <div class="loads-card-header">
+                <div class="loads-card-title">
+                  <i class="ph-bold ph-list-checks" style="font-size:14px;color:var(--accent)"></i>
+                  Parsed Loads
+                </div>
+                <span id="selectedCountTop" style="font-size:11px;color:var(--text2);font-weight:600"></span>
               </div>
-              <div class="table-wrap">
+
+              <!-- Stats strip -->
+              <div class="loads-stats-strip" id="parseStats"></div>
+
+              <!-- Table -->
+              <div style="overflow-x:auto">
                 <table id="loadsTable">
                   <thead><tr>
-                    <th><input type="checkbox" id="checkAll" onchange="toggleAll(this)"></th>
-                    <th>Email</th><th>Route</th><th>Date</th><th>EQ</th><th>Status</th>
+                    <th style="width:36px;padding-left:14px"><input type="checkbox" id="checkAll" onchange="toggleAll(this)" style="accent-color:var(--accent);cursor:pointer;width:14px;height:14px"></th>
+                    <th><i class="ph-bold ph-envelope-simple" style="font-size:11px;vertical-align:middle;margin-right:4px"></i>Contact</th>
+                    <th><i class="ph-bold ph-map-pin-line" style="font-size:11px;vertical-align:middle;margin-right:4px"></i>Route</th>
+                    <th><i class="ph-bold ph-calendar" style="font-size:11px;vertical-align:middle;margin-right:4px"></i>Date</th>
+                    <th><i class="ph-bold ph-truck" style="font-size:11px;vertical-align:middle;margin-right:4px"></i>EQ</th>
+                    <th>Status</th>
                   </tr></thead>
                   <tbody id="loadsBody"></tbody>
                 </table>
               </div>
-              <div class="btn-row">
-                <button class="btn btn-primary" id="sendBtn" onclick="startSend()"><i class="ph-bold ph-paper-plane-tilt" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Send Selected</button>
-                <span id="selectedCount" style="font-size:11px;color:var(--text2)"></span>
+
+              <!-- Send CTA bar -->
+              <div class="send-cta-bar" id="topSendRow" style="display:none">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <button class="send-cta-btn" id="sendBtn" onclick="startSend()">
+                    <i class="ph-bold ph-paper-plane-tilt"></i>
+                    Send Selected
+                  </button>
+                  <span class="send-selected-count" id="selectedCount"></span>
+                </div>
+                <div class="send-kbd">
+                  <kbd>⌘</kbd><kbd>↵</kbd> to send
+                </div>
               </div>
             </div>
           </div>
+
         </div>
         <div>
           <div class="card" style="position:sticky;top:24px">
@@ -2525,57 +2678,39 @@ function renderParseResults(data) {
   const dupCount = (stats.skip_dup || 0) + (stats.skip_today || 0);
   const blockedCount = stats.skip_stop || 0;
 
-  document.getElementById('parseStats').innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-      <div style="background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.2);border-radius:10px;padding:10px 12px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <i class="ph-bold ph-check-circle" style="font-size:15px;color:var(--accent)"></i>
-          <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700">New</span>
-        </div>
-        <div style="font-size:22px;font-weight:800;color:var(--accent);line-height:1">${newCount}</div>
-      </div>
-      <div style="background:rgba(250,204,21,.07);border:1px solid rgba(250,204,21,.2);border-radius:10px;padding:10px 12px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <i class="ph-bold ph-copy" style="font-size:15px;color:var(--yellow)"></i>
-          <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700">Duplicate</span>
-        </div>
-        <div style="font-size:22px;font-weight:800;color:var(--yellow);line-height:1">${dupCount}</div>
-      </div>
-      <div style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 12px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <i class="ph-bold ph-prohibit" style="font-size:15px;color:var(--red)"></i>
-          <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700">Blocked</span>
-        </div>
-        <div style="font-size:22px;font-weight:800;color:var(--red);line-height:1">${blockedCount}</div>
-      </div>
-      <div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:10px 12px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <i class="ph-bold ph-envelope" style="font-size:15px;color:var(--blue)"></i>
-          <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700">% w/ Email</span>
-        </div>
-        <div style="font-size:22px;font-weight:800;color:var(--blue);line-height:1">${emailPct}<span style="font-size:13px;font-weight:600;opacity:.7">%</span></div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:5px">
-        <i class="ph-bold ph-rows" style="font-size:13px"></i>Loads Parsed
-      </span>
-      <span style="font-size:11px;font-weight:700;color:var(--text2)">${total} total · ${withEmail} with email</span>
-    </div>
-    <div style="background:var(--surface2);border-radius:99px;height:8px;overflow:hidden;border:1px solid var(--border)">
-      <div style="height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--blue));width:${emailPct}%;transition:width .6s ease"></div>
-    </div>
-  `;
+  // Stats strip — 4-column borderless grid
+  document.getElementById('parseStats').innerHTML = [
+    { val: newCount,      label: 'Ready',     sub: 'to send',    color: 'var(--accent)', icon: 'ph-check-circle',  bg: 'rgba(5,150,105,.06)' },
+    { val: dupCount,      label: 'Duplicate', sub: 'skipped',    color: 'var(--yellow)', icon: 'ph-copy',           bg: 'rgba(250,204,21,.05)' },
+    { val: blockedCount,  label: 'Blocked',   sub: 'stop list',  color: 'var(--red)',    icon: 'ph-prohibit',       bg: 'rgba(239,68,68,.05)' },
+    { val: emailPct+'%',  label: 'With Email',sub: withEmail+'/'+total, color: 'var(--blue)',  icon: 'ph-envelope', bg: 'rgba(96,165,250,.05)' },
+  ].map(s => `<div class="loads-stat" style="background:${s.bg}">
+    <i class="ph-bold ${s.icon}" style="font-size:18px;color:${s.color};margin-bottom:2px"></i>
+    <div class="loads-stat-val" style="color:${s.color}">${s.val}</div>
+    <div class="loads-stat-label">${s.label}</div>
+    <div class="loads-stat-sub">${s.sub}</div>
+  </div>`).join('');
+
+  // Update parse dot state
+  const dot = document.getElementById('datParseDot');
+  const hint = document.getElementById('datParseHint');
+  if (dot) { dot.className = 'dat-parse-dot ready'; }
+  if (hint) hint.textContent = newCount + ' ready to send';
+
   document.getElementById('loadsBody').innerHTML = loads.map((l, i) => {
-    const sc = l.skip === 'stop_list' ? 'chip-stop' : l.skip === 'today' ? 'chip-today' : l.skip === 'duplicate' ? 'chip-dup' : 'chip-sent';
-    const sl = l.skip === 'stop_list' ? '🚫 blocked' : l.skip === 'today' ? '⊘ today' : l.skip === 'duplicate' ? '⊘ dup' : '✓ new';
-    return `<tr>
-      <td><input type="checkbox" class="row-check" data-idx="${i}" ${l.skip ? '' : 'checked'} ${l.skip ? 'disabled' : ''}></td>
-      <td class="email-cell">${l.company ? `<div style="font-weight:600;font-size:12px;color:var(--text);line-height:1.3">${l.company}</div>` : ''}<div style="font-size:11px;color:var(--text2)">${l.email}</div></td>
-      <td class="route-cell">${l.origin} → ${l.destination}</td>
-      <td style="color:var(--text2)">${l.date}</td>
-      <td style="color:var(--text2)">${l.equip}</td>
-      <td><span class="chip ${sc}">${sl}</span></td>
+    const isStop = l.skip === 'stop_list';
+    const isSkip = l.skip && !isStop;
+    const rowCls = isStop ? 'row-stop' : isSkip ? 'row-skip' : '';
+    const chipCls = isStop ? 'chip-stop' : l.skip === 'today' ? 'chip-today' : l.skip === 'duplicate' ? 'chip-dup' : 'chip-sent';
+    const chipIcon = isStop ? 'ph-prohibit' : l.skip === 'today' ? 'ph-clock' : l.skip === 'duplicate' ? 'ph-copy' : 'ph-check';
+    const chipLabel = isStop ? 'Blocked' : l.skip === 'today' ? 'Today' : l.skip === 'duplicate' ? 'Duplicate' : 'New';
+    return `<tr class="${rowCls}">
+      <td style="padding-left:14px"><input type="checkbox" class="row-check" data-idx="${i}" ${l.skip ? '' : 'checked'} ${l.skip ? 'disabled' : ''} style="accent-color:var(--accent);cursor:pointer;width:13px;height:13px"></td>
+      <td class="email-cell">${l.company ? `<div style="font-weight:600;font-size:12px;color:var(--text);line-height:1.3">${l.company}</div>` : ''}<div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">${l.email}</div></td>
+      <td class="route-cell" style="font-size:12px;white-space:nowrap">${l.origin} <span style="color:var(--text3)">→</span> ${l.destination}</td>
+      <td style="color:var(--text2);font-size:11px;white-space:nowrap">${l.date}</td>
+      <td style="color:var(--text2);font-size:11px"><span style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">${l.equip}</span></td>
+      <td><span class="chip ${chipCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ph-bold ${chipIcon}" style="font-size:10px"></i>${chipLabel}</span></td>
     </tr>`;
   }).join('');
   updateSelectedCount();
@@ -2586,15 +2721,38 @@ function toggleAll(cb) {
   updateSelectedCount();
 }
 function updateSelectedCount() {
-  const n = document.querySelectorAll('.row-check:checked').length;
-  const txt = n + ' selected';
-  document.getElementById('selectedCount').textContent = txt;
+  const checked = document.querySelectorAll('.row-check:checked').length;
+  const total   = document.querySelectorAll('.row-check:not(:disabled)').length;
+  const txt = checked + ' of ' + total + ' selected';
+  const cnt = document.getElementById('selectedCount');
+  if (cnt) cnt.textContent = txt;
   const topEl = document.getElementById('selectedCountTop');
   if (topEl) topEl.textContent = txt;
-  // Show/hide top button based on whether loads exist
   const topRow = document.getElementById('topSendRow');
-  if (topRow) topRow.style.display = document.querySelectorAll('.row-check').length > 0 ? '' : 'none';
+  if (topRow) topRow.style.display = total > 0 ? 'flex' : 'none';
 }
+
+// Update line count in textarea footer
+function updateDatMeta() {
+  const val = document.getElementById('datText')?.value || '';
+  const lines = val ? val.split('\n').filter(l => l.trim()).length : 0;
+  const el = document.getElementById('datLineMeta');
+  if (el) el.textContent = lines + ' line' + (lines !== 1 ? 's' : '');
+  const dot = document.getElementById('datParseDot');
+  const hint = document.getElementById('datParseHint');
+  if (lines > 0 && dot) { dot.className = 'dat-parse-dot parsing'; if (hint) hint.textContent = 'parsing…'; }
+  else if (dot) { dot.className = 'dat-parse-dot'; if (hint) hint.textContent = 'paste to auto-parse'; }
+}
+
+// Keyboard shortcut ⌘+Enter to send
+document.addEventListener('keydown', function(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    const btn = document.getElementById('sendBtn');
+    if (btn && !btn.disabled && document.getElementById('page-send')?.classList.contains('active')) {
+      e.preventDefault(); startSend();
+    }
+  }
+});
 
 // ── SEND ─────────────────────────────────────────────────────────────────────
 let pollInterval = null;

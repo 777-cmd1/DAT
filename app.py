@@ -1526,7 +1526,7 @@ _EQUIP_LABELS = {
 
 def _build_subject(load):
     """Build a clean, human-readable email subject from a parsed load dict.
-    Example: Laredo, TX → Conroe, TX • 3/19 • Van • 53 ft • 40,913 lbs
+    Example: Laredo, TX to Conroe, TX, 3/19, Van, 53 ft, 40,913 lbs
     Missing fields are skipped — no double separators, no trailing separators."""
     origin      = (load.get('origin') or '').strip()
     destination = (load.get('destination') or '').strip()
@@ -1535,11 +1535,10 @@ def _build_subject(load):
     length      = (load.get('length') or '').strip()
     weight      = (load.get('weight') or '').strip()
 
-    equip = _EQUIP_LABELS.get(equip_raw.upper(), equip_raw)  # map code → full name
+    equip = _EQUIP_LABELS.get(equip_raw.upper(), equip_raw)
 
-    # Route: "Origin → Destination" or just one city if the other is missing
     if origin and destination:
-        route = f'{origin} → {destination}'
+        route = f'{origin} to {destination}'
     elif origin:
         route = origin
     elif destination:
@@ -1548,7 +1547,7 @@ def _build_subject(load):
         route = ''
 
     parts = [p for p in [route, date, equip, length, weight] if p]
-    return ' • '.join(parts)
+    return ', '.join(parts)
 
 def run_send_job(loads, cfg, templates, uid=None):
     """Run in a background thread. uid must be passed explicitly — no session in threads."""

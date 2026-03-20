@@ -81,6 +81,32 @@ app.config['SESSION_COOKIE_SECURE'] = _is_production
 db.init_app(app)
 flask_migrate.init_app(app, db)
 
+# ── In-memory TTL cache (parse performance) ────────────────────────────────
+# Caches DB-heavy reads that occur on every /api/parse call.
+# Without this, every parse fetches the full sends table from Railway PG.
+import threading as _threading
+_cache_lock   = _threading.Lock()
+_CACHE_STORE: dict = {}
+_SENT_LOG_TTL  = 90   # seconds — covers rapid re-parses between sends
+_STOP_LIST_TTL = 300  # 5 minutes — stop list rarely changes
+
+def _cache_get(key: str, ttl: float):
+    """Return (value, hit). hit=False means expired or missing."""
+    with _cache_lock:
+        entry = _CACHE_STORE.get(key)
+    if entry and (time.monotonic() - entry['t']) < ttl:
+        return entry['v'], True
+    return None, False
+
+def _cache_set(key: str, value):
+    with _cache_lock:
+        _CACHE_STORE[key] = {'t': time.monotonic(), 'v': value}
+
+def _cache_del(*keys: str):
+    with _cache_lock:
+        for k in keys:
+            _CACHE_STORE.pop(k, None)
+
 # ── CSRF helpers ─────────────────────────────────────────────────────────────
 # Session-based CSRF token for HTML form pages (login, register, reset).
 # JSON-only API routes are covered by SameSite=Lax cookie.
@@ -984,13 +1010,18 @@ def render_template_text(tmpl, load, cfg):
 
 def load_stop_list(uid=None):
     if uid is None: uid = current_user_id()
-    be, bd = set(), set()
-    if not uid: return be, bd
+    if not uid: return set(), set()
+    cache_key = f'stop_list:{uid}'
+    cached, hit = _cache_get(cache_key, _STOP_LIST_TTL)
+    if hit: return cached
     from app.models import StopListEntry
+    be, bd = set(), set()
     for e in StopListEntry.query.filter_by(user_id=uid).all():
         if e.type == 'email': be.add(e.value.lower())
         else: bd.add(e.value.lower())
-    return be, bd
+    result = (be, bd)
+    _cache_set(cache_key, result)
+    return result
 
 def get_stop_list_raw():
     uid = current_user_id()
@@ -1014,6 +1045,7 @@ def write_stop_list(entries):
             reason=e.get('reason', ''),
         ))
     db.session.commit()
+    _cache_del(f'stop_list:{uid}')  # invalidate so next parse sees updated list
 
 def is_blocked(email, be, bd):
     em=email.strip().lower()
@@ -1025,16 +1057,25 @@ def load_sent_log(uid=None):
     """Pass uid explicitly when calling from background threads."""
     if uid is None:
         uid = current_user_id()
-    all_sent, sent_today = set(), set()
-    if not uid: return all_sent, sent_today
+    if not uid: return set(), set()
+    cache_key = f'sent_log:{uid}'
+    cached, hit = _cache_get(cache_key, _SENT_LOG_TTL)
+    if hit: return cached
     from app.models import Send
-    today = date.today()
-    for s in Send.query.filter_by(user_id=uid, status='sent').all():
-        em = s.recipient_email.lower()
-        all_sent.add(f"{em}|{s.origin}|{s.destination}")
-        if s.sent_at and s.sent_at.date() == today:
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    # Fetch only the 4 columns needed — avoids transferring all 12+ columns over network
+    rows = db.session.query(
+        Send.recipient_email, Send.origin, Send.destination, Send.sent_at
+    ).filter(Send.user_id == uid, Send.status == 'sent').all()
+    all_sent, sent_today = set(), set()
+    for em_raw, orig, dest, sent_at in rows:
+        em = em_raw.lower()
+        all_sent.add(f"{em}|{orig}|{dest}")
+        if sent_at and sent_at >= today_start:
             sent_today.add(em)
-    return all_sent, sent_today
+    result = (all_sent, sent_today)
+    _cache_set(cache_key, result)
+    return result
 
 def append_log(load, status, variant=0, uid=None):
     """Pass uid explicitly when calling from background threads."""
@@ -1051,6 +1092,7 @@ def append_log(load, status, variant=0, uid=None):
         template_variant=variant, status=status,
     ))
     db.session.commit()
+    _cache_del(f'sent_log:{uid}')  # invalidate so next parse sees fresh dedup
 
 def get_log_rows():
     uid = current_user_id()
@@ -2152,6 +2194,7 @@ def api_reply_status():
             try:
                 db.session.add(StopListEntry(user_id=uid, type='email', value=em.lower()))
                 db.session.commit()
+                _cache_del(f'stop_list:{uid}')  # invalidate so next parse sees updated list
             except IntegrityError:
                 db.session.rollback()
     audit_log('mark_reply', resource_type='reply',
@@ -2711,6 +2754,15 @@ with app.app_context():
                     _conn.rollback()  # column already exists — ignore
     except Exception as _e:
         print(f'Migration check skipped: {_e}')
+    # Ensure parse-critical index exists: (user_id, status) on sends
+    try:
+        with db.engine.connect() as _conn:
+            _conn.execute(db.text(
+                'CREATE INDEX IF NOT EXISTS ix_sends_user_status ON sends (user_id, status)'
+            ))
+            _conn.commit()
+    except Exception:
+        pass
     # Mark any DB jobs still "running" as "interrupted" (handles deploy mid-send)
     try:
         from app.models import SendJob

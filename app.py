@@ -1900,15 +1900,21 @@ def api_parse():
     if not raw: return jsonify({"error": "No text"}), 400
     all_loads = parse_dat_text(raw)
     be, bd = load_stop_list(); all_sent, sent_today = load_sent_log()
-    result = []; stats = {"total":len(all_loads),"new":0,"skip_today":0,"skip_dup":0,"skip_stop":0}
-    seen_in_batch = set()  # within-batch deduplication (by email only, like v1)
+    result = []; stats = {"total":len(all_loads),"new":0,"skip_today":0,"skip_dup":0,"skip_sent":0,"skip_stop":0}
+    seen_in_batch = set()  # within-batch dedup by email (prevents sending twice in same paste)
     for l in all_loads:
         em = l['email'].lower().strip()
         key = f"{em}|{l['origin']}|{l['destination']}"
-        if is_blocked(l['email'], be, bd): l['skip'] = 'stop_list'; stats["skip_stop"] += 1
-        elif em in sent_today: l['skip'] = 'today'; stats["skip_today"] += 1
-        elif em in seen_in_batch or key in all_sent: l['skip'] = 'duplicate'; stats["skip_dup"] += 1
-        else: l['skip'] = None; stats["new"] += 1; seen_in_batch.add(em)
+        if is_blocked(l['email'], be, bd):
+            l['skip'] = 'stop_list'; stats["skip_stop"] += 1
+        elif em in sent_today:
+            l['skip'] = 'today'; stats["skip_today"] += 1
+        elif em in seen_in_batch:
+            l['skip'] = 'in_batch'; stats["skip_dup"] += 1   # same email twice in this paste
+        elif key in all_sent:
+            l['skip'] = 'sent'; stats["skip_sent"] += 1      # sent before (any previous session)
+        else:
+            l['skip'] = None; stats["new"] += 1; seen_in_batch.add(em)
         result.append(l)
     return jsonify({"loads": result, "stats": stats})
 

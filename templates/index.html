@@ -620,44 +620,27 @@ tr:last-child td { border-bottom: none; }
 }
 .sb-card-body { padding:14px 16px 16px; }
 
-/* Broadcast Pulse — progress */
-.bp-hero { display:flex; align-items:baseline; gap:6px; margin-bottom:3px; }
+/* Broadcast Pulse — donut */
+.bp-donut-wrap { position:relative; width:140px; height:140px; margin:0 auto 10px; }
+.bp-donut-svg { filter:drop-shadow(0 0 8px rgba(5,150,105,.1)); transition:filter .5s; }
+.bp-donut-wrap:hover .bp-donut-svg { filter:drop-shadow(0 0 16px rgba(5,150,105,.2)); }
+.bp-donut-center {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:1px;
+}
 .bp-hero-num {
-  font-size:32px; font-weight:900; color:var(--text); line-height:1;
-  font-family:'DM Mono',monospace;
-  transition: color .4s ease;
+  font-size:34px; font-weight:900; color:var(--text); line-height:1;
+  font-family:'DM Mono',monospace; transition:color .4s ease;
 }
 .bp-hero-num.counting { color:var(--accent); }
-.bp-hero-of  { font-size:14px; font-weight:600; color:var(--text3); }
-.bp-label { font-size:11px; color:var(--text3); margin-bottom:10px; }
-.bp-bar-track {
-  height:10px; border-radius:99px; background:var(--surface2);
-  border:1px solid var(--border); overflow:hidden; position:relative;
+.bp-donut-divider {
+  width:24px; height:1px; background:var(--border); margin:3px 0;
 }
-.bp-bar-fill {
-  height:100%; border-radius:99px;
-  background:linear-gradient(90deg,var(--accent),#34d399);
-  transition:width .8s cubic-bezier(.4,0,.2,1);
-  box-shadow:0 0 10px rgba(5,150,105,.35);
-  position:relative;
+.bp-donut-target {
+  font-size:13px; font-weight:600; color:var(--text3);
+  font-family:'DM Mono',monospace; line-height:1;
 }
-.bp-bar-fill::after {
-  content:''; position:absolute; top:0; right:0; bottom:0; width:24px;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.15));
-  border-radius:0 99px 99px 0;
-  opacity:0; transition:opacity .4s;
-}
-.bp-bar-track:not(.idle) .bp-bar-fill::after { opacity:1; }
-.bp-bar-track.hot .bp-bar-fill { background:linear-gradient(90deg,var(--yellow),var(--accent)); }
-.bp-bar-track.full .bp-bar-fill {
-  background:linear-gradient(90deg,var(--accent),var(--blue));
-  box-shadow:0 0 14px rgba(5,150,105,.5);
-  animation:bpBarGlow 2s ease-in-out infinite;
-}
-@keyframes bpBarGlow {
-  0%,100% { box-shadow:0 0 10px rgba(5,150,105,.35); }
-  50%     { box-shadow:0 0 18px rgba(5,150,105,.55); }
-}
+.bp-label { font-size:10px; color:var(--text3); margin-bottom:10px; }
 .bp-status { display:flex; align-items:center; gap:5px; margin-top:8px; font-size:10px; color:var(--text3); }
 .bp-pulse-dot {
   width:6px; height:6px; border-radius:50%; background:var(--accent);
@@ -1567,19 +1550,26 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
               <span class="sb-card-label"><i class="ph-bold ph-broadcast" style="font-size:13px;color:var(--accent)"></i>Broadcast Pulse<span class="bp-live-dot" id="bpLiveDot"></span></span>
               <span id="dsDate" style="font-size:10px;color:var(--text3)"></span>
             </div>
-            <div class="sb-card-body">
-              <div class="bp-hero">
-                <span class="bp-hero-num" id="dsSent">0</span>
-                <span class="bp-hero-of">/ <span id="dsProgressLabel">100</span></span>
-              </div>
-              <div class="bp-label" id="dsMotivation">Target: 100 emails today</div>
-              <div class="bp-bar-track" id="bpBarTrack">
-                <div class="bp-bar-fill" id="dsProgressFill" style="width:0%"></div>
+            <div class="sb-card-body" style="padding-top:18px;padding-bottom:14px">
+              <div class="bp-donut-wrap">
+                <svg width="140" height="140" viewBox="0 0 140 140" class="bp-donut-svg">
+                  <circle cx="70" cy="70" r="58" fill="none" stroke="var(--surface2)" stroke-width="11"/>
+                  <circle cx="70" cy="70" r="58" fill="none" stroke="var(--accent)" stroke-width="11"
+                    stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke-linecap="round"
+                    transform="rotate(-90 70 70)" id="bpDonutFill"
+                    style="transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1),stroke .4s"/>
+                </svg>
+                <div class="bp-donut-center">
+                  <div class="bp-hero-num" id="dsSent">0</div>
+                  <div class="bp-donut-divider"></div>
+                  <div class="bp-donut-target" id="dsProgressLabel">100</div>
+                </div>
               </div>
               <div class="bp-status" id="bpStatus">
-                <span class="bp-pulse-dot" style="animation:none;background:var(--border)"></span>
+                <span class="bp-pulse-dot idle"></span>
                 <span>Idle — paste loads to begin</span>
               </div>
+              <div class="bp-label" id="dsMotivation" style="text-align:center;margin-bottom:0;margin-top:2px">Target: 100 emails today</div>
             </div>
             <!-- Metric strip: Sent / Replied / Conv -->
             <div class="sb-metrics">
@@ -2720,15 +2710,17 @@ async function loadDailyStats() {
         : conversion >= 15 ? 'var(--yellow)' : 'var(--red)';
     }
 
-    // Broadcast Pulse bar
+    // Broadcast Pulse donut
     const pct = dailyTarget > 0 ? Math.min(100, Math.round(sent / dailyTarget * 100)) : 0;
-    const fill = document.getElementById('dsProgressFill');
-    const track = document.getElementById('bpBarTrack');
-    if (fill) fill.style.width = pct + '%';
-    if (track) {
-      track.classList.remove('hot','full');
-      if (pct >= 100) track.classList.add('full');
-      else if (pct >= 60) track.classList.add('hot');
+    const bpFill = document.getElementById('bpDonutFill');
+    if (bpFill) {
+      const circumference = 2 * Math.PI * 58; // ~364.4
+      const offset = circumference * (1 - pct / 100);
+      setTimeout(() => {
+        bpFill.style.strokeDashoffset = offset;
+        bpFill.style.stroke = pct >= 100 ? 'var(--blue)'
+          : pct >= 60 ? 'var(--accent)' : 'var(--accent)';
+      }, 100);
     }
 
     // Status line + live dot state

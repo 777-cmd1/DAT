@@ -622,7 +622,12 @@ tr:last-child td { border-bottom: none; }
 
 /* Broadcast Pulse — progress */
 .bp-hero { display:flex; align-items:baseline; gap:6px; margin-bottom:3px; }
-.bp-hero-num { font-size:32px; font-weight:900; color:var(--text); line-height:1; font-family:'DM Mono',monospace; }
+.bp-hero-num {
+  font-size:32px; font-weight:900; color:var(--text); line-height:1;
+  font-family:'DM Mono',monospace;
+  transition: color .4s ease;
+}
+.bp-hero-num.counting { color:var(--accent); }
 .bp-hero-of  { font-size:14px; font-weight:600; color:var(--text3); }
 .bp-label { font-size:11px; color:var(--text3); margin-bottom:10px; }
 .bp-bar-track {
@@ -634,13 +639,50 @@ tr:last-child td { border-bottom: none; }
   background:linear-gradient(90deg,var(--accent),#34d399);
   transition:width .8s cubic-bezier(.4,0,.2,1);
   box-shadow:0 0 10px rgba(5,150,105,.35);
+  position:relative;
 }
+.bp-bar-fill::after {
+  content:''; position:absolute; top:0; right:0; bottom:0; width:24px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.15));
+  border-radius:0 99px 99px 0;
+  opacity:0; transition:opacity .4s;
+}
+.bp-bar-track:not(.idle) .bp-bar-fill::after { opacity:1; }
 .bp-bar-track.hot .bp-bar-fill { background:linear-gradient(90deg,var(--yellow),var(--accent)); }
-.bp-bar-track.full .bp-bar-fill { background:linear-gradient(90deg,var(--accent),var(--blue)); box-shadow:0 0 14px rgba(5,150,105,.5); }
+.bp-bar-track.full .bp-bar-fill {
+  background:linear-gradient(90deg,var(--accent),var(--blue));
+  box-shadow:0 0 14px rgba(5,150,105,.5);
+  animation:bpBarGlow 2s ease-in-out infinite;
+}
+@keyframes bpBarGlow {
+  0%,100% { box-shadow:0 0 10px rgba(5,150,105,.35); }
+  50%     { box-shadow:0 0 18px rgba(5,150,105,.55); }
+}
 .bp-status { display:flex; align-items:center; gap:5px; margin-top:8px; font-size:10px; color:var(--text3); }
 .bp-pulse-dot {
   width:6px; height:6px; border-radius:50%; background:var(--accent);
-  animation:dotPulse 1.5s ease-in-out infinite;
+  box-shadow:0 0 4px rgba(5,150,105,.4);
+  animation:bpDotPulse 2s ease-in-out infinite;
+}
+.bp-pulse-dot.idle { background:var(--border); box-shadow:none; animation:none; }
+.bp-pulse-dot.sending {
+  background:var(--accent);
+  animation:bpDotSend .8s ease-in-out infinite;
+}
+@keyframes bpDotPulse {
+  0%,100% { opacity:.6; transform:scale(1); }
+  50%     { opacity:1;  transform:scale(1.3); }
+}
+@keyframes bpDotSend {
+  0%,100% { opacity:1;   transform:scale(1);   box-shadow:0 0 4px rgba(5,150,105,.4); }
+  50%     { opacity:.85; transform:scale(1.5); box-shadow:0 0 10px rgba(5,150,105,.6); }
+}
+
+/* Live dot in card header */
+.bp-live-dot {
+  width:5px; height:5px; border-radius:50%; background:var(--accent);
+  animation:bpDotPulse 2.5s ease-in-out infinite;
+  margin-left:2px; flex-shrink:0;
 }
 
 /* Metric strip — 3-column */
@@ -655,11 +697,18 @@ tr:last-child td { border-bottom: none; }
 
 /* Donut chart */
 .donut-wrap { position:relative; width:110px; height:110px; margin:0 auto 6px; }
+.donut-wrap svg { filter:drop-shadow(0 0 6px rgba(59,130,246,.08)); transition:filter .5s; }
+.donut-wrap:hover svg { filter:drop-shadow(0 0 12px rgba(59,130,246,.15)); }
 .donut-center {
   position:absolute; inset:0; display:flex; flex-direction:column;
   align-items:center; justify-content:center;
 }
-.donut-pct { font-size:22px; font-weight:900; color:var(--text); font-family:'DM Mono',monospace; line-height:1; }
+.donut-pct {
+  font-size:22px; font-weight:900; color:var(--text);
+  font-family:'DM Mono',monospace; line-height:1;
+  transition:color .3s;
+}
+.donut-pct.counting { color:var(--blue); }
 .donut-sub { font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-top:2px; }
 .donut-info { text-align:center; font-size:11px; color:var(--text3); }
 .donut-info strong { color:var(--text2); font-weight:700; }
@@ -1515,7 +1564,7 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
           <!-- ═══ BROADCAST PULSE ═══ -->
           <div class="sb-card" style="position:sticky;top:24px">
             <div class="sb-card-head">
-              <span class="sb-card-label"><i class="ph-bold ph-broadcast" style="font-size:13px;color:var(--accent)"></i>Broadcast Pulse</span>
+              <span class="sb-card-label"><i class="ph-bold ph-broadcast" style="font-size:13px;color:var(--accent)"></i>Broadcast Pulse<span class="bp-live-dot" id="bpLiveDot"></span></span>
               <span id="dsDate" style="font-size:10px;color:var(--text3)"></span>
             </div>
             <div class="sb-card-body">
@@ -2644,15 +2693,26 @@ async function loadDailyStats() {
     const dsDate = document.getElementById('dsDate');
     if (dsDate) dsDate.textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
 
-    // Broadcast Pulse — hero number
-    setEl('dsSent', sent);
-    setEl('dsSentMetric', sent);
+    // Broadcast Pulse — hero number with count-up
+    const heroEl = document.getElementById('dsSent');
+    const metricEl = document.getElementById('dsSentMetric');
+    const prevSent = parseInt(heroEl?.textContent) || 0;
+    if (heroEl && sent !== prevSent) {
+      heroEl.classList.add('counting');
+      animateCount(heroEl, sent);
+      if (metricEl) animateCount(metricEl, sent);
+      setTimeout(() => heroEl.classList.remove('counting'), 850);
+    }
     setEl('dsProgressLabel', dailyTarget);
 
-    // Metric strip
+    // Metric strip — animate replied count
     const dsReplied = document.getElementById('dsReplied');
     const dsConv = document.getElementById('dsConversion');
-    if (dsReplied) dsReplied.textContent = repliedToday;
+    if (dsReplied) {
+      const prevReplied = parseInt(dsReplied.textContent) || 0;
+      if (repliedToday !== prevReplied) animateCount(dsReplied, repliedToday);
+      else dsReplied.textContent = repliedToday;
+    }
     if (dsConv) {
       dsConv.textContent = conversion !== null ? conversion + '%' : '—';
       dsConv.style.color = conversion === null ? 'var(--yellow)'
@@ -2671,16 +2731,20 @@ async function loadDailyStats() {
       else if (pct >= 60) track.classList.add('hot');
     }
 
-    // Status line
+    // Status line + live dot state
     const remaining = Math.max(0, dailyTarget - sent);
     const bpStatus = document.getElementById('bpStatus');
+    const liveDot = document.getElementById('bpLiveDot');
     if (bpStatus) {
-      const dot = bpStatus.querySelector('.bp-pulse-dot');
       if (pct >= 100) {
         bpStatus.innerHTML = '<i class="ph-bold ph-trophy" style="font-size:12px;color:var(--accent)"></i><span style="color:var(--accent);font-weight:600">Target reached!</span>';
+        if (liveDot) liveDot.style.background = 'var(--accent)';
       } else if (sent > 0) {
-        if (dot) { dot.style.animation = ''; dot.style.background = ''; }
         bpStatus.innerHTML = '<span class="bp-pulse-dot"></span><span>' + remaining + ' to go — ' + pct + '%</span>';
+        if (liveDot) liveDot.style.background = '';
+      } else {
+        bpStatus.innerHTML = '<span class="bp-pulse-dot idle"></span><span>Idle — paste loads to begin</span>';
+        if (liveDot) liveDot.style.background = 'var(--border)';
       }
     }
 
@@ -2734,11 +2798,18 @@ async function loadQuota() {
       if (used) used.textContent = q.used;
       if (limitEl) limitEl.textContent = q.limit;
       if (rem) rem.textContent = q.remaining + ' to go';
-      if (pctEl) pctEl.textContent = pct + '%';
+      if (pctEl) {
+        pctEl.classList.add('counting');
+        animateCount(pctEl, pct, 0, '%');
+        setTimeout(() => pctEl.classList.remove('counting'), 850);
+      }
       if (donutFill) {
+        // Start from full offset (hidden) then sweep to target
         const offset = circumference * (1 - pct / 100);
-        donutFill.style.strokeDashoffset = offset;
-        donutFill.style.stroke = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--blue)';
+        setTimeout(() => {
+          donutFill.style.strokeDashoffset = offset;
+          donutFill.style.stroke = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--blue)';
+        }, 100);
       }
     }
   } catch(e) { /* quota widget is non-critical */ }
@@ -2886,9 +2957,11 @@ async function startSend() {
   const spc = document.getElementById('sendProgressCard');
   if (spc) spc.style.display = 'block';
   document.getElementById('liveLog').innerHTML = '';
-  // Update pulse status
+  // Update pulse status to sending
   const bps = document.getElementById('bpStatus');
-  if (bps) bps.innerHTML = '<span class="bp-pulse-dot"></span><span style="color:var(--accent);font-weight:600">Sending...</span>';
+  if (bps) bps.innerHTML = '<span class="bp-pulse-dot sending"></span><span style="color:var(--accent);font-weight:600">Sending...</span>';
+  const ld = document.getElementById('bpLiveDot');
+  if (ld) { ld.style.background = ''; ld.classList.add('sending'); ld.style.animation = 'bpDotSend .8s ease-in-out infinite'; }
   const res = await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loads})});
   const data = await res.json();
   if (!data.ok) { toast(data.error, true); document.getElementById('sendBtn').disabled = false; return; }
@@ -2917,6 +2990,8 @@ async function pollStatus() {
     loadDailyStats();
     const bps = document.getElementById('bpStatus');
     if (bps) bps.innerHTML = '<i class="ph-bold ph-check-circle" style="font-size:12px;color:var(--accent)"></i><span style="color:var(--accent);font-weight:600">Complete — ' + s.sent + ' sent</span>';
+    const ld2 = document.getElementById('bpLiveDot');
+    if (ld2) { ld2.style.animation = ''; ld2.classList.remove('sending'); }
   }
 }
 

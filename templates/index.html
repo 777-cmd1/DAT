@@ -606,6 +606,87 @@ tr:last-child td { border-bottom: none; }
 .send-kbd { font-size:10px; color:var(--text3); display:flex;align-items:center;gap:4px; }
 .send-kbd kbd { background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-family:'DM Mono',monospace;font-size:10px; }
 .send-selected-count { font-size:12px; font-weight:600; color:var(--text2); }
+.send-cta-top { border-top:none; border-bottom:1px solid var(--border); }
+
+/* ── SIDEBAR — Broadcast Pulse ─────────────────────────────────────── */
+.sb-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.sb-card + .sb-card { margin-top:12px; }
+.sb-card-head {
+  padding:14px 16px 0; display:flex; align-items:center; justify-content:space-between;
+}
+.sb-card-label {
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em;
+  color:var(--text3); display:flex; align-items:center; gap:6px;
+}
+.sb-card-body { padding:14px 16px 16px; }
+
+/* Broadcast Pulse — progress */
+.bp-hero { display:flex; align-items:baseline; gap:6px; margin-bottom:3px; }
+.bp-hero-num { font-size:32px; font-weight:900; color:var(--text); line-height:1; font-family:'DM Mono',monospace; }
+.bp-hero-of  { font-size:14px; font-weight:600; color:var(--text3); }
+.bp-label { font-size:11px; color:var(--text3); margin-bottom:10px; }
+.bp-bar-track {
+  height:10px; border-radius:99px; background:var(--surface2);
+  border:1px solid var(--border); overflow:hidden; position:relative;
+}
+.bp-bar-fill {
+  height:100%; border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),#34d399);
+  transition:width .8s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 0 10px rgba(5,150,105,.35);
+}
+.bp-bar-track.hot .bp-bar-fill { background:linear-gradient(90deg,var(--yellow),var(--accent)); }
+.bp-bar-track.full .bp-bar-fill { background:linear-gradient(90deg,var(--accent),var(--blue)); box-shadow:0 0 14px rgba(5,150,105,.5); }
+.bp-status { display:flex; align-items:center; gap:5px; margin-top:8px; font-size:10px; color:var(--text3); }
+.bp-pulse-dot {
+  width:6px; height:6px; border-radius:50%; background:var(--accent);
+  animation:dotPulse 1.5s ease-in-out infinite;
+}
+
+/* Metric strip — 3-column */
+.sb-metrics { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--border); border-top:1px solid var(--border); }
+.sb-metric {
+  background:var(--surface); padding:12px 10px; display:flex; flex-direction:column; align-items:center; gap:2px;
+  transition:background .15s;
+}
+.sb-metric:hover { background:var(--surface2); }
+.sb-metric-val { font-size:20px; font-weight:800; line-height:1; font-family:'DM Mono',monospace; }
+.sb-metric-lbl { font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--text3); }
+
+/* Donut chart */
+.donut-wrap { position:relative; width:110px; height:110px; margin:0 auto 6px; }
+.donut-center {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+}
+.donut-pct { font-size:22px; font-weight:900; color:var(--text); font-family:'DM Mono',monospace; line-height:1; }
+.donut-sub { font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-top:2px; }
+.donut-info { text-align:center; font-size:11px; color:var(--text3); }
+.donut-info strong { color:var(--text2); font-weight:700; }
+
+/* Automation Impact — redesigned */
+.ai-speed-badge {
+  background:linear-gradient(135deg,var(--accent),var(--blue));
+  color:#fff; font-size:11px; font-weight:800; padding:3px 10px;
+  border-radius:20px; line-height:1.2;
+}
+.ai-kpis { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+.ai-kpi {
+  background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+  padding:10px; text-align:center;
+}
+.ai-kpi-icon { font-size:18px; margin-bottom:4px; }
+.ai-kpi-val { font-size:18px; font-weight:800; line-height:1; font-family:'DM Mono',monospace; }
+.ai-kpi-lbl { font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-top:3px; }
+
+/* Comparison bars */
+.ai-compare { margin-top:2px; }
+.ai-compare-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-bottom:8px; }
+.ai-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.ai-bar-icon { width:20px; text-align:center; flex-shrink:0; }
+.ai-bar-track { flex:1; height:8px; border-radius:99px; overflow:hidden; }
+.ai-bar-fill { height:100%; border-radius:99px; transition:width .8s ease; }
+.ai-bar-val { font-size:10px; font-weight:700; width:50px; text-align:right; flex-shrink:0; }
 
 /* parseResults animation */
 @keyframes parseReveal {
@@ -1384,6 +1465,20 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
               <!-- Stats strip -->
               <div class="loads-stats-strip" id="parseStats"></div>
 
+              <!-- Top Send CTA (above table) -->
+              <div class="send-cta-bar send-cta-top" id="topSendBar" style="display:none">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <button class="send-cta-btn" onclick="startSend()">
+                    <i class="ph-bold ph-paper-plane-tilt"></i>
+                    Send Selected
+                  </button>
+                  <span class="send-selected-count" id="selectedCountTop2"></span>
+                </div>
+                <div class="send-kbd">
+                  <kbd>⌘</kbd><kbd>↵</kbd> to send
+                </div>
+              </div>
+
               <!-- Table -->
               <div style="overflow-x:auto">
                 <table id="loadsTable">
@@ -1417,157 +1512,151 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
 
         </div>
         <div>
-          <div class="card" style="position:sticky;top:24px">
-            <div class="card-label" style="display:flex;align-items:center;gap:7px"><i class="ph-bold ph-activity" style="font-size:15px;color:var(--accent)"></i>Send Progress</div>
-
-            <!-- DAILY STATS -->
-            <div id="dailyStatsBlock" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);display:flex;align-items:center;gap:5px"><i class="ph-bold ph-sun-horizon" style="font-size:13px;color:var(--yellow)"></i>Today</span>
-                <span id="dsDate" style="font-size:10px;color:var(--text3)"></span>
-              </div>
-              <div style="display:flex;gap:0;margin-bottom:12px">
-                <div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid var(--border)">
-                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-                    <i class="ph-bold ph-paper-plane-tilt" style="font-size:14px;color:var(--accent)"></i>
-                    <div id="dsSent" style="font-size:22px;font-weight:800;color:var(--accent);line-height:1">0</div>
-                  </div>
-                  <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600">Sent</div>
-                </div>
-                <div style="flex:1;text-align:center;padding:8px 4px;border-right:1px solid var(--border)">
-                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-                    <i class="ph-bold ph-chat-circle-dots" style="font-size:14px;color:var(--blue)"></i>
-                    <div id="dsReplied" style="font-size:22px;font-weight:800;color:var(--blue);line-height:1">0</div>
-                  </div>
-                  <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600">Replied</div>
-                </div>
-                <div style="flex:1;text-align:center;padding:8px 4px">
-                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-                    <i class="ph-bold ph-trend-up" style="font-size:14px;color:var(--yellow)"></i>
-                    <div id="dsConversion" style="font-size:22px;font-weight:800;color:var(--yellow);line-height:1">—</div>
-                  </div>
-                  <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600">Conv%</div>
-                </div>
-              </div>
-              <!-- Target progress -->
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);display:flex;align-items:center;gap:5px"><i class="ph-bold ph-target" style="font-size:13px;color:var(--accent)"></i>Target</span>
-                <span id="dsProgressLabel" style="font-size:11px;font-weight:600;color:var(--text2)">0 / 100</span>
-              </div>
-              <div style="background:var(--surface2);border-radius:99px;height:48px;overflow:hidden;border:1px solid var(--border);box-shadow:inset 0 2px 4px rgba(0,0,0,.15);position:relative">
-                <div id="dsProgressFill" style="height:100%;border-radius:99px;background:linear-gradient(90deg,var(--yellow),var(--accent),var(--blue));background-size:200% 100%;transition:width .8s cubic-bezier(.4,0,.2,1);width:0%;box-shadow:0 0 12px rgba(5,150,105,.4);animation:barShimmer 2.5s ease-in-out infinite;display:flex;align-items:center;justify-content:flex-end;padding-right:10px"></div>
-                <div id="dsProgressPctLabel" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:var(--text);pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.2)">0%</div>
-              </div>
-              <div id="dsMotivation" style="font-size:10px;color:var(--text3);margin-top:5px;text-align:right"></div>
+          <!-- ═══ BROADCAST PULSE ═══ -->
+          <div class="sb-card" style="position:sticky;top:24px">
+            <div class="sb-card-head">
+              <span class="sb-card-label"><i class="ph-bold ph-broadcast" style="font-size:13px;color:var(--accent)"></i>Broadcast Pulse</span>
+              <span id="dsDate" style="font-size:10px;color:var(--text3)"></span>
             </div>
-
-            <!-- QUOTA WIDGET -->
-            <div id="quotaBlock" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);display:flex;align-items:center;gap:5px">
-                  <i class="ph-bold ph-gauge" style="font-size:13px;color:var(--blue)"></i>Daily Quota
-                </span>
-                <span id="quotaPlanBadge" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border-radius:99px;background:rgba(99,102,241,.12);color:#818cf8;border:1px solid rgba(99,102,241,.2)">free</span>
+            <div class="sb-card-body">
+              <div class="bp-hero">
+                <span class="bp-hero-num" id="dsSent">0</span>
+                <span class="bp-hero-of">/ <span id="dsProgressLabel">100</span></span>
               </div>
-              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-                <span id="quotaUsedLabel" style="font-size:13px;font-weight:800;color:var(--text)">0 / 50</span>
-                <span id="quotaRemLabel" style="font-size:10px;color:var(--text3)">50 remaining</span>
+              <div class="bp-label" id="dsMotivation">Target: 100 emails today</div>
+              <div class="bp-bar-track" id="bpBarTrack">
+                <div class="bp-bar-fill" id="dsProgressFill" style="width:0%"></div>
               </div>
-              <div style="background:var(--surface2);border-radius:99px;height:6px;overflow:hidden;border:1px solid var(--border)">
-                <div id="quotaBarFill" style="height:100%;border-radius:99px;background:var(--blue);transition:width .6s ease;width:0%"></div>
+              <div class="bp-status" id="bpStatus">
+                <span class="bp-pulse-dot" style="animation:none;background:var(--border)"></span>
+                <span>Idle — paste loads to begin</span>
               </div>
             </div>
-
-            <div id="progressIdle" style="color:var(--text3);font-size:12px;padding:10px 0;text-align:center">
-              Parse loads and click Send to begin
-            </div>
-            <div class="progress-wrap" id="progressWrap">
-              <div class="progress-info">
-                <span id="progressText">0 / 0</span>
-                <span id="progressPct" style="color:var(--accent)">0%</span>
+            <!-- Metric strip: Sent / Replied / Conv -->
+            <div class="sb-metrics">
+              <div class="sb-metric">
+                <div class="sb-metric-val" style="color:var(--accent)" id="dsSentMetric">0</div>
+                <div class="sb-metric-lbl">Sent</div>
               </div>
-              <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+              <div class="sb-metric">
+                <div class="sb-metric-val" style="color:var(--blue)" id="dsReplied">0</div>
+                <div class="sb-metric-lbl">Replied</div>
+              </div>
+              <div class="sb-metric">
+                <div class="sb-metric-val" style="color:var(--yellow)" id="dsConversion">—</div>
+                <div class="sb-metric-lbl">Conv %</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ DAILY QUOTA — DONUT ═══ -->
+          <div class="sb-card">
+            <div class="sb-card-head">
+              <span class="sb-card-label"><i class="ph-bold ph-gauge" style="font-size:13px;color:var(--blue)"></i>Daily Quota</span>
+              <span id="quotaPlanBadge" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border-radius:99px;background:rgba(99,102,241,.12);color:#818cf8;border:1px solid rgba(99,102,241,.2)">free</span>
+            </div>
+            <div class="sb-card-body" style="padding-top:18px;padding-bottom:18px">
+              <div class="donut-wrap">
+                <svg width="110" height="110" viewBox="0 0 110 110" id="quotaDonut">
+                  <circle cx="55" cy="55" r="46" fill="none" stroke="var(--surface2)" stroke-width="9"/>
+                  <circle cx="55" cy="55" r="46" fill="none" stroke="var(--blue)" stroke-width="9"
+                    stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round"
+                    transform="rotate(-90 55 55)" id="quotaDonutFill"
+                    style="transition:stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)"/>
+                </svg>
+                <div class="donut-center">
+                  <div class="donut-pct" id="quotaPctLabel">0%</div>
+                  <div class="donut-sub">used</div>
+                </div>
+              </div>
+              <div class="donut-info">
+                <span id="quotaUsedLabel" style="font-weight:800;color:var(--text)">0</span>
+                <span style="color:var(--text3)"> / </span>
+                <span id="quotaLimitLabel" style="font-weight:700;color:var(--text2)">50</span>
+                <span style="color:var(--text3)"> — </span>
+                <span id="quotaRemLabel" style="color:var(--text3)">50 to go</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ SEND PROGRESS (active during send) ═══ -->
+          <div class="sb-card" id="sendProgressCard" style="display:none">
+            <div class="sb-card-head">
+              <span class="sb-card-label"><i class="ph-bold ph-paper-plane-tilt" style="font-size:13px;color:var(--accent)"></i>Sending...</span>
+              <span id="progressPct" style="font-size:12px;font-weight:800;color:var(--accent)">0%</span>
+            </div>
+            <div class="sb-card-body">
+              <div class="progress-info" style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span id="progressText" style="font-size:12px;font-weight:600;color:var(--text2)">0 / 0</span>
+              </div>
+              <div class="progress-bar-bg" style="height:8px;border-radius:99px;background:var(--surface2);border:1px solid var(--border);overflow:hidden;margin-bottom:14px">
+                <div class="progress-bar-fill" id="progressFill" style="width:0%;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),#34d399);transition:width .4s ease"></div>
+              </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
                 <div style="background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
-                  <div style="width:32px;height:32px;border-radius:8px;background:rgba(5,150,105,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                    <i class="ph-bold ph-check-circle" style="font-size:18px;color:var(--accent)"></i>
+                  <div style="width:28px;height:28px;border-radius:8px;background:rgba(5,150,105,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="ph-bold ph-check-circle" style="font-size:16px;color:var(--accent)"></i>
                   </div>
                   <div>
-                    <div id="pSent" style="font-size:20px;font-weight:800;color:var(--accent);line-height:1">0</div>
-                    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600;margin-top:2px">Sent</div>
+                    <div id="pSent" style="font-size:18px;font-weight:800;color:var(--accent);line-height:1">0</div>
+                    <div style="font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600;margin-top:2px">Sent</div>
                   </div>
                 </div>
                 <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
-                  <div style="width:32px;height:32px;border-radius:8px;background:rgba(239,68,68,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                    <i class="ph-bold ph-x-circle" style="font-size:18px;color:var(--red)"></i>
+                  <div style="width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="ph-bold ph-x-circle" style="font-size:16px;color:var(--red)"></i>
                   </div>
                   <div>
-                    <div id="pErr" style="font-size:20px;font-weight:800;color:var(--red);line-height:1">0</div>
-                    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600;margin-top:2px">Errors</div>
+                    <div id="pErr" style="font-size:18px;font-weight:800;color:var(--red);line-height:1">0</div>
+                    <div style="font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600;margin-top:2px">Errors</div>
                   </div>
                 </div>
               </div>
-              <div class="live-log" id="liveLog"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- AUTOMATION IMPACT CARD (Send page) -->
-        <div class="card" id="autoImpactSendCard" style="margin-top:12px">
-          <div class="card-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <span style="display:flex;align-items:center;gap:7px">
-              <i class="ph-bold ph-lightning" style="font-size:15px;color:var(--yellow)"></i>
-              Automation Impact
-            </span>
-            <span id="aiSpeedMult" style="background:linear-gradient(135deg,var(--accent),var(--blue));color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px">~4×</span>
-          </div>
-
-          <!-- Today KPI 2×2 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px">
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
-              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px">
-                <i class="ph-bold ph-clock-countdown" style="font-size:11px;color:var(--blue)"></i>Saved Today
-              </div>
-              <div id="aiTimeSavedToday" style="font-size:18px;font-weight:800;color:var(--blue);line-height:1">—</div>
-            </div>
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
-              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px">
-                <i class="ph-bold ph-envelope-simple" style="font-size:11px;color:var(--accent)"></i>Automated
-              </div>
-              <div id="aiEmailsToday" style="font-size:18px;font-weight:800;color:var(--accent);line-height:1">0</div>
-            </div>
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
-              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px">
-                <i class="ph-bold ph-cursor-click" style="font-size:11px;color:var(--yellow)"></i>Actions Saved
-              </div>
-              <div id="aiActionsToday" style="font-size:18px;font-weight:800;color:var(--yellow);line-height:1">0</div>
-            </div>
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px">
-              <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px">
-                <i class="ph-bold ph-rocket-launch" style="font-size:11px;color:var(--red)"></i>Auto Speed
-              </div>
-              <div id="aiSpeedToday" style="font-size:18px;font-weight:800;color:var(--red);line-height:1">—</div>
+              <div class="live-log" id="liveLog" style="max-height:180px;overflow-y:auto;font-size:11px"></div>
             </div>
           </div>
 
-          <!-- Time comparison bars -->
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:7px">Manual vs Automation — Today</div>
-          <div style="margin-bottom:5px">
-            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
-              <span style="color:var(--text3);display:flex;align-items:center;gap:3px"><i class="ph-bold ph-user" style="font-size:10px"></i>Manual</span>
-              <span id="aiManualBar" style="font-weight:700;color:var(--red)">—</span>
+          <!-- ═══ AUTOMATION IMPACT ═══ -->
+          <div class="sb-card" id="autoImpactSendCard">
+            <div class="sb-card-head">
+              <span class="sb-card-label"><i class="ph-bold ph-lightning" style="font-size:13px;color:var(--yellow)"></i>Automation Impact</span>
+              <span class="ai-speed-badge" id="aiSpeedMult">~4×</span>
             </div>
-            <div style="background:rgba(239,68,68,.12);border-radius:99px;height:7px;overflow:hidden;border:1px solid rgba(239,68,68,.15)">
-              <div style="height:100%;background:linear-gradient(90deg,#ef4444,#f87171);border-radius:99px;width:100%"></div>
-            </div>
-          </div>
-          <div>
-            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
-              <span style="color:var(--text3);display:flex;align-items:center;gap:3px"><i class="ph-bold ph-lightning" style="font-size:10px;color:var(--accent)"></i>DAT Mailer</span>
-              <span id="aiAutoBar" style="font-weight:700;color:var(--accent)">—</span>
-            </div>
-            <div style="background:rgba(5,150,105,.12);border-radius:99px;height:7px;overflow:hidden;border:1px solid rgba(5,150,105,.15)">
-              <div id="aiAutoBarFill" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));border-radius:99px;width:1%;transition:width .8s ease"></div>
+            <div class="sb-card-body">
+              <div class="ai-kpis">
+                <div class="ai-kpi">
+                  <div class="ai-kpi-icon" style="color:var(--blue)"><i class="ph-bold ph-clock-countdown"></i></div>
+                  <div class="ai-kpi-val" style="color:var(--blue)" id="aiTimeSavedToday">—</div>
+                  <div class="ai-kpi-lbl">Saved</div>
+                </div>
+                <div class="ai-kpi">
+                  <div class="ai-kpi-icon" style="color:var(--accent)"><i class="ph-bold ph-envelope-simple"></i></div>
+                  <div class="ai-kpi-val" style="color:var(--accent)" id="aiEmailsToday">0</div>
+                  <div class="ai-kpi-lbl">Auto</div>
+                </div>
+                <div class="ai-kpi">
+                  <div class="ai-kpi-icon" style="color:var(--yellow)"><i class="ph-bold ph-cursor-click"></i></div>
+                  <div class="ai-kpi-val" style="color:var(--yellow)" id="aiActionsToday">0</div>
+                  <div class="ai-kpi-lbl">Actions</div>
+                </div>
+              </div>
+              <div class="ai-compare">
+                <div class="ai-compare-label">Manual vs DAT Mailer</div>
+                <div class="ai-bar-row">
+                  <div class="ai-bar-icon"><i class="ph-bold ph-user" style="font-size:12px;color:var(--red)"></i></div>
+                  <div class="ai-bar-track" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.12)">
+                    <div class="ai-bar-fill" style="width:100%;background:linear-gradient(90deg,#ef4444,#f87171)"></div>
+                  </div>
+                  <div class="ai-bar-val" style="color:var(--red)" id="aiManualBar">—</div>
+                </div>
+                <div class="ai-bar-row">
+                  <div class="ai-bar-icon"><i class="ph-bold ph-lightning" style="font-size:12px;color:var(--accent)"></i></div>
+                  <div class="ai-bar-track" style="background:rgba(5,150,105,.1);border:1px solid rgba(5,150,105,.12)">
+                    <div class="ai-bar-fill" id="aiAutoBarFill" style="width:1%;background:linear-gradient(90deg,var(--accent),var(--blue))"></div>
+                  </div>
+                  <div class="ai-bar-val" style="color:var(--accent)" id="aiAutoBar">—</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2555,11 +2644,14 @@ async function loadDailyStats() {
     const dsDate = document.getElementById('dsDate');
     if (dsDate) dsDate.textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
 
-    // Update numbers
-    const dsSent = document.getElementById('dsSent');
+    // Broadcast Pulse — hero number
+    setEl('dsSent', sent);
+    setEl('dsSentMetric', sent);
+    setEl('dsProgressLabel', dailyTarget);
+
+    // Metric strip
     const dsReplied = document.getElementById('dsReplied');
     const dsConv = document.getElementById('dsConversion');
-    if (dsSent) dsSent.textContent = sent;
     if (dsReplied) dsReplied.textContent = repliedToday;
     if (dsConv) {
       dsConv.textContent = conversion !== null ? conversion + '%' : '—';
@@ -2568,32 +2660,38 @@ async function loadDailyStats() {
         : conversion >= 15 ? 'var(--yellow)' : 'var(--red)';
     }
 
-    // Progress bar
+    // Broadcast Pulse bar
     const pct = dailyTarget > 0 ? Math.min(100, Math.round(sent / dailyTarget * 100)) : 0;
     const fill = document.getElementById('dsProgressFill');
-    const label = document.getElementById('dsProgressLabel');
-    const motiv = document.getElementById('dsMotivation');
-
-    if (fill) {
-      fill.style.width = pct + '%';
-      if (pct >= 100) fill.style.background = 'linear-gradient(90deg,var(--accent),#34d399)';
-      else if (pct >= 60) fill.style.background = 'linear-gradient(90deg,var(--blue),var(--accent))';
-      else fill.style.background = 'linear-gradient(90deg,var(--yellow),var(--blue))';
+    const track = document.getElementById('bpBarTrack');
+    if (fill) fill.style.width = pct + '%';
+    if (track) {
+      track.classList.remove('hot','full');
+      if (pct >= 100) track.classList.add('full');
+      else if (pct >= 60) track.classList.add('hot');
     }
-    const pctLabel = document.getElementById('dsProgressPctLabel');
-    if (pctLabel) {
-      pctLabel.textContent = pct + '%';
-      pctLabel.style.color = pct > 40 ? '#fff' : 'var(--text)';
-    }
-    if (label) label.textContent = sent + ' / ' + dailyTarget;
 
+    // Status line
     const remaining = Math.max(0, dailyTarget - sent);
+    const bpStatus = document.getElementById('bpStatus');
+    if (bpStatus) {
+      const dot = bpStatus.querySelector('.bp-pulse-dot');
+      if (pct >= 100) {
+        bpStatus.innerHTML = '<i class="ph-bold ph-trophy" style="font-size:12px;color:var(--accent)"></i><span style="color:var(--accent);font-weight:600">Target reached!</span>';
+      } else if (sent > 0) {
+        if (dot) { dot.style.animation = ''; dot.style.background = ''; }
+        bpStatus.innerHTML = '<span class="bp-pulse-dot"></span><span>' + remaining + ' to go — ' + pct + '%</span>';
+      }
+    }
+
+    // Motivation label
+    const motiv = document.getElementById('dsMotivation');
     if (motiv) {
-      if (pct >= 100) motiv.innerHTML = '<i class="ph-bold ph-trophy" style="color:var(--accent);margin-right:4px"></i>Target reached!';
-      else if (pct >= 75) motiv.innerHTML = '<i class="ph-bold ph-rocket-launch" style="color:var(--blue);margin-right:4px"></i>Almost there! ' + remaining + ' to go';
-      else if (pct >= 50) motiv.innerHTML = '<i class="ph-bold ph-fire" style="color:var(--yellow);margin-right:4px"></i>Halfway! ' + remaining + ' left';
-      else if (sent > 0) motiv.innerHTML = '<i class="ph-bold ph-target" style="color:var(--text3);margin-right:4px"></i>' + remaining + ' emails left to hit target';
-      else motiv.innerHTML = '<i class="ph-bold ph-flag" style="color:var(--text3);margin-right:4px"></i>Target: ' + dailyTarget + ' emails today';
+      if (pct >= 100) motiv.textContent = 'Target reached!';
+      else if (pct >= 75) motiv.textContent = 'Almost there! ' + remaining + ' to go';
+      else if (pct >= 50) motiv.textContent = 'Halfway — ' + remaining + ' left';
+      else if (sent > 0) motiv.textContent = remaining + ' emails left to hit target';
+      else motiv.textContent = 'Target: ' + dailyTarget + ' emails today';
     }
   } catch(e) { console.error('loadDailyStats:', e); }
 }
@@ -2621,17 +2719,26 @@ async function loadQuota() {
       const [bg, border, color] = (colors[q.plan] || colors.free).split('/');
       badge.style.background = bg; badge.style.borderColor = border; badge.style.color = color;
     }
+    const pctEl = document.getElementById('quotaPctLabel');
+    const limitEl = document.getElementById('quotaLimitLabel');
+    const donutFill = document.getElementById('quotaDonutFill');
+    const circumference = 2 * Math.PI * 46; // ~289
     if (q.unlimited) {
-      if (used) used.textContent = q.used + ' / ∞';
-      if (rem)  rem.textContent  = 'Unlimited';
-      if (bar)  { bar.style.width = '100%'; bar.style.background = 'var(--accent)'; }
+      if (used) used.textContent = q.used;
+      if (limitEl) limitEl.textContent = '∞';
+      if (rem) rem.textContent = 'Unlimited';
+      if (pctEl) pctEl.textContent = '∞';
+      if (donutFill) { donutFill.style.strokeDashoffset = '0'; donutFill.style.stroke = 'var(--accent)'; }
     } else {
       const pct = q.pct || 0;
-      if (used) used.textContent = q.used + ' / ' + q.limit;
-      if (rem)  rem.textContent  = q.remaining + ' remaining';
-      if (bar) {
-        bar.style.width = pct + '%';
-        bar.style.background = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--blue)';
+      if (used) used.textContent = q.used;
+      if (limitEl) limitEl.textContent = q.limit;
+      if (rem) rem.textContent = q.remaining + ' to go';
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (donutFill) {
+        const offset = circumference * (1 - pct / 100);
+        donutFill.style.strokeDashoffset = offset;
+        donutFill.style.stroke = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--blue)';
       }
     }
   } catch(e) { /* quota widget is non-critical */ }
@@ -2737,12 +2844,13 @@ function updateSelectedCount() {
   const checked = document.querySelectorAll('.row-check:checked').length;
   const total   = document.querySelectorAll('.row-check:not(:disabled)').length;
   const txt = checked + ' of ' + total + ' selected';
-  const cnt = document.getElementById('selectedCount');
-  if (cnt) cnt.textContent = txt;
-  const topEl = document.getElementById('selectedCountTop');
-  if (topEl) topEl.textContent = txt;
-  const topRow = document.getElementById('topSendRow');
-  if (topRow) topRow.style.display = total > 0 ? 'flex' : 'none';
+  ['selectedCount','selectedCountTop','selectedCountTop2'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.textContent = txt;
+  });
+  const show = total > 0 ? 'flex' : 'none';
+  ['topSendRow','topSendBar'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = show;
+  });
 }
 
 // Update line count in textarea footer
@@ -2775,9 +2883,12 @@ async function startSend() {
   const loads = checked.map(i => parsedLoads[i]).filter(l => !l.skip);
   if (!loads.length) { toast('No valid loads selected', true); return; }
   document.getElementById('sendBtn').disabled = true;
-  document.getElementById('progressIdle').style.display = 'none';
-  document.getElementById('progressWrap').classList.add('show');
+  const spc = document.getElementById('sendProgressCard');
+  if (spc) spc.style.display = 'block';
   document.getElementById('liveLog').innerHTML = '';
+  // Update pulse status
+  const bps = document.getElementById('bpStatus');
+  if (bps) bps.innerHTML = '<span class="bp-pulse-dot"></span><span style="color:var(--accent);font-weight:600">Sending...</span>';
   const res = await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loads})});
   const data = await res.json();
   if (!data.ok) { toast(data.error, true); document.getElementById('sendBtn').disabled = false; return; }
@@ -2804,6 +2915,8 @@ async function pollStatus() {
     document.getElementById('sendBtn').disabled = false;
     toast(`Done! Sent: ${s.sent}, Errors: ${s.errors}`);
     loadDailyStats();
+    const bps = document.getElementById('bpStatus');
+    if (bps) bps.innerHTML = '<i class="ph-bold ph-check-circle" style="font-size:12px;color:var(--accent)"></i><span style="color:var(--accent);font-weight:600">Complete — ' + s.sent + ' sent</span>';
   }
 }
 

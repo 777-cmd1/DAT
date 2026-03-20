@@ -1798,7 +1798,6 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
         <div class="tq-filters">
           <button class="tq-tab active" id="tqf-all"      onclick="setFilter('all')">All <span class="tq-tab-count" id="tqc-all">0</span></button>
           <button class="tq-tab" id="tqf-new"             onclick="setFilter('new')">● New <span class="tq-tab-count" id="tqc-new">0</span></button>
-          <button class="tq-tab" id="tqf-interested"      onclick="setFilter('interested')">✅ Interested <span class="tq-tab-count" id="tqc-interested">0</span></button>
           <button class="tq-tab" id="tqf-follow_up"       onclick="setFilter('follow_up')">⏳ Follow-up <span class="tq-tab-count" id="tqc-follow_up">0</span></button>
           <button class="tq-tab" id="tqf-ignored"         onclick="setFilter('ignored')">🚫 Ignored <span class="tq-tab-count" id="tqc-ignored">0</span></button>
         </div>
@@ -1886,6 +1885,7 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
               <th class="th-center">Stage</th>
               <th class="th-center">Status</th>
               <th>Next Send</th>
+              <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="toggleFuSort()" title="Sort by date added">Added <span id="fuSortIcon">↓</span></th>
               <th class="th-center">Auto</th>
               <th class="th-center">Actions</th>
             </tr>
@@ -3169,8 +3169,9 @@ function contactState(msgs) {
   return best;
 }
 
-// Normalize: treat not_interested as ignored for display
+// Normalize: treat interested same as follow_up, not_interested as ignored
 function normalizeState(s) {
+  if (s === 'interested') return 'follow_up';
   return s === 'not_interested' ? 'ignored' : (s || 'new');
 }
 
@@ -3243,8 +3244,6 @@ function tqCard(msgs) {
   const showActions = (state === 'new' || state === 'viewed');
   const rightHtml = showActions
     ? '<div class="tq-card-right" onclick="event.stopPropagation()">' +
-        '<button class="tq-action tq-action-yes" onclick="markContact(\'' + emailEsc + '\',\'interested\')" title="Interested [I]">' +
-          '<i class="ph-bold ph-check"></i> Interested <span class="tq-action-key">I</span></button>' +
         '<button class="tq-action tq-action-fu"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
           '<i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-action-key">F</span></button>' +
         '<button class="tq-action tq-action-no"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
@@ -3254,7 +3253,6 @@ function tqCard(msgs) {
       '</div>'
     : '<div class="tq-card-right" onclick="event.stopPropagation()" style="justify-content:center;align-items:center;gap:6px;padding:10px 10px;display:flex;flex-direction:column;">' +
         '<button class="tq-compact-reset" style="width:100%;text-align:center" onclick="markContact(\'' + emailEsc + '\',\'new\')"><i class="ph-bold ph-arrow-counter-clockwise"></i> Reset</button>' +
-        (state !== 'interested' ? '<button class="tq-compact-reset" style="color:var(--accent);width:100%;text-align:center" onclick="markContact(\'' + emailEsc + '\',\'interested\')"><i class="ph-bold ph-check"></i> Interested</button>' : '') +
         '<button class="tq-compact-reset" style="color:#f87171;width:100%;text-align:center" onclick="markContactStop(\'' + emailEsc + '\')"><i class="ph-bold ph-prohibit"></i> Block</button>' +
       '</div>';
 
@@ -3334,13 +3332,13 @@ function renderReplies() {
   const allGroups = buildContactGroups(source);
 
   // Count per state for tabs
-  const counts = { new:0, viewed:0, follow_up:0, interested:0, ignored:0, all:0 };
+  const counts = { new:0, viewed:0, follow_up:0, ignored:0, all:0 };
   allGroups.forEach(g => {
     const s = normalizeState(contactState(g));
     counts[s] = (counts[s]||0) + 1;
     counts.all++;
   });
-  ['all','new','interested','follow_up','ignored'].forEach(k => {
+  ['all','new','follow_up','ignored'].forEach(k => {
     const el = document.getElementById('tqc-' + k);
     if (el) el.textContent = counts[k] || 0;
   });
@@ -3370,8 +3368,8 @@ function renderReplies() {
     return;
   }
 
-  // Sort: new first, then viewed, then follow_up, then interested, then ignored
-  const stateSort = { new:0, viewed:1, follow_up:2, interested:3, ignored:4 };
+  // Sort: new first, then viewed, then follow_up, then ignored
+  const stateSort = { new:0, viewed:1, follow_up:2, ignored:3 };
   filtered.sort((a,b) => {
     const sa = stateSort[normalizeState(contactState(a))] || 5;
     const sb = stateSort[normalizeState(contactState(b))] || 5;
@@ -3384,7 +3382,6 @@ function renderReplies() {
     { key:'new',        label:'New',       dot:'tq-dot-new',      full:true  },
     { key:'viewed',     label:'Needs action', dot:'tq-dot-viewed', full:true  },
     { key:'follow_up',  label:'Follow-up', dot:'tq-dot-followup',  full:false },
-    { key:'interested', label:'Interested',dot:'tq-dot-interested', full:false },
     { key:'ignored',    label:'Ignored',   dot:'tq-dot-ignored',   full:false },
   ];
 
@@ -3419,17 +3416,21 @@ async function markContact(email, status, addToStop) {
   if (!msgs.length) return;
   // Optimistic update
   msgs.forEach(r => r.status = status);
-  // Animate card out then re-render
-  tqAnimateOut(email, async () => {
-    renderReplies(); updateBadge();
-    if (status === 'interested') { await loadFollowups(); toast('✅ Added to pipeline!'); }
-    if (addToStop) toast('🚫 Added to Stop List');
-  });
-  // API calls (fire and forget)
-  msgs.forEach(r => fetch('/api/replies/status', {
+  // Fire API calls immediately (parallel with animation)
+  const fetchPromises = msgs.map(r => fetch('/api/replies/status', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({msg_id: r.msg_id, status, add_to_stop: !!addToStop})
   }));
+  // Animate card out, then await API + reload followups
+  tqAnimateOut(email, async () => {
+    renderReplies(); updateBadge();
+    if (status === 'follow_up') {
+      await Promise.all(fetchPromises);
+      await loadFollowups();
+      toast('✅ Added to pipeline!');
+    }
+    if (addToStop) toast('🚫 Added to Stop List');
+  });
 }
 
 async function markContactStop(email) {
@@ -3451,7 +3452,7 @@ async function markRStop(sid) {
 }
 
 // ── FOLLOW-UP ────────────────────────────────────────────────────────────────
-let allFollowups = [], fuFilter = 'all', fuGlobalAuto = true;
+let allFollowups = [], fuFilter = 'all', fuGlobalAuto = true, fuSortDir = 'desc';
 
 async function loadFollowups() {
   try {
@@ -3504,6 +3505,13 @@ function setFuFilter(f) {
   fuFilter = f;
   document.querySelectorAll('[id^="fuf-"]').forEach(el => el.classList.remove('active'));
   document.getElementById('fuf-' + f)?.classList.add('active');
+  renderFollowups();
+}
+
+function toggleFuSort() {
+  fuSortDir = fuSortDir === 'desc' ? 'asc' : 'desc';
+  const icon = document.getElementById('fuSortIcon');
+  if (icon) icon.textContent = fuSortDir === 'desc' ? '↓' : '↑';
   renderFollowups();
 }
 
@@ -3691,7 +3699,9 @@ function renderFollowups() {
   if (search) list = list.filter(f =>
     (f.email||'').toLowerCase().includes(search)||(f.route||'').toLowerCase().includes(search)
   );
-  list = [...list].sort((a,b) => new Date(b.added_at||0) - new Date(a.added_at||0));
+  list = [...list].sort((a,b) => fuSortDir === 'desc'
+    ? new Date(b.added_at||0) - new Date(a.added_at||0)
+    : new Date(a.added_at||0) - new Date(b.added_at||0));
 
   // Stats
   const counts = {FU1:0,FU2:0,FU3:0,closed:0,failed:0};
@@ -3731,7 +3741,7 @@ function renderFollowups() {
     if (tableWrap) tableWrap.style.display = 'none';
     if (empty) {
       empty.style.display = '';
-      empty.textContent = allFollowups.length===0 ? 'No follow-ups yet — mark replies as Interested to add them here' : 'No contacts match the current filters';
+      empty.textContent = allFollowups.length===0 ? 'No follow-ups yet — mark replies as Follow-up to add them here' : 'No contacts match the current filters';
     }
     updateFuBulkBar(); return;
   }
@@ -3786,6 +3796,7 @@ function renderFollowups() {
       <td class="td-center">${_fuStatusBadge(f)}${isFailed&&f.last_error?`<div style="font-size:9px;color:var(--red);margin-top:3px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"${errorTitle}>${f.last_error}</div>`:''}
       </td>
       <td>${nsaHtml}</td>
+      <td style="font-size:11px;color:var(--text3);white-space:nowrap;font-family:'DM Mono',monospace">${f.added_at ? new Date(f.added_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'}</td>
       <td class="td-center">${autoToggle}</td>
       <td class="td-center">
         <div style="display:flex;gap:4px;justify-content:center;align-items:center">

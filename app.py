@@ -2141,7 +2141,7 @@ def api_reply_status():
             'company': reply_obj.get('from','').split('<')[0].strip(),
             'route': reply_obj.get('route',''),
         })
-    if status == 'interested' and reply_obj:
+    if status in ('interested', 'follow_up') and reply_obj:
         add_to_followups(reply_obj)
     if add_to_stop and reply_obj:
         uid = current_user_id()

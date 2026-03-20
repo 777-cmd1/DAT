@@ -641,6 +641,65 @@ tr:last-child td { border-bottom: none; }
   font-family:'DM Mono',monospace; line-height:1;
 }
 .bp-label { font-size:10px; color:var(--text3); margin-bottom:10px; }
+
+/* ── Sending Progress — enhanced ─────────────────── */
+.sp-bar-wrap {
+  position:relative; height:32px; border-radius:12px;
+  background:var(--surface2); border:1px solid var(--border);
+  overflow:hidden; margin-bottom:16px;
+}
+.sp-bar-fill {
+  height:100%; border-radius:12px;
+  background:linear-gradient(90deg,var(--accent),#34d399,var(--blue));
+  background-size:200% 100%;
+  animation:spGradientShift 3s ease infinite;
+  transition:width .5s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 0 16px rgba(5,150,105,.3);
+  position:relative;
+}
+.sp-bar-fill::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg,transparent 60%,rgba(255,255,255,.12) 80%,transparent 100%);
+  background-size:200% 100%;
+  animation:spShimmer 2s ease-in-out infinite;
+}
+@keyframes spGradientShift {
+  0%   { background-position:0% 50%; }
+  50%  { background-position:100% 50%; }
+  100% { background-position:0% 50%; }
+}
+@keyframes spShimmer {
+  0%   { background-position:200% 0; }
+  100% { background-position:-200% 0; }
+}
+.sp-bar-label {
+  position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; gap:6px;
+  font-size:12px; font-weight:800; color:#fff;
+  text-shadow:0 1px 4px rgba(0,0,0,.3);
+  pointer-events:none; z-index:1;
+}
+.sp-bar-label .sp-pct { font-family:'DM Mono',monospace; }
+
+/* Sent/Error counters */
+.sp-counters { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+.sp-counter {
+  display:flex; align-items:center; gap:10px;
+  padding:12px 14px; border-radius:12px;
+  border:1px solid;
+}
+.sp-counter-icon {
+  width:32px; height:32px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.sp-counter-val { font-size:22px; font-weight:900; line-height:1; font-family:'DM Mono',monospace; }
+.sp-counter-lbl { font-size:8px; text-transform:uppercase; letter-spacing:.1em; font-weight:700; color:var(--text3); margin-top:2px; }
+.sp-counter.sent { background:rgba(5,150,105,.06); border-color:rgba(5,150,105,.18); }
+.sp-counter.sent .sp-counter-icon { background:rgba(5,150,105,.12); }
+.sp-counter.sent .sp-counter-val { color:var(--accent); }
+.sp-counter.err { background:rgba(239,68,68,.06); border-color:rgba(239,68,68,.18); }
+.sp-counter.err .sp-counter-icon { background:rgba(239,68,68,.12); }
+.sp-counter.err .sp-counter-val { color:var(--red); }
 .bp-status { display:flex; align-items:center; gap:5px; margin-top:8px; font-size:10px; color:var(--text3); }
 .bp-pulse-dot {
   width:6px; height:6px; border-radius:50%; background:var(--accent);
@@ -1565,11 +1624,6 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
                   <div class="bp-donut-target" id="dsProgressLabel">100</div>
                 </div>
               </div>
-              <div class="bp-status" id="bpStatus">
-                <span class="bp-pulse-dot idle"></span>
-                <span>Idle — paste loads to begin</span>
-              </div>
-              <div class="bp-label" id="dsMotivation" style="text-align:center;margin-bottom:0;margin-top:2px">Target: 100 emails today</div>
             </div>
             <!-- Metric strip: Sent / Replied / Conv -->
             <div class="sb-metrics">
@@ -1588,70 +1642,44 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
             </div>
           </div>
 
-          <!-- ═══ DAILY QUOTA — DONUT ═══ -->
-          <div class="sb-card">
-            <div class="sb-card-head">
-              <span class="sb-card-label"><i class="ph-bold ph-gauge" style="font-size:13px;color:var(--blue)"></i>Daily Quota</span>
-              <span id="quotaPlanBadge" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border-radius:99px;background:rgba(99,102,241,.12);color:#818cf8;border:1px solid rgba(99,102,241,.2)">free</span>
-            </div>
-            <div class="sb-card-body" style="padding-top:18px;padding-bottom:18px">
-              <div class="donut-wrap">
-                <svg width="110" height="110" viewBox="0 0 110 110" id="quotaDonut">
-                  <circle cx="55" cy="55" r="46" fill="none" stroke="var(--surface2)" stroke-width="9"/>
-                  <circle cx="55" cy="55" r="46" fill="none" stroke="var(--blue)" stroke-width="9"
-                    stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round"
-                    transform="rotate(-90 55 55)" id="quotaDonutFill"
-                    style="transition:stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)"/>
-                </svg>
-                <div class="donut-center">
-                  <div class="donut-pct" id="quotaPctLabel">0%</div>
-                  <div class="donut-sub">used</div>
-                </div>
-              </div>
-              <div class="donut-info">
-                <span id="quotaUsedLabel" style="font-weight:800;color:var(--text)">0</span>
-                <span style="color:var(--text3)"> / </span>
-                <span id="quotaLimitLabel" style="font-weight:700;color:var(--text2)">50</span>
-                <span style="color:var(--text3)"> — </span>
-                <span id="quotaRemLabel" style="color:var(--text3)">50 to go</span>
-              </div>
-            </div>
-          </div>
-
           <!-- ═══ SEND PROGRESS (active during send) ═══ -->
           <div class="sb-card" id="sendProgressCard" style="display:none">
             <div class="sb-card-head">
-              <span class="sb-card-label"><i class="ph-bold ph-paper-plane-tilt" style="font-size:13px;color:var(--accent)"></i>Sending...</span>
-              <span id="progressPct" style="font-size:12px;font-weight:800;color:var(--accent)">0%</span>
+              <span class="sb-card-label">
+                <i class="ph-bold ph-paper-plane-tilt" style="font-size:13px;color:var(--accent)"></i>
+                Sending
+                <span class="bp-pulse-dot sending" style="margin-left:2px"></span>
+              </span>
+              <span id="progressText" style="font-size:11px;font-weight:700;color:var(--text2);font-family:'DM Mono',monospace">0 / 0</span>
             </div>
             <div class="sb-card-body">
-              <div class="progress-info" style="display:flex;justify-content:space-between;margin-bottom:8px">
-                <span id="progressText" style="font-size:12px;font-weight:600;color:var(--text2)">0 / 0</span>
-              </div>
-              <div class="progress-bar-bg" style="height:8px;border-radius:99px;background:var(--surface2);border:1px solid var(--border);overflow:hidden;margin-bottom:14px">
-                <div class="progress-bar-fill" id="progressFill" style="width:0%;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),#34d399);transition:width .4s ease"></div>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-                <div style="background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
-                  <div style="width:28px;height:28px;border-radius:8px;background:rgba(5,150,105,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                    <i class="ph-bold ph-check-circle" style="font-size:16px;color:var(--accent)"></i>
-                  </div>
-                  <div>
-                    <div id="pSent" style="font-size:18px;font-weight:800;color:var(--accent);line-height:1">0</div>
-                    <div style="font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600;margin-top:2px">Sent</div>
-                  </div>
-                </div>
-                <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
-                  <div style="width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                    <i class="ph-bold ph-x-circle" style="font-size:16px;color:var(--red)"></i>
-                  </div>
-                  <div>
-                    <div id="pErr" style="font-size:18px;font-weight:800;color:var(--red);line-height:1">0</div>
-                    <div style="font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:600;margin-top:2px">Errors</div>
-                  </div>
+              <!-- Big animated progress bar -->
+              <div class="sp-bar-wrap">
+                <div class="sp-bar-fill" id="progressFill" style="width:0%"></div>
+                <div class="sp-bar-label">
+                  <i class="ph-bold ph-paper-plane-tilt" style="font-size:14px"></i>
+                  <span class="sp-pct" id="progressPct">0%</span>
                 </div>
               </div>
-              <div class="live-log" id="liveLog" style="max-height:180px;overflow-y:auto;font-size:11px"></div>
+              <!-- Sent / Error counters -->
+              <div class="sp-counters">
+                <div class="sp-counter sent">
+                  <div class="sp-counter-icon"><i class="ph-bold ph-check-circle" style="font-size:18px;color:var(--accent)"></i></div>
+                  <div>
+                    <div class="sp-counter-val" id="pSent">0</div>
+                    <div class="sp-counter-lbl">Sent</div>
+                  </div>
+                </div>
+                <div class="sp-counter err">
+                  <div class="sp-counter-icon"><i class="ph-bold ph-x-circle" style="font-size:18px;color:var(--red)"></i></div>
+                  <div>
+                    <div class="sp-counter-val" id="pErr">0</div>
+                    <div class="sp-counter-lbl">Errors</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Live log -->
+              <div class="live-log" id="liveLog" style="max-height:200px;overflow-y:auto;font-size:11px"></div>
             </div>
           </div>
 
@@ -1696,6 +1724,21 @@ input:checked + .fu-switch-sm.fu-switch-slider:before { transform:translateX(12p
                   <div class="ai-bar-val" style="color:var(--accent)" id="aiAutoBar">—</div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- ═══ DAILY QUOTA — compact ═══ -->
+          <div class="sb-card" id="quotaCard">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <i class="ph-bold ph-gauge" style="font-size:14px;color:var(--blue)"></i>
+                <span style="font-size:11px;font-weight:700;color:var(--text2)">Quota</span>
+                <span style="font-size:13px;font-weight:800;color:var(--text);font-family:'DM Mono',monospace" id="quotaUsedLabel">0</span>
+                <span style="font-size:11px;color:var(--text3)">/</span>
+                <span style="font-size:13px;font-weight:700;color:var(--text2);font-family:'DM Mono',monospace" id="quotaLimitLabel">50</span>
+                <span style="font-size:10px;color:var(--text3)" id="quotaRemLabel">— 50 left</span>
+              </div>
+              <span id="quotaPlanBadge" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:99px;background:rgba(99,102,241,.12);color:#818cf8;border:1px solid rgba(99,102,241,.2)">free</span>
             </div>
           </div>
         </div>
@@ -2723,31 +2766,12 @@ async function loadDailyStats() {
       }, 100);
     }
 
-    // Status line + live dot state
-    const remaining = Math.max(0, dailyTarget - sent);
-    const bpStatus = document.getElementById('bpStatus');
+    // Live dot state
     const liveDot = document.getElementById('bpLiveDot');
-    if (bpStatus) {
-      if (pct >= 100) {
-        bpStatus.innerHTML = '<i class="ph-bold ph-trophy" style="font-size:12px;color:var(--accent)"></i><span style="color:var(--accent);font-weight:600">Target reached!</span>';
-        if (liveDot) liveDot.style.background = 'var(--accent)';
-      } else if (sent > 0) {
-        bpStatus.innerHTML = '<span class="bp-pulse-dot"></span><span>' + remaining + ' to go — ' + pct + '%</span>';
-        if (liveDot) liveDot.style.background = '';
-      } else {
-        bpStatus.innerHTML = '<span class="bp-pulse-dot idle"></span><span>Idle — paste loads to begin</span>';
-        if (liveDot) liveDot.style.background = 'var(--border)';
-      }
-    }
-
-    // Motivation label
-    const motiv = document.getElementById('dsMotivation');
-    if (motiv) {
-      if (pct >= 100) motiv.textContent = 'Target reached!';
-      else if (pct >= 75) motiv.textContent = 'Almost there! ' + remaining + ' to go';
-      else if (pct >= 50) motiv.textContent = 'Halfway — ' + remaining + ' left';
-      else if (sent > 0) motiv.textContent = remaining + ' emails left to hit target';
-      else motiv.textContent = 'Target: ' + dailyTarget + ' emails today';
+    if (liveDot) {
+      if (pct >= 100) liveDot.style.background = 'var(--accent)';
+      else if (sent > 0) liveDot.style.background = '';
+      else liveDot.style.background = 'var(--border)';
     }
   } catch(e) { console.error('loadDailyStats:', e); }
 }
@@ -2775,34 +2799,15 @@ async function loadQuota() {
       const [bg, border, color] = (colors[q.plan] || colors.free).split('/');
       badge.style.background = bg; badge.style.borderColor = border; badge.style.color = color;
     }
-    const pctEl = document.getElementById('quotaPctLabel');
     const limitEl = document.getElementById('quotaLimitLabel');
-    const donutFill = document.getElementById('quotaDonutFill');
-    const circumference = 2 * Math.PI * 46; // ~289
     if (q.unlimited) {
       if (used) used.textContent = q.used;
       if (limitEl) limitEl.textContent = '∞';
-      if (rem) rem.textContent = 'Unlimited';
-      if (pctEl) pctEl.textContent = '∞';
-      if (donutFill) { donutFill.style.strokeDashoffset = '0'; donutFill.style.stroke = 'var(--accent)'; }
+      if (rem) rem.textContent = '— Unlimited';
     } else {
-      const pct = q.pct || 0;
       if (used) used.textContent = q.used;
       if (limitEl) limitEl.textContent = q.limit;
-      if (rem) rem.textContent = q.remaining + ' to go';
-      if (pctEl) {
-        pctEl.classList.add('counting');
-        animateCount(pctEl, pct, 0, '%');
-        setTimeout(() => pctEl.classList.remove('counting'), 850);
-      }
-      if (donutFill) {
-        // Start from full offset (hidden) then sweep to target
-        const offset = circumference * (1 - pct / 100);
-        setTimeout(() => {
-          donutFill.style.strokeDashoffset = offset;
-          donutFill.style.stroke = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--blue)';
-        }, 100);
-      }
+      if (rem) rem.textContent = '— ' + q.remaining + ' left';
     }
   } catch(e) { /* quota widget is non-critical */ }
 }
@@ -2949,11 +2954,9 @@ async function startSend() {
   const spc = document.getElementById('sendProgressCard');
   if (spc) spc.style.display = 'block';
   document.getElementById('liveLog').innerHTML = '';
-  // Update pulse status to sending
-  const bps = document.getElementById('bpStatus');
-  if (bps) bps.innerHTML = '<span class="bp-pulse-dot sending"></span><span style="color:var(--accent);font-weight:600">Sending...</span>';
+  // Update live dot to sending state
   const ld = document.getElementById('bpLiveDot');
-  if (ld) { ld.style.background = ''; ld.classList.add('sending'); ld.style.animation = 'bpDotSend .8s ease-in-out infinite'; }
+  if (ld) { ld.style.background = ''; ld.style.animation = 'bpDotSend .8s ease-in-out infinite'; }
   const res = await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loads})});
   const data = await res.json();
   if (!data.ok) { toast(data.error, true); document.getElementById('sendBtn').disabled = false; return; }
@@ -2980,10 +2983,8 @@ async function pollStatus() {
     document.getElementById('sendBtn').disabled = false;
     toast(`Done! Sent: ${s.sent}, Errors: ${s.errors}`);
     loadDailyStats();
-    const bps = document.getElementById('bpStatus');
-    if (bps) bps.innerHTML = '<i class="ph-bold ph-check-circle" style="font-size:12px;color:var(--accent)"></i><span style="color:var(--accent);font-weight:600">Complete — ' + s.sent + ' sent</span>';
     const ld2 = document.getElementById('bpLiveDot');
-    if (ld2) { ld2.style.animation = ''; ld2.classList.remove('sending'); }
+    if (ld2) { ld2.style.animation = ''; }
   }
 }
 

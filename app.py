@@ -1413,11 +1413,27 @@ def get_automation_impact():
 
 _EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
 _DATE_RE  = re.compile(r'\d{1,2}/\d{1,2}(?:\s*-\s*\d{1,2}/\d{1,2})?')
+_DATE_MONTH_RE = re.compile(r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}')
+_MONTH_TO_NUM = {'Jan':'1','Feb':'2','Mar':'3','Apr':'4','May':'5','Jun':'6',
+                 'Jul':'7','Aug':'8','Sep':'9','Oct':'10','Nov':'11','Dec':'12'}
 _LEN_RE   = re.compile(r'\d{2,3}\s*ft')
 _WT_RE    = re.compile(r'[\d,]+\s*lbs')
-_EQUIP_RE = re.compile(r'\b(VM|FD|SD|V|F|R)\b')
+_EQUIP_RE = re.compile(r'\b(VM|VR|FD|SD|V|F|R)\b')
+# Detailed view uses full words: "Van", "Reefer", "Flatbed", "Van or Reefer", "Van Air-Ride"
+_EQUIP_WORD_RE = re.compile(r'\b(Van Air-Ride|Van or Reefer|Flatbed|Reefer|Van)\b', re.IGNORECASE)
+_EQUIP_WORD_MAP = {'van': 'V', 'reefer': 'R', 'flatbed': 'F', 'van or reefer': 'VR', 'van air-ride': 'V'}
+# City pattern: "City Name, ST" optionally followed by "(0)" or "(123)"
+_CITY_RE  = re.compile(r'^([A-Z][a-zA-Z\s\.]+,?\s+[A-Z]{2})(?:\s*\(\d*\))?$')
+# Words that should NEVER be treated as city names
+_NOT_CITY = frozenset({
+    'Full', 'Partial', 'Canceled', 'Equipment', 'Load', 'Truck',
+    'Length', 'Weight', 'Commodity', 'Reference ID', 'Van', 'Reefer',
+    'Flatbed', 'CONTACT INFORMATION', 'COMMENTS', 'VIEW ROUTE',
+    'Van Air-Ride', 'Van or Reefer', 'Post now', 'Trip',
+})
 
 def parse_dat_text(text):
+    """Parse both compact (list) and detailed (card) DAT board formats."""
     # Expand tab-separated lines into individual tokens so both
     # newline-per-field and tab-per-field DAT board formats work
     raw_lines = text.strip().splitlines()
@@ -1432,20 +1448,89 @@ def parse_dat_text(text):
         m = _EMAIL_RE.search(line)
         if not m: continue
         email = m.group().lower()
-        block = lines[max(0, i-12):i]
+        # Lookback 30 lines (detailed view has ~20 lines per load)
+        block = lines[max(0, i-30):i]
         block_text = " ".join(block)
-        date_m  = _DATE_RE.search(block_text)
-        len_m   = _LEN_RE.search(block_text)
-        wt_m    = _WT_RE.search(block_text)
-        eq_m    = _EQUIP_RE.search(block_text)
-        company = lines[i-1] if i > 0 else ""
-        cities  = [l for l in block if re.match(r'^[A-Z][a-zA-Z\s]+,?\s+[A-Z]{2}$', l.strip()) and len(l) < 35]
-        origin      = cities[0] if len(cities) > 0 else ""
-        destination = cities[1] if len(cities) > 1 else ""
+
+        # Helper: get LAST regex match in text (closest to email)
+        def _last(regex, txt):
+            ms = list(regex.finditer(txt))
+            return ms[-1] if ms else None
+
+        # ── Date: try numeric first (3/23), then month name (Mar 23)
+        date_m = _last(_DATE_RE, block_text)
+        if not date_m:
+            month_m = _last(_DATE_MONTH_RE, block_text)
+            if month_m:
+                parts = month_m.group().split()
+                date_str = f"{_MONTH_TO_NUM.get(parts[0], '?')}/{parts[1]}"
+                class _M:
+                    def __init__(self, s): self._s = s
+                    def group(self, *a): return self._s
+                date_m = _M(date_str)
+
+        len_m   = _last(_LEN_RE, block_text)
+        wt_m    = _last(_WT_RE, block_text)
+        eq_m    = _last(_EQUIP_RE, block_text)
+        # Fallback: try full words (Van, Reefer, Flatbed) — use last match
+        if not eq_m:
+            eq_word = _last(_EQUIP_WORD_RE, block_text)
+            if eq_word:
+                mapped = _EQUIP_WORD_MAP.get(eq_word.group().lower(), '')
+                if mapped:
+                    eq_m = _M(mapped)
+
+        # ── Cities: match "City, ST" and strip optional "(0)"
+        # Use the LAST two cities in the block (closest to this email)
+        cities = []
+        for bl in block:
+            cm = _CITY_RE.match(bl.strip())
+            if cm and len(cm.group(1)) < 35 and cm.group(1).strip() not in _NOT_CITY:
+                cities.append(cm.group(1).strip())
+        # Take last 2 cities (origin, destination) — they belong to THIS load
+        if len(cities) >= 2:
+            origin      = cities[-2]
+            destination = cities[-1]
+        elif len(cities) == 1:
+            origin      = cities[-1]
+            destination = ""
+        else:
+            origin = destination = ""
+
+        # ── Company: walk backwards from email, skip phone/keywords/numbers
+        company = ""
+        for j in range(i-1, max(0, i-8), -1):
+            cand = lines[j].strip()
+            if not cand: continue
+            # Skip phone numbers: (855) 956-1095, +1-800-555-0100, etc
+            if re.match(r'^[\(\)\d\s\-\+\.x]+$', cand): continue
+            # Skip known section headers
+            if cand.upper() in ('CONTACT INFORMATION', 'COMMENTS', 'VIEW ROUTE'): continue
+            # Skip emails
+            if '@' in cand: continue
+            # Skip number-heavy lines: 42,000 lbs, $1,200, 53 ft, 3/23, 0900, etc
+            if re.match(r'^[\d\$,.\s/\-*%a-z]+$', cand): continue
+            # Skip weights, lengths, dates
+            if _WT_RE.match(cand) or _LEN_RE.match(cand): continue
+            # Skip known DAT keywords
+            if cand in _NOT_CITY: continue
+            # Skip all-caps short codes: ANATXFL1, SSLARFL
+            if re.match(r'^[A-Z0-9]{3,12}$', cand): continue
+            # Skip commodity-like ALL-CAPS lines (CANNED FOOD, SNACKS) — but allow mixed case companies
+            if re.match(r'^[A-Z\s]{3,30}$', cand) and not re.search(r'[a-z]', cand) and len(cand.split()) <= 3: continue
+            # Skip EXT/ext lines (phone extension hints)
+            if re.match(r'^(?:EXT|ext)\b', cand): continue
+            company = cand
+            break
+
+        # ── Fallback origin (only if no cities found) — strict exclusion
         if not origin:
             for bl in block:
-                if re.match(r'^[A-Z][a-zA-Z\s]{2,25}$', bl) and bl not in ('Full', 'Partial', 'Canceled'):
-                    origin = bl; break
+                bl_s = bl.strip()
+                if bl_s in _NOT_CITY: continue
+                if re.match(r'^[A-Z][a-zA-Z\s]{2,25}$', bl_s):
+                    origin = bl_s; break
+
         key = f"{email}|{origin}|{destination}"
         if key in seen: continue
         seen.add(key)

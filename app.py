@@ -639,11 +639,13 @@ def api_admin_delete_user():
         return jsonify({'error': 'Cannot delete admin'}), 400
     from app.models import (User as UserModel, EmailAccount, Send, Reply,
                             FollowUp, PipelineContact, StopListEntry, Template,
-                            UsageEvent, AuditLog, Invitation, Workspace)
+                            UsageEvent, AuditLog, Invitation, Workspace,
+                            SendJob, PasswordResetToken)
     user = UserModel.query.filter_by(email=email).first()
     if not user:
         # Maybe just a pending invite — clean that up
         deleted_invites = Invitation.query.filter_by(email=email).delete()
+        PasswordResetToken.query.filter_by(email=email).delete()
         if deleted_invites:
             db.session.commit()
             return jsonify({'ok': True, 'detail': 'Invite removed (no user account found)'})
@@ -652,12 +654,13 @@ def api_admin_delete_user():
     uid = user.id
     # Delete all dependent records first (FK cascade)
     for model in [Send, Reply, FollowUp, PipelineContact, StopListEntry,
-                  Template, UsageEvent, AuditLog, EmailAccount]:
+                  Template, UsageEvent, AuditLog, EmailAccount, SendJob]:
         model.query.filter_by(user_id=uid).delete()
     # Delete owned workspaces
     Workspace.query.filter_by(owner_id=uid).delete()
-    # Reset invitations for this email so admin can re-invite
+    # Reset invitations and password tokens for this email
     Invitation.query.filter_by(email=email).delete()
+    PasswordResetToken.query.filter_by(email=email).delete()
     # Finally delete the user
     db.session.delete(user)
     db.session.commit()

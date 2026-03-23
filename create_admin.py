@@ -14,8 +14,8 @@ def hash_password(password):
 def main():
     email = input("Admin email: ").strip().lower()
     name = input("Your name: ").strip()
-    password = getpass.getpass("Password (min 6 chars): ")
-    if len(password) < 6:
+    password = getpass.getpass("Password (min 8 chars): ")
+    if len(password) < 8:
         print("Password too short!"); return
 
     users = []

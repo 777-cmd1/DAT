@@ -594,9 +594,18 @@ def api_admin_invite():
     if not email or '@' not in email:
         return jsonify({'error': 'Invalid email'}), 400
 
-    # Check if already a user
-    if get_user(email):
-        return jsonify({'error': 'User already exists'}), 400
+    # Check if already a fully-functional user
+    existing = get_user(email)
+    if existing:
+        # Allow re-invite if user exists but has no Gmail connected (broken onboarding)
+        from app.models import EmailAccount
+        acct = EmailAccount.query.filter_by(user_id=existing['id']).first()
+        has_gmail = bool(acct and acct.google_refresh_token)
+        if has_gmail:
+            return jsonify({'error': 'User already exists and has Gmail connected'}), 400
+        # User exists but no Gmail — return their login info instead of blocking
+        return jsonify({'ok': True, 'detail': 'User account exists but Gmail not connected. User can log in and connect Gmail from Settings.',
+                        'user_exists': True}), 200
 
     token = secrets.token_urlsafe(32)
     from app.models import Invitation
@@ -628,9 +637,31 @@ def api_admin_delete_user():
     email = (request.json.get('email') or '').lower()
     if email == ADMIN_EMAIL.lower():
         return jsonify({'error': 'Cannot delete admin'}), 400
-    from app.models import User as UserModel
-    UserModel.query.filter_by(email=email).delete()
+    from app.models import (User as UserModel, EmailAccount, Send, Reply,
+                            FollowUp, PipelineContact, StopListEntry, Template,
+                            UsageEvent, AuditLog, Invitation, Workspace)
+    user = UserModel.query.filter_by(email=email).first()
+    if not user:
+        # Maybe just a pending invite — clean that up
+        deleted_invites = Invitation.query.filter_by(email=email).delete()
+        if deleted_invites:
+            db.session.commit()
+            return jsonify({'ok': True, 'detail': 'Invite removed (no user account found)'})
+        return jsonify({'error': 'User not found'}), 404
+
+    uid = user.id
+    # Delete all dependent records first (FK cascade)
+    for model in [Send, Reply, FollowUp, PipelineContact, StopListEntry,
+                  Template, UsageEvent, AuditLog, EmailAccount]:
+        model.query.filter_by(user_id=uid).delete()
+    # Delete owned workspaces
+    Workspace.query.filter_by(owner_id=uid).delete()
+    # Reset invitations for this email so admin can re-invite
+    Invitation.query.filter_by(email=email).delete()
+    # Finally delete the user
+    db.session.delete(user)
     db.session.commit()
+    app.logger.info(f'Admin deleted user {email} and all related data')
     return jsonify({'ok': True})
 
 @app.route('/api/admin/users/plan', methods=['POST'])

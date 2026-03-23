@@ -97,8 +97,8 @@
   </div>
   <div class="field">
     <label>Password</label>
-    <input type="password" id="password" placeholder="Min 6 characters">
-    <div class="hint">At least 6 characters</div>
+    <input type="password" id="password" placeholder="Min 8 characters">
+    <div class="hint">At least 8 characters</div>
   </div>
   <div class="field">
     <label>Confirm password</label>
@@ -118,7 +118,7 @@
     const btn = document.getElementById('regBtn');
 
     if (!name) { showErr('Please enter your name'); return; }
-    if (password.length < 6) { showErr('Password must be at least 6 characters'); return; }
+    if (password.length < 8) { showErr('Password must be at least 8 characters'); return; }
     if (password !== password2) { showErr('Passwords do not match'); return; }
 
     btn.disabled = true; btn.textContent = 'Creating account…';

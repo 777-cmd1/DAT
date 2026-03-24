@@ -134,7 +134,11 @@
 </div>
 
 <script>
-  const CSRF_TOKEN = '{{ csrf_token }}';
+  let CSRF_TOKEN = '{{ csrf_token|default("", true) }}';
+  // If CSRF token missing (page rendered without it), redirect to proper login
+  if (!CSRF_TOKEN && window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
   document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
   async function doLogin() {

@@ -511,14 +511,19 @@ def api_me():
 
 @app.route('/register/<token>', methods=['GET'])
 def register_page(token):
-    from app.models import Invitation
+    from app.models import Invitation, User as UserModel
     invite = Invitation.query.filter_by(token=token, status='pending').first()
     if not invite:
-        return render_template('login.html', error='Invalid or expired invite link.')
+        # If invite is gone but user already exists → just redirect to login
+        return redirect(url_for('login_page'))
     if invite.expires_at and invite.expires_at < datetime.utcnow():
         invite.status = 'expired'
         db.session.commit()
-        return render_template('login.html', error='This invite link has expired. Please request a new one.')
+        # If user already registered via this invite → redirect to login
+        if UserModel.query.filter_by(email=invite.email.lower()).first():
+            return redirect(url_for('login_page'))
+        return render_template('login.html', error='This invite link has expired. Please request a new one.',
+                               csrf_token=_get_csrf_token())
     return render_template('register.html', token=token, email=invite.email,
                            csrf_token=_get_csrf_token())
 

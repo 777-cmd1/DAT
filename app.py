@@ -89,6 +89,8 @@ _cache_lock   = _threading.Lock()
 _CACHE_STORE: dict = {}
 _SENT_LOG_TTL  = 90   # seconds — covers rapid re-parses between sends
 _STOP_LIST_TTL = 300  # 5 minutes — stop list rarely changes
+_STATS_TTL     = 30   # seconds — dashboard stats (refreshed every 2 min by frontend)
+_AI_IMPACT_TTL = 60   # seconds — automation impact (refreshed on nav to send page)
 
 def _cache_get(key: str, ttl: float):
     """Return (value, hit). hit=False means expired or missing."""
@@ -106,6 +108,23 @@ def _cache_del(*keys: str):
     with _cache_lock:
         for k in keys:
             _CACHE_STORE.pop(k, None)
+
+# ── Performance timing middleware ────────────────────────────────────────────
+# Logs wall-clock time for every /api/ route — visible in Railway logs.
+_PERF_SLOW_THRESHOLD_MS = 500   # log WARNING if route takes > 500ms
+
+@app.before_request
+def _perf_start():
+    request._perf_start = time.monotonic()
+
+@app.after_request
+def _perf_end(response):
+    start = getattr(request, '_perf_start', None)
+    if start and request.path.startswith('/api/'):
+        elapsed_ms = (time.monotonic() - start) * 1000
+        level = logging.WARNING if elapsed_ms > _PERF_SLOW_THRESHOLD_MS else logging.DEBUG
+        app.logger.log(level, f'PERF {request.method} {request.path} → {elapsed_ms:.0f}ms')
+    return response
 
 # ── CSRF helpers ─────────────────────────────────────────────────────────────
 # Session-based CSRF token for HTML form pages (login, register, reset).
@@ -1131,7 +1150,7 @@ def append_log(load, status, variant=0, uid=None):
         template_variant=variant, status=status,
     ))
     db.session.commit()
-    _cache_del(f'sent_log:{uid}')  # invalidate so next parse sees fresh dedup
+    _cache_del(f'sent_log:{uid}', f'stats:{uid}', f'ai_impact:{uid}')  # invalidate caches
 
 def get_log_rows():
     uid = current_user_id()
@@ -1208,6 +1227,29 @@ def get_route_for_email(email_addr):
     if last: return f"{last.origin} → {last.destination}"
     return ""
 
+def _bulk_routes_for_emails(uid, emails):
+    """Batch-fetch routes for a set of emails — avoids N+1 queries in reply fetching."""
+    if not uid or not emails: return {}
+    from app.models import Send
+    from sqlalchemy import func
+    # For each email, get the latest send's origin → destination
+    subq = db.session.query(
+        Send.recipient_email,
+        Send.origin,
+        Send.destination,
+        func.max(Send.sent_at).label('latest')
+    ).filter(
+        Send.user_id == uid,
+        func.lower(Send.recipient_email).in_([e.lower() for e in emails])
+    ).group_by(Send.recipient_email, Send.origin, Send.destination).all()
+    # Keep only the latest per email
+    routes = {}
+    for em, orig, dest, ts in subq:
+        key = em.lower()
+        if key not in routes or (ts and routes[key][1] and ts > routes[key][1]):
+            routes[key] = (f"{orig} → {dest}", ts)
+    return {k: v[0] for k, v in routes.items()}
+
 _last_fetch_times: dict = {}   # per-user IMAP throttle: {user_id: timestamp}
 
 def fetch_replies_from_gmail():
@@ -1237,13 +1279,14 @@ def fetch_replies_from_gmail():
         ).execute()
         messages = results.get('messages', [])
 
+        # First pass: collect new reply data without route lookup (avoid N+1)
+        _pending_replies = []
         for msg_ref in messages:
             try:
                 msg_data = service.users().messages().get(
                     userId='me', id=msg_ref['id'], format='full'
                 ).execute()
 
-                # Extract headers
                 headers = {h['name']: h['value']
                            for h in msg_data.get('payload', {}).get('headers', [])}
                 msg_id   = headers.get('Message-ID', msg_ref['id'])
@@ -1258,22 +1301,29 @@ def fetch_replies_from_gmail():
                 if sender not in known:
                     continue
 
-                # Extract plain-text body
                 body = _gmail_get_body(msg_data.get('payload', {}))
 
-                new_replies.append({
+                _pending_replies.append({
                     'msg_id':      msg_id,
                     'email':       sender,
                     'from':        from_addr,
                     'subject':     headers.get('Subject', ''),
                     'date':        headers.get('Date', ''),
                     'body':        body,
-                    'route':       get_route_for_email(sender),
+                    'route':       '',  # filled in bulk below
                     'status':      'new',
                     'received_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
                 })
             except Exception:
                 continue
+
+        # Bulk route lookup — 1 query instead of N
+        if _pending_replies:
+            sender_emails = {r['email'] for r in _pending_replies}
+            route_map = _bulk_routes_for_emails(uid, sender_emails)
+            for r in _pending_replies:
+                r['route'] = route_map.get(r['email'], '')
+            new_replies.extend(_pending_replies)
 
     except Exception as e:
         return {'error': str(e)}
@@ -1297,51 +1347,118 @@ def _gmail_get_body(payload):
     return ''
 
 def get_stats():
+    """Compute dashboard stats using SQL aggregation (not Python loops over all rows)."""
     empty={"total":0,"sent":0,"errors":0,"today":0,"by_day":[],"by_variant":[],"by_hour":[],
            "top_recipients":[],"top_routes":[],"replied_emails":[],"replied_domains":[],"response_rate":{}}
     uid = current_user_id()
     if not uid: return empty
-    from app.models import Send
-    today_dt = date.today()
-    today_str = today_dt.strftime('%Y-%m-%d')
-    total=sent=errors=today_count=0
-    by_day,by_var,by_em,by_route,by_hr=Counter(),Counter(),Counter(),Counter(),Counter()
-    for row in Send.query.filter_by(user_id=uid).all():
-        total += 1
-        st = row.status or ''
-        day = row.sent_at.strftime('%Y-%m-%d') if row.sent_at else 'unknown'
-        hr  = row.sent_at.strftime('%H') if row.sent_at else '00'
-        if st == 'sent':
-            sent+=1; by_day[day]+=1; by_var[str(row.template_variant)]+=1; by_hr[hr]+=1
-            if row.sent_at and row.sent_at.date() == today_dt: today_count+=1
-            em = row.recipient_email.lower()
-            if em: by_em[em]+=1
-            if row.origin and row.destination: by_route[f"{row.origin} → {row.destination}"]+=1
-        elif st=='error': errors+=1
-    replies=load_replies()
-    tr=len(replies)
-    interested=sum(1 for r in replies if r.get('status')=='interested')
-    not_int=sum(1 for r in replies if r.get('status')=='not_interested')
-    new_r=sum(1 for r in replies if r.get('status')=='new')
+    cache_key = f'stats:{uid}'
+    cached, hit = _cache_get(cache_key, _STATS_TTL)
+    if hit: return cached
+    from app.models import Send, Reply
+    from sqlalchemy import func, case, cast, Date
 
-    # Response rate = replies received / emails successfully sent
-    # Interest rate = interested replies / total replies (quality metric)
+    today_dt = date.today()
+
+    # ── Single aggregate query: total, sent, errors, today ────────────────
+    agg = db.session.query(
+        func.count(Send.id).label('total'),
+        func.count(case((Send.status == 'sent', 1))).label('sent'),
+        func.count(case((Send.status == 'error', 1))).label('errors'),
+        func.count(case((
+            db.and_(Send.status == 'sent', cast(Send.sent_at, Date) == today_dt), 1
+        ))).label('today'),
+    ).filter(Send.user_id == uid).first()
+    total = agg.total or 0
+    sent = agg.sent or 0
+    errors = agg.errors or 0
+    today_count = agg.today or 0
+
+    # ── By-day (last 14 days) ─────────────────────────────────────────────
+    cutoff = today_dt - timedelta(days=14)
+    by_day_rows = db.session.query(
+        func.date(Send.sent_at).label('day'),
+        func.count(Send.id)
+    ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at >= cutoff)\
+     .group_by(func.date(Send.sent_at)).order_by(func.date(Send.sent_at)).all()
+    by_day = [{"date": str(d), "count": c} for d, c in by_day_rows if d]
+
+    # ── By-variant ────────────────────────────────────────────────────────
+    by_var_rows = db.session.query(
+        Send.template_variant, func.count(Send.id)
+    ).filter(Send.user_id == uid, Send.status == 'sent')\
+     .group_by(Send.template_variant).all()
+    by_variant = [{"variant": str(v), "count": c} for v, c in by_var_rows]
+
+    # ── By-hour ───────────────────────────────────────────────────────────
+    # Use extract for hour — works on both PostgreSQL and SQLite
+    try:
+        from sqlalchemy import extract
+        by_hr_rows = db.session.query(
+            extract('hour', Send.sent_at).label('hr'),
+            func.count(Send.id)
+        ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at.isnot(None))\
+         .group_by('hr').all()
+        by_hr = {int(h): c for h, c in by_hr_rows if h is not None}
+    except Exception:
+        by_hr = {}
+    by_hour = [{"hour": f"{h:02d}:00", "count": by_hr.get(h, 0)} for h in range(24)]
+
+    # ── Top recipients (top 10) ───────────────────────────────────────────
+    top_recip = db.session.query(
+        func.lower(Send.recipient_email), func.count(Send.id)
+    ).filter(Send.user_id == uid, Send.status == 'sent')\
+     .group_by(func.lower(Send.recipient_email))\
+     .order_by(func.count(Send.id).desc()).limit(10).all()
+
+    # ── Top routes (top 10) ───────────────────────────────────────────────
+    top_rt = db.session.query(
+        Send.origin, Send.destination, func.count(Send.id)
+    ).filter(
+        Send.user_id == uid, Send.status == 'sent',
+        Send.origin.isnot(None), Send.destination.isnot(None),
+        Send.origin != '', Send.destination != ''
+    ).group_by(Send.origin, Send.destination)\
+     .order_by(func.count(Send.id).desc()).limit(10).all()
+
+    # ── Reply stats (SQL aggregation) ─────────────────────────────────────
+    reply_agg = db.session.query(
+        func.count(Reply.id).label('total'),
+        func.count(case((Reply.status == 'interested', 1))).label('interested'),
+        func.count(case((Reply.status == 'not_interested', 1))).label('not_interested'),
+        func.count(case((Reply.status == 'new', 1))).label('new_r'),
+    ).filter(Reply.user_id == uid).first()
+    tr = reply_agg.total or 0
+    interested = reply_agg.interested or 0
+    not_int = reply_agg.not_interested or 0
+    new_r = reply_agg.new_r or 0
+
     response_rate_pct = round(100 * tr / sent, 1) if sent > 0 else 0
     interest_rate_pct = round(100 * interested / tr, 1) if tr > 0 else 0
 
-    rc,rs,dc=Counter(),{},Counter()
-    for r in replies:
-        em=r.get('email','').lower().strip()
+    # ── Replied emails/domains (SQL) ──────────────────────────────────────
+    reply_rows = db.session.query(
+        func.lower(Reply.from_email), Reply.status, func.count(Reply.id)
+    ).filter(Reply.user_id == uid, Reply.from_email != '')\
+     .group_by(func.lower(Reply.from_email), Reply.status).all()
+
+    rc, rs = Counter(), {}
+    for em, status, cnt in reply_rows:
         if em:
-            rc[em]+=1; rs[em]=r.get('status','new')
-            if '@' in em: dc[em.split('@')[1]]+=1
-    return {
+            rc[em] += cnt
+            rs[em] = status
+    dc = Counter()
+    for em in rc:
+        if '@' in em:
+            dc[em.split('@')[1]] += rc[em]
+
+    result = {
         "total":total,"sent":sent,"errors":errors,"today":today_count,
-        "by_day":[{"date":d,"count":c} for d,c in sorted(by_day.items())[-14:]],
-        "by_variant":[{"variant":v,"count":c} for v,c in sorted(by_var.items())],
-        "by_hour":[{"hour":f"{h:02d}:00","count":by_hr.get(f"{h:02d}",0)} for h in range(24)],
-        "top_recipients":[{"email":e,"count":c} for e,c in by_em.most_common(10)],
-        "top_routes":[{"route":r,"count":c} for r,c in by_route.most_common(10)],
+        "by_day": by_day,
+        "by_variant": by_variant,
+        "by_hour": by_hour,
+        "top_recipients":[{"email":e,"count":c} for e,c in top_recip],
+        "top_routes":[{"route":f"{o} → {d}","count":c} for o,d,c in top_rt],
         "replied_emails":[{"email":e,"count":c,"status":rs.get(e,'new')} for e,c in rc.most_common()],
         "replied_domains":[{"domain":d,"count":c} for d,c in dc.most_common()],
         "response_rate":{
@@ -1349,10 +1466,12 @@ def get_stats():
             "interested": interested,
             "not_interested": not_int,
             "new": new_r,
-            "pct": response_rate_pct,          # replies / sent
-            "interest_pct": interest_rate_pct, # interested / replies
+            "pct": response_rate_pct,
+            "interest_pct": interest_rate_pct,
         },
     }
+    _cache_set(cache_key, result)
+    return result
 
 # ── AUTOMATION IMPACT ───────────────────────────────────────────────────────
 # Only truly fixed constants live here.
@@ -1409,24 +1528,64 @@ def _ai_calc_from_count(emails_sent, delay_sec=None):
     }
 
 def get_automation_impact():
+    """Compute automation impact metrics using SQL aggregation (not loading all rows)."""
+    uid = current_user_id()
+    cache_key = f'ai_impact:{uid}'
+    cached, hit = _cache_get(cache_key, _AI_IMPACT_TTL)
+    if hit: return cached
+
     cfg = load_config()
     delay_avg = (cfg.get('delay_min', 20) + cfg.get('delay_max', 45)) / 2.0
 
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
+    today_key = today.strftime('%Y-%m-%d')
+
     daily_counts = Counter()
-    hourly_counts = Counter()
-    uid = current_user_id()
+    peak_hour = None
     if uid:
         from app.models import Send
-        for row in Send.query.filter_by(user_id=uid, status='sent').all():
-            if not row.sent_at: continue
-            daily_counts[row.sent_at.strftime('%Y-%m-%d')] += 1
-            hourly_counts[row.sent_at.strftime('%H')] += 1
-    lifetime_count = sum(daily_counts.values())
-    today_key = today.strftime('%Y-%m-%d')
-    week_total = sum(c for d, c in daily_counts.items()
-        if len(d) == 10 and datetime.strptime(d, '%Y-%m-%d').date() >= week_start)
+        from sqlalchemy import func, extract
+
+        # Daily counts (last 14 days only — all we display)
+        cutoff = today - timedelta(days=14)
+        day_rows = db.session.query(
+            func.date(Send.sent_at).label('day'),
+            func.count(Send.id)
+        ).filter(
+            Send.user_id == uid, Send.status == 'sent',
+            Send.sent_at.isnot(None), Send.sent_at >= cutoff
+        ).group_by(func.date(Send.sent_at)).all()
+        for d, c in day_rows:
+            if d:
+                daily_counts[str(d)] = c
+
+        # Lifetime + this week totals (single query)
+        lifetime_count = db.session.query(func.count(Send.id)).filter(
+            Send.user_id == uid, Send.status == 'sent'
+        ).scalar() or 0
+
+        week_total = db.session.query(func.count(Send.id)).filter(
+            Send.user_id == uid, Send.status == 'sent',
+            Send.sent_at >= week_start
+        ).scalar() or 0
+
+        # Peak hour
+        try:
+            hr_row = db.session.query(
+                extract('hour', Send.sent_at).label('hr'),
+                func.count(Send.id).label('cnt')
+            ).filter(
+                Send.user_id == uid, Send.status == 'sent', Send.sent_at.isnot(None)
+            ).group_by('hr').order_by(func.count(Send.id).desc()).first()
+            if hr_row and hr_row.hr is not None:
+                peak_hour = f"{int(hr_row.hr):02d}:00"
+        except Exception:
+            pass
+    else:
+        lifetime_count = 0
+        week_total = 0
+
     daily_rows = []
     for d in sorted(daily_counts.keys())[-14:]:
         calc = _ai_calc_from_count(daily_counts[d], delay_sec=delay_avg)
@@ -1436,11 +1595,7 @@ def get_automation_impact():
     if daily_rows:
         best = max(daily_rows, key=lambda r: r['time_saved_sec'])
         best_day = {'date': best['date'], 'emails': best['emails'], 'time_saved_fmt': best['time_saved_fmt']}
-    peak_hour = None
-    if hourly_counts:
-        peak = max(hourly_counts.items(), key=lambda kv: kv[1])[0]
-        peak_hour = f"{peak}:00"
-    return {
+    result = {
         'today': _ai_calc_from_count(daily_counts.get(today_key, 0), delay_sec=delay_avg),
         'week': _ai_calc_from_count(week_total, delay_sec=delay_avg),
         'lifetime': _ai_calc_from_count(lifetime_count, delay_sec=delay_avg),
@@ -1449,6 +1604,8 @@ def get_automation_impact():
         'peak_hour': peak_hour,
         'config': {'delay_min': cfg.get('delay_min', 20), 'delay_max': cfg.get('delay_max', 45), 'delay_avg': round(delay_avg, 1)},
     }
+    _cache_set(cache_key, result)
+    return result
 
 _EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
 _DATE_RE  = re.compile(r'\d{1,2}/\d{1,2}(?:\s*-\s*\d{1,2}/\d{1,2})?')

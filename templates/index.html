@@ -2708,16 +2708,14 @@ async function loadDailyStats() {
   // Always read fresh from localStorage
   dailyTarget = parseInt(localStorage.getItem('daily_target') || '100');
   try {
-    const [statsRes, repliesRes] = await Promise.all([
-      fetch('/api/stats'),
-      fetch('/api/replies')
-    ]);
+    const statsRes = await fetch('/api/stats');
     const stats = await statsRes.json();
-    const replies = await repliesRes.json();
+    // Reuse cached allReplies instead of fetching /api/replies again
+    const replies = allReplies || [];
 
     const sent = stats.today || 0;
     const todayStr = new Date().toISOString().slice(0,10);
-    const repliedToday = (replies || []).filter(r =>
+    const repliedToday = replies.filter(r =>
       (r.received_at || r.date || '').slice(0,10) === todayStr
     ).length;
     const conversion = sent > 0 ? Math.round(repliedToday / sent * 100) : null;
@@ -4307,12 +4305,12 @@ function setEl2(id, v) { const el = document.getElementById(id); if (el) el.text
 document.addEventListener('DOMContentLoaded', () => {
   loadCurrentUser();
   loadSettings();
-  loadReplies();
   loadFollowups();
-  loadDailyStats();
   loadQuota();
   loadAutomationImpact();
   checkScheduledDue();
+  // Load replies first, then daily stats (reuses cached allReplies)
+  loadReplies().then(() => loadDailyStats());
   setInterval(loadDailyStats, 120000);
   setInterval(loadQuota, 60000);
 });

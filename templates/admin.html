@@ -63,7 +63,7 @@
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
   /* ── Stat cards ── */
-  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 24px; }
   .stat-card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 20px;
@@ -243,8 +243,66 @@
   .section { display: none; }
   .section.active { display: block; }
 
+  /* ── Period filter ── */
+  .period-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+  .period-bar label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-right: 4px; }
+  .period-btn {
+    padding: 6px 14px; border-radius: 16px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-family: inherit;
+    font-size: 12px; font-weight: 500; cursor: pointer; transition: .15s;
+  }
+  .period-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .period-btn:hover:not(.active) { border-color: var(--muted); color: var(--text); }
+
+  /* ── Top users ── */
+  .section-title {
+    font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .5px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::before { content: ""; width: 3px; height: 14px; background: var(--accent); border-radius: 2px; }
+  .top-users-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
+  .top-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px; display: flex; align-items: center; gap: 12px;
+  }
+  .top-rank {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: 700;
+    font-family: 'JetBrains Mono', monospace; flex-shrink: 0;
+  }
+  .top-rank.r1 { background: rgba(234,179,8,.15); color: #eab308; }
+  .top-rank.r2 { background: rgba(168,162,158,.12); color: #a8a29e; }
+  .top-rank.r3 { background: rgba(180,83,9,.12); color: #d97706; }
+  .top-info { flex: 1; min-width: 0; }
+  .top-email { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top-stats { font-size: 11px; color: var(--muted); margin-top: 2px; display: flex; gap: 12px; }
+  .top-stats span { display: flex; align-items: center; gap: 3px; }
+  .top-value { font-family: 'JetBrains Mono', monospace; color: var(--text); }
+
+  /* ── Activity dots ── */
+  .activity-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0; }
+  .activity-dot.active-today { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,.4); }
+  .activity-dot.inactive-3d { background: #eab308; }
+  .activity-dot.inactive-7d { background: #f97316; }
+  .activity-dot.inactive-14d { background: var(--red); }
+  .last-active-cell { display: flex; align-items: center; }
+  tr.row-muted td { opacity: .5; }
+  tr.row-muted:hover td { opacity: .75; }
+
+  /* ── Sortable headers ── */
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  th.sorted { color: var(--accent); }
+  .sort-icon { font-size: 10px; margin-left: 4px; opacity: .4; }
+  th.sorted .sort-icon { opacity: 1; }
+  .all-time-badge {
+    font-size: 8px; background: var(--surface2); padding: 2px 5px;
+    border-radius: 3px; color: var(--muted); margin-left: 4px; text-transform: uppercase;
+  }
+
   @media (max-width: 900px) {
-    .stat-grid { grid-template-columns: repeat(3, 1fr); }
+    .stat-grid { grid-template-columns: repeat(4, 1fr); }
+    .top-users-grid { grid-template-columns: 1fr 1fr; }
     .mini-stat-row { grid-template-columns: repeat(2, 1fr); }
     .info-grid { grid-template-columns: 1fr; }
     .main { padding: 20px 16px; }
@@ -281,49 +339,56 @@
 
   <!-- ══ OVERVIEW ══ -->
   <div class="section active" id="section-overview">
-
-    <div class="stat-grid" id="overview-cards">
-      <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="ov-users">—</div><div class="stat-sub">registered accounts</div></div>
-      <div class="stat-card"><div class="stat-label">Workspaces</div><div class="stat-value accent" id="ov-ws">—</div><div class="stat-sub">active workspaces</div></div>
-      <div class="stat-card"><div class="stat-label">Sends Today</div><div class="stat-value green" id="ov-sends">—</div><div class="stat-sub">emails sent today</div></div>
-      <div class="stat-card"><div class="stat-label">Total Replies</div><div class="stat-value" id="ov-replies">—</div><div class="stat-sub">all-time replies</div></div>
-      <div class="stat-card"><div class="stat-label">Active (24h)</div><div class="stat-value yellow" id="ov-active">—</div><div class="stat-sub">users active today</div></div>
+    <div class="period-bar" id="period-bar">
+      <label>Period:</label>
+      <button class="period-btn" data-period="total" onclick="setPeriod('total')">Total</button>
+      <button class="period-btn active" data-period="today" onclick="setPeriod('today')">Today</button>
+      <button class="period-btn" data-period="yesterday" onclick="setPeriod('yesterday')">Yesterday</button>
+      <button class="period-btn" data-period="7d" onclick="setPeriod('7d')">7 days</button>
+      <button class="period-btn" data-period="30d" onclick="setPeriod('30d')">30 days</button>
     </div>
-
+    <div class="stat-grid" id="overview-cards">
+      <div class="stat-card"><div class="stat-label">Total Users <span class="all-time-badge">All time</span></div><div class="stat-value" id="ov-users">—</div><div class="stat-sub" id="ov-users-sub">registered</div></div>
+      <div class="stat-card"><div class="stat-label">Active Users</div><div class="stat-value green" id="ov-active">—</div><div class="stat-sub" id="ov-active-sub"></div></div>
+      <div class="stat-card"><div class="stat-label">Sends</div><div class="stat-value accent" id="ov-sends">—</div><div class="stat-sub" id="ov-sends-sub"></div></div>
+      <div class="stat-card"><div class="stat-label">Replies</div><div class="stat-value" id="ov-replies" style="color:#3b82f6">—</div><div class="stat-sub" id="ov-replies-sub"></div></div>
+      <div class="stat-card"><div class="stat-label">Reply Rate</div><div class="stat-value yellow" id="ov-rate">—</div><div class="stat-sub">replies / sends</div></div>
+      <div class="stat-card"><div class="stat-label">Follow-ups</div><div class="stat-value" id="ov-fu">—</div><div class="stat-sub" id="ov-fu-sub"></div></div>
+      <div class="stat-card"><div class="stat-label">Inactive</div><div class="stat-value" id="ov-inactive" style="color:var(--red)">—</div><div class="stat-sub">0 sends in period</div></div>
+    </div>
     <div class="plan-row" id="plan-pills">
       <div class="plan-pill"><div class="dot dot-free"></div><span>Free</span><strong id="pp-free">—</strong></div>
       <div class="plan-pill"><div class="dot dot-starter"></div><span>Starter</span><strong id="pp-starter">—</strong></div>
       <div class="plan-pill"><div class="dot dot-pro"></div><span>Pro</span><strong id="pp-pro">—</strong></div>
     </div>
-
+    <div class="section-title" id="top-users-title">Top Users — Today</div>
+    <div class="top-users-grid" id="top-users-grid">
+      <div style="color:var(--muted);font-size:13px;padding:12px">No activity in this period</div>
+    </div>
   </div>
 
   <!-- ══ ACCOUNTS ══ -->
   <div class="section" id="section-accounts">
     <div class="card">
-      <div class="card-title">
-        All Accounts
-        <span class="count" id="accounts-count">0</span>
-      </div>
+      <div class="card-title">All Accounts <span class="count" id="accounts-count">0</span></div>
       <div class="table-wrap">
         <table class="accounts-table">
           <thead>
             <tr>
-              <th>Email</th>
-              <th>Workspace</th>
+              <th class="sortable" data-col="email" onclick="sortAccounts('email')">Email <span class="sort-icon">▼</span></th>
               <th>Plan</th>
-              <th>Quota today</th>
-              <th>Sends</th>
-              <th>Replies</th>
-              <th>Follow-ups</th>
+              <th class="sortable" data-col="sends" onclick="sortAccounts('sends')">Sends <span class="sort-icon">▼</span></th>
+              <th class="sortable" data-col="replies" onclick="sortAccounts('replies')">Replies <span class="sort-icon">▼</span></th>
+              <th class="sortable" data-col="reply_rate" onclick="sortAccounts('reply_rate')">Reply Rate <span class="sort-icon">▼</span></th>
+              <th class="sortable" data-col="followups" onclick="sortAccounts('followups')">Follow-ups <span class="sort-icon">▼</span></th>
               <th>Gmail</th>
-              <th>Last active</th>
+              <th class="sortable" data-col="days_inactive" onclick="sortAccounts('days_inactive')">Last Active <span class="sort-icon">▼</span></th>
               <th>Joined</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="accounts-tbody">
-            <tr><td colspan="11" class="empty"><span class="spinner"></span>Loading…</td></tr>
+            <tr><td colspan="10" class="empty"><span class="spinner"></span>Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -397,22 +462,43 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* ─── Tab switching ─── */
+/* ─── State + Period switching ─── */
 let currentTab = 'overview';
+let currentPeriod = 'today';
 let overviewLoaded = false, accountsLoaded = false, invitesLoaded = false;
+const PERIOD_LABELS = { total: 'Total', today: 'Today', yesterday: 'Yesterday', '7d': '7 Days', '30d': '30 Days' };
 
+function setPeriod(period) {
+  currentPeriod = period;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === period));
+  overviewLoaded = false; accountsLoaded = false;
+  if (currentTab === 'overview') loadOverview();
+  if (currentTab === 'accounts') loadAccounts();
+}
+
+/* ─── Tab switching ─── */
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + tab));
+  const bar = document.getElementById('period-bar');
+  if (bar) bar.style.display = tab === 'invites' ? 'none' : 'flex';
+  if (tab === 'accounts') {
+    const sec = document.getElementById('section-accounts');
+    if (bar && sec) sec.insertBefore(bar, sec.firstChild);
+  } else if (tab === 'overview') {
+    const sec = document.getElementById('section-overview');
+    if (bar && sec) sec.insertBefore(bar, sec.firstChild);
+  }
   if (tab === 'overview' && !overviewLoaded) loadOverview();
   if (tab === 'accounts' && !accountsLoaded) loadAccounts();
   if (tab === 'invites' && !invitesLoaded) { loadUsers(); loadInvites(); }
 }
 
 function refreshCurrent() {
-  if (currentTab === 'overview') { overviewLoaded = false; loadOverview(); }
-  if (currentTab === 'accounts') { accountsLoaded = false; loadAccounts(); }
+  overviewLoaded = false; accountsLoaded = false;
+  if (currentTab === 'overview') loadOverview();
+  if (currentTab === 'accounts') loadAccounts();
   if (currentTab === 'invites') { loadUsers(); loadInvites(); }
 }
 
@@ -420,73 +506,122 @@ function refreshCurrent() {
 async function loadOverview() {
   overviewLoaded = true;
   try {
-    const res = await fetch('/api/admin/stats/overview');
+    const res = await fetch('/api/admin/stats/overview?period=' + currentPeriod);
     if (!res.ok) throw new Error();
     const d = await res.json();
-    document.getElementById('ov-users').textContent   = d.total_users ?? 0;
-    document.getElementById('ov-ws').textContent      = d.total_workspaces ?? 0;
-    document.getElementById('ov-sends').textContent   = d.sends_today ?? 0;
-    document.getElementById('ov-replies').textContent = d.replies_total ?? 0;
-    document.getElementById('ov-active').textContent  = d.active_users_24h ?? 0;
+    document.getElementById('ov-users').textContent = d.total_users ?? 0;
+    document.getElementById('ov-active').textContent = d.active_users ?? 0;
+    document.getElementById('ov-active-sub').textContent = 'of ' + (d.total_users ?? 0) + ' total';
+    document.getElementById('ov-sends').textContent = d.sends ?? 0;
+    document.getElementById('ov-replies').textContent = d.replies ?? 0;
+    document.getElementById('ov-rate').textContent = d.sends > 0 ? d.reply_rate + '%' : '—';
+    document.getElementById('ov-fu').textContent = d.followups ?? 0;
+    document.getElementById('ov-inactive').textContent = d.inactive_accounts ?? 0;
     const plans = d.plans || {};
-    document.getElementById('pp-free').textContent    = plans.free    ?? 0;
+    document.getElementById('pp-free').textContent = plans.free ?? 0;
     document.getElementById('pp-starter').textContent = plans.starter ?? 0;
-    document.getElementById('pp-pro').textContent     = plans.pro     ?? 0;
-  } catch(e) {
-    toast('Failed to load overview', 'red');
-  }
+    document.getElementById('pp-pro').textContent = plans.pro ?? 0;
+    // Top Users
+    const title = document.getElementById('top-users-title');
+    const grid = document.getElementById('top-users-grid');
+    if (title) title.textContent = 'Top Users — ' + (PERIOD_LABELS[currentPeriod] || currentPeriod);
+    const tops = d.top_users || [];
+    if (!tops.length) {
+      grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px">No activity in this period</div>';
+    } else {
+      grid.innerHTML = tops.map((t, i) =>
+        '<div class="top-card">' +
+          '<div class="top-rank r' + (i+1) + '">' + (i+1) + '</div>' +
+          '<div class="top-info">' +
+            '<div class="top-email">' + esc(t.email) + '</div>' +
+            '<div class="top-stats">' +
+              '<span>Sends: <span class="top-value">' + t.sends + '</span></span>' +
+              '<span>Replies: <span class="top-value">' + t.replies + '</span></span>' +
+              '<span>Rate: <span class="top-value">' + t.reply_rate + '%</span></span>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+    }
+  } catch(e) { toast('Failed to load overview', 'red'); }
+}
+
+/* ─── Inactivity helper ─── */
+function getInactivityInfo(daysInactive) {
+  if (daysInactive === null || daysInactive === undefined) return { dot: 'inactive-14d', label: 'Never', muted: true };
+  if (daysInactive === 0) return { dot: 'active-today', label: 'Today', muted: false };
+  if (daysInactive <= 3) return { dot: 'active-today', label: daysInactive + 'd ago', muted: false };
+  if (daysInactive <= 7) return { dot: 'inactive-3d', label: daysInactive + 'd ago', muted: false };
+  if (daysInactive <= 14) return { dot: 'inactive-7d', label: daysInactive + 'd ago', muted: true };
+  return { dot: 'inactive-14d', label: daysInactive + 'd ago', muted: true };
+}
+
+/* ─── Sort logic ─── */
+let sortCol = 'sends', sortDir = 'desc';
+function sortAccounts(col) {
+  if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  else { sortCol = col; sortDir = 'desc'; }
+  accountsData.sort((a, b) => {
+    let va = a[col], vb = b[col];
+    if (va === null || va === undefined) va = typeof vb === 'string' ? '' : -1;
+    if (vb === null || vb === undefined) vb = typeof va === 'string' ? '' : -1;
+    if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return sortDir === 'asc' ? va - vb : vb - va;
+  });
+  renderAccountsTable();
+  document.querySelectorAll('.accounts-table th.sortable').forEach(th => {
+    const isActive = th.dataset.col === col;
+    th.classList.toggle('sorted', isActive);
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.textContent = isActive ? (sortDir === 'asc' ? '▲' : '▼') : '▼';
+  });
 }
 
 /* ─── Accounts ─── */
 let accountsData = [];
-
 async function loadAccounts() {
   accountsLoaded = true;
   const tbody = document.getElementById('accounts-tbody');
-  tbody.innerHTML = '<tr><td colspan="11" class="empty"><span class="spinner"></span>Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="empty"><span class="spinner"></span>Loading…</td></tr>';
   try {
-    const res = await fetch('/api/admin/stats/accounts');
+    const res = await fetch('/api/admin/stats/accounts?period=' + currentPeriod);
     if (!res.ok) throw new Error();
     accountsData = await res.json();
     document.getElementById('accounts-count').textContent = accountsData.length;
-    if (!accountsData.length) {
-      tbody.innerHTML = '<tr><td colspan="11" class="empty">No accounts yet</td></tr>';
-      return;
-    }
-    tbody.innerHTML = accountsData.map(a => {
-      const pct = a.quota_limit > 0 ? Math.min(100, Math.round(a.quota_used_today / a.quota_limit * 100)) : 0;
-      const fillClass = pct >= 100 ? 'full' : pct >= 80 ? 'warn' : '';
-      const quotaLabel = a.quota_limit > 0 ? `${a.quota_used_today}/${a.quota_limit}` : `${a.quota_used_today}/∞`;
-      const planClass = `plan-${a.plan || 'free'}`;
-      const lastAct = a.last_activity ? a.last_activity.slice(0, 10) : '—';
-      return `
-        <tr onclick="openAccountModal('${a.user_id}')">
-          <td class="mono">${esc(a.email)}</td>
-          <td>${esc(a.workspace_name || '—')}</td>
-          <td>
-            <select class="plan-select" onchange="event.stopPropagation();changePlan('${esc(a.email)}',this.value)" onclick="event.stopPropagation()">
-              <option value="free"    ${(a.plan||'free')==='free'    ? 'selected' : ''}>free</option>
-              <option value="starter" ${(a.plan||'free')==='starter' ? 'selected' : ''}>starter</option>
-              <option value="pro"     ${(a.plan||'free')==='pro'     ? 'selected' : ''}>pro</option>
-            </select>
-          </td>
-          <td>
-            <div style="font-size:12px;color:var(--muted)">${quotaLabel}</div>
-            <div class="quota-bar"><div class="quota-fill ${fillClass}" style="width:${pct}%"></div></div>
-          </td>
-          <td class="mono">${a.sends_total ?? 0}</td>
-          <td class="mono">${a.replies_total ?? 0}</td>
-          <td class="mono">${a.followups_total ?? 0}</td>
-          <td class="${a.email_connected ? 'conn-yes' : 'conn-no'}">${a.email_connected ? '● Connected' : '○ None'}</td>
-          <td class="muted" style="font-size:12px">${lastAct}</td>
-          <td class="muted" style="font-size:12px">${(a.created_at || '').slice(0, 10)}</td>
-          <td><button class="del-btn" onclick="event.stopPropagation();deleteUser('${esc(a.email)}')">Remove</button></td>
-        </tr>`;
-    }).join('');
+    sortAccounts(sortCol);
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty">Failed to load accounts</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">Failed to load accounts</td></tr>';
     toast('Failed to load accounts', 'red');
   }
+}
+
+function renderAccountsTable() {
+  const tbody = document.getElementById('accounts-tbody');
+  if (!accountsData.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">No accounts yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = accountsData.map(a => {
+    const info = getInactivityInfo(a.days_inactive);
+    const rateText = a.sends > 0 ? a.reply_rate + '%' : '—';
+    const rateColor = a.sends === 0 ? 'var(--muted)' : a.reply_rate >= 10 ? 'var(--green)' : a.reply_rate >= 5 ? '#eab308' : 'var(--muted)';
+    return '<tr class="' + (info.muted ? 'row-muted' : '') + '" onclick="openAccountModal(\'' + a.user_id + '\')">' +
+      '<td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">' + esc(a.email) + '</td>' +
+      '<td><select class="plan-select" onchange="event.stopPropagation();changePlan(\'' + esc(a.email) + '\',this.value)" onclick="event.stopPropagation()">' +
+        '<option value="free"' + ((a.plan||'free')==='free' ? ' selected' : '') + '>free</option>' +
+        '<option value="starter"' + ((a.plan||'free')==='starter' ? ' selected' : '') + '>starter</option>' +
+        '<option value="pro"' + ((a.plan||'free')==='pro' ? ' selected' : '') + '>pro</option>' +
+      '</select></td>' +
+      '<td class="mono">' + (a.sends ?? 0) + '</td>' +
+      '<td class="mono">' + (a.replies ?? 0) + '</td>' +
+      '<td class="mono" style="color:' + rateColor + '">' + rateText + '</td>' +
+      '<td class="mono">' + (a.followups ?? 0) + '</td>' +
+      '<td class="' + (a.email_connected ? 'conn-yes' : 'conn-no') + '">' + (a.email_connected ? '●' : '○') + '</td>' +
+      '<td><div class="last-active-cell"><span class="activity-dot ' + info.dot + '"></span>' + info.label + '</div></td>' +
+      '<td class="muted" style="font-size:12px">' + (a.created_at || '').slice(0, 10) + '</td>' +
+      '<td><button class="del-btn" onclick="event.stopPropagation();deleteUser(\'' + esc(a.email) + '\')">Remove</button></td>' +
+    '</tr>';
+  }).join('');
 }
 
 /* ─── Account Detail Modal ─── */
@@ -506,13 +641,13 @@ async function openAccountModal(userId) {
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
     const d = await res.json();
 
-    title.textContent = d.email || 'Account Detail';
-    sub.textContent   = d.workspace_name ? `Workspace: ${d.workspace_name}` : '';
+    title.textContent = d.user.email || 'Account Detail';
+    sub.textContent   = d.workspace.name ? `Workspace: ${d.workspace.name}` : '';
 
-    const planClass = `plan-${d.plan || 'free'}`;
-    const pct = d.quota_limit > 0 ? Math.min(100, Math.round(d.quota_used_today / d.quota_limit * 100)) : 0;
+    const planClass = `plan-${d.workspace.plan || 'free'}`;
+    const pct = d.quota.limit > 0 ? Math.min(100, Math.round(d.quota.used / d.quota.limit * 100)) : 0;
     const fillClass = pct >= 100 ? 'full' : pct >= 80 ? 'warn' : '';
-    const quotaLabel = d.quota_limit > 0 ? `${d.quota_used_today} / ${d.quota_limit}` : `${d.quota_used_today} / Unlimited`;
+    const quotaLabel = d.quota.limit > 0 ? `${d.quota.used} / ${d.quota.limit}` : `${d.quota.used} / Unlimited`;
 
     /* Recent audit rows */
     const auditRows = (d.recent_audit || []).map(a =>
@@ -532,8 +667,8 @@ async function openAccountModal(userId) {
       </tr>`
     ).join('') || `<tr><td colspan="3" class="empty" style="padding:12px 0">No sends yet</td></tr>`;
 
-    const replies_by = d.replies_by_status || {};
-    const followups_by = d.followups_by_status || {};
+    const replies_by = d.replies || {};
+    const followups_by = d.followups || {};
 
     body.innerHTML = `
       <!-- Info -->
@@ -542,19 +677,19 @@ async function openAccountModal(userId) {
         <div class="info-grid">
           <div class="info-item">
             <div class="info-item-label">Email</div>
-            <div class="info-item-value mono" style="font-size:13px">${esc(d.email||'—')}</div>
+            <div class="info-item-value mono" style="font-size:13px">${esc(d.user.email||'—')}</div>
           </div>
           <div class="info-item">
             <div class="info-item-label">Name</div>
-            <div class="info-item-value">${esc(d.name||'—')}</div>
+            <div class="info-item-value">${esc(d.user.name||'—')}</div>
           </div>
           <div class="info-item">
             <div class="info-item-label">Plan</div>
-            <div class="info-item-value"><span class="badge-plan ${planClass}">${d.plan||'free'}</span></div>
+            <div class="info-item-value"><span class="badge-plan ${planClass}">${d.workspace.plan||'free'}</span></div>
           </div>
           <div class="info-item">
             <div class="info-item-label">Joined</div>
-            <div class="info-item-value" style="color:var(--muted);font-size:13px">${(d.created_at||'').slice(0,10)||'—'}</div>
+            <div class="info-item-value" style="color:var(--muted);font-size:13px">${(d.user.created_at||'').slice(0,10)||'—'}</div>
           </div>
           <div class="info-item">
             <div class="info-item-label">Gmail Account</div>
@@ -586,7 +721,7 @@ async function openAccountModal(userId) {
           <div class="mini-stat"><div class="mini-stat-val">${d.sends_total??0}</div><div class="mini-stat-lbl">All-time</div></div>
           <div class="mini-stat"><div class="mini-stat-val green">${d.sends_today??0}</div><div class="mini-stat-lbl">Today</div></div>
           <div class="mini-stat"><div class="mini-stat-val accent">${d.sends_week??0}</div><div class="mini-stat-lbl">This week</div></div>
-          <div class="mini-stat"><div class="mini-stat-val">${d.replies_total??0}</div><div class="mini-stat-lbl">Replies</div></div>
+          <div class="mini-stat"><div class="mini-stat-val">${d.replies.total??0}</div><div class="mini-stat-lbl">Total</div></div>
         </div>
       </div>
 
@@ -597,7 +732,7 @@ async function openAccountModal(userId) {
           <div class="mini-stat"><div class="mini-stat-val">${replies_by.new??0}</div><div class="mini-stat-lbl">New</div></div>
           <div class="mini-stat"><div class="mini-stat-val">${replies_by.interested??0}</div><div class="mini-stat-lbl">Interested</div></div>
           <div class="mini-stat"><div class="mini-stat-val">${replies_by.not_interested??0}</div><div class="mini-stat-lbl">Not interested</div></div>
-          <div class="mini-stat"><div class="mini-stat-val">${replies_by.booked??0}</div><div class="mini-stat-lbl">Booked</div></div>
+          <div class="mini-stat"><div class="mini-stat-val">${replies_by.total??0}</div><div class="mini-stat-lbl">Total</div></div>
         </div>
       </div>
 
@@ -608,7 +743,7 @@ async function openAccountModal(userId) {
           <div class="mini-stat"><div class="mini-stat-val">${followups_by.pending??0}</div><div class="mini-stat-lbl">Pending</div></div>
           <div class="mini-stat"><div class="mini-stat-val green">${followups_by.sent??0}</div><div class="mini-stat-lbl">Sent</div></div>
           <div class="mini-stat"><div class="mini-stat-val">${followups_by.skipped??0}</div><div class="mini-stat-lbl">Skipped</div></div>
-          <div class="mini-stat"><div class="mini-stat-val yellow">${(d.followups_total??0)}</div><div class="mini-stat-lbl">Total</div></div>
+          <div class="mini-stat"><div class="mini-stat-val yellow">${(d.followups.total??0)}</div><div class="mini-stat-lbl">Total</div></div>
         </div>
       </div>
 

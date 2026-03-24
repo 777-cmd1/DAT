@@ -13,23 +13,24 @@ Metrics are split into three categories:
 **A) Static/Lifetime (never filtered by period):**
 - Total Users count
 - Joined date
-- Plan (free/starter/pro)
-- Gmail connection status
+- Plan (free/starter/pro) — resolved via `Workspace.owner_id`. Non-owner users default to `free` (current data model has no membership table; 1 user = 1 workspace in practice)
+- Gmail connection status — defined as `bool(acct.google_refresh_token)` (OAuth token presence, not gmail_address)
 - Workspace identity
 
 **B) Period-Based (filtered by selected period):**
 - Sends count
 - Replies count
 - Reply Rate (replies / sends %)
-- Follow-ups count
-- Active Users count
-- Inactive Accounts count
+- Follow-ups sent count (filtered by `last_fu_sent`, status='sent')
+- Active Users count — "Active" means sent at least one email in the period. Login-only or reply-management activity does not count.
+- Inactive Accounts count (total_users - active_users)
 
-**C) Inactivity-Derived (computed from last activity):**
-- Active today: last send/reply within today
-- Inactive 3d: last activity 3-7 days ago
-- Inactive 7d: last activity 7-14 days ago (row muted)
-- Inactive 14d+: last activity >14 days ago (row muted)
+**C) Inactivity-Derived (computed from last activity timestamp):**
+- Active today: last send within today (`days_inactive = 0`)
+- Recent: last activity 1-3 days ago (`days_inactive <= 3`, green dot)
+- Inactive 3-7d: yellow dot, not muted
+- Inactive 7-14d: orange dot, row muted
+- Inactive 14d+: red dot, row muted
 
 ### Period Filter
 
@@ -69,17 +70,22 @@ Returns:
 ```
 
 Query logic:
-- Compute date range from `period` param
+- Compute date range from `period` param using `_admin_date_range()` (all times UTC)
 - `total_users`: `COUNT(users)` (no date filter)
 - `active_users`: `COUNT(DISTINCT user_id)` from sends WHERE sent_at in range
 - `sends`: `COUNT(sends)` WHERE status='sent' AND sent_at in range
 - `replies`: `COUNT(replies)` WHERE received_at in range
 - `reply_rate`: replies / sends * 100
-- `followups`: `COUNT(follow_ups)` WHERE added_at in range
+- `followups`: `COUNT(follow_ups)` WHERE last_fu_sent in range AND status='sent'
 - `inactive_accounts`: total_users - active_users
-- `top_users`: top 5 users by sends in period (SQL GROUP BY + ORDER BY + LIMIT 5)
+- `top_users`: top 3 users by sends in period (SQL GROUP BY + ORDER BY + LIMIT 3)
 
 All queries use SQL aggregation. No Python loops over all rows.
+
+**Breaking changes from old overview response:**
+- Removed: `total_workspaces` (redundant, 1:1 with users), `sends_today` (replaced by period-aware `sends`), `replies_total` (replaced by `replies`), `active_users_24h` (replaced by `active_users`)
+- Added: `reply_rate`, `followups`, `inactive_accounts`, `top_users`
+- Frontend element IDs (`ov-ws`, `ov-sends`, `ov-replies`, `ov-active`) will be replaced with new ones
 
 **Modified endpoint:** `GET /api/admin/stats/accounts?period=today`
 
@@ -104,14 +110,19 @@ Returns array with period-aware activity columns:
 }]
 ```
 
+**Breaking changes from old accounts response:**
+- Removed: `sends_total`, `sends_today` (replaced by period-aware `sends`), `quota_used_today`, `quota_limit` (quota info moved to detail modal only — admin rarely needs per-row quota)
+- Added: `replies`, `reply_rate`, `followups`, `days_inactive`
+- `replies_total`, `followups_total` renamed to `replies`, `followups` (now period-aware)
+
 Query logic:
 - One main query joining users with aggregated sends/replies/followups for the period
 - `last_activity`: MAX(sent_at) from sends for each user (always lifetime, not filtered)
-- `days_inactive`: computed from last_activity vs now
+- `days_inactive`: computed server-side from last_activity vs `datetime.utcnow()`
 - Use subqueries or LEFT JOINs to get per-user counts in one pass
 - Avoid N+1: do NOT iterate users and query each individually
 
-**Existing endpoint preserved:** `GET /api/admin/stats/account/<user_id>` unchanged (detail modal).
+**Existing endpoint preserved:** `GET /api/admin/stats/account/<user_id>` unchanged (detail modal keeps quota info).
 
 ### Frontend
 
@@ -134,7 +145,7 @@ All cards except Total Users update when period changes.
 
 **Top Users Section:**
 - Title: "Top Users — {period label}"
-- 3 cards (top 3 from top_users array)
+- 3 cards (top 3 from top_users array, backend returns exactly 3)
 - Each card: rank badge (gold/silver/bronze), email, sends/replies/rate
 - Grid: 3 columns
 
@@ -143,10 +154,10 @@ All cards except Total Users update when period changes.
 - Columns: Email, Plan, Sends, Replies, Reply Rate, Follow-ups, Gmail, Last Active, Joined, Remove
 - Sends/Replies/Reply Rate/Follow-ups reflect selected period
 - Last Active column: activity dot + relative text
-  - Green dot: active today
+  - Green dot: active today or within 3 days
   - Yellow dot: 3-7 days inactive
   - Orange dot: 7-14 days inactive
-  - Red dot: 14+ days inactive
+  - Red dot: 14+ days inactive or never active
 - Rows with 7+ days inactive get `opacity: 0.5` (muted)
 - Client-side sorting via JS (no backend re-fetch needed)
 
@@ -156,17 +167,18 @@ All cards except Total Users update when period changes.
 
 ```python
 def _admin_date_range(period: str):
-    """Return (start_dt, end_dt) for the given period string."""
-    today = date.today()
+    """Return (start_dt, end_dt) for the given period string. All times UTC."""
+    now = datetime.utcnow()
+    today = now.date()  # UTC date, not local
     if period == 'today':
-        return datetime.combine(today, datetime.min.time()), datetime.utcnow()
+        return datetime.combine(today, datetime.min.time()), now
     elif period == 'yesterday':
         y = today - timedelta(days=1)
         return datetime.combine(y, datetime.min.time()), datetime.combine(today, datetime.min.time())
     elif period == '7d':
-        return datetime.combine(today - timedelta(days=7), datetime.min.time()), datetime.utcnow()
+        return datetime.combine(today - timedelta(days=7), datetime.min.time()), now
     elif period == '30d':
-        return datetime.combine(today - timedelta(days=30), datetime.min.time()), datetime.utcnow()
+        return datetime.combine(today - timedelta(days=30), datetime.min.time()), now
     else:  # 'total'
         return None, None  # no date filter
 ```
@@ -179,8 +191,9 @@ function sortAccounts(col) {
   if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
   else { sortCol = col; sortDir = 'desc'; }
   accountsData.sort((a, b) => {
-    let va = a[col], vb = b[col];
+    let va = a[col] ?? '', vb = b[col] ?? '';
     if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    va = va ?? -1; vb = vb ?? -1;
     return sortDir === 'asc' ? va - vb : vb - va;
   });
   renderAccounts();
@@ -204,16 +217,17 @@ function getInactivityInfo(daysInactive) {
 
 | File | Change |
 |------|--------|
-| `app.py` | Modify `/api/admin/stats/overview` and `/api/admin/stats/accounts` to accept `period` param, use SQL aggregation with date ranges, add top_users to overview response |
-| `templates/admin.html` | Add period filter bar, update overview cards (7 cards), add top users section, update accounts table (new columns, sort, inactivity dots), add JS sort/filter logic |
+| `app.py` | Modify `/api/admin/stats/overview` and `/api/admin/stats/accounts` to accept `period` param, use SQL aggregation with date ranges, add `_admin_date_range()` helper, add top_users to overview response |
+| `templates/admin.html` | Add period filter bar, replace overview cards (7 new cards), add top users section, update accounts table (reply rate + follow-ups columns, sort headers, inactivity dots), add JS sort/filter/period logic |
 
 ## Performance
 
-- All queries use SQL `COUNT`, `GROUP BY`, `DATE()` filtering — no Python loops
+- All queries use SQL `COUNT`, `GROUP BY`, date range filtering — no Python loops
 - Accounts endpoint: single pass with LEFT JOINs or subqueries per user (not N+1)
-- Top users: SQL `ORDER BY COUNT DESC LIMIT 5`
+- Top users: SQL `ORDER BY COUNT DESC LIMIT 3`
 - No caching needed — admin panel is low-traffic (only admin uses it)
 - Existing account detail modal endpoint unchanged
+- Existing index `ix_sends_user_sent` on `(user_id, sent_at)` covers per-user date-filtered queries
 
 ## Edge Cases
 
@@ -221,3 +235,10 @@ function getInactivityInfo(daysInactive) {
 - Period = Total: no date filter on any query, shows lifetime totals
 - Reply Rate with 0 sends: show "—" not "0%" or "NaN"
 - New user registered today with no sends: active_users does NOT count them (activity = sends only)
+- Null values in sort: null-coalesced to empty string or -1 to prevent NaN in comparisons
+- Non-owner users: shown with plan='free' and workspace_name from their own workspace (if exists) or '--'
+
+## Known Limitations
+
+- Workspace/plan model: currently 1 user = 1 workspace (owner). No membership table for invited-to-workspace users. If multi-user workspaces are needed later, a `WorkspaceMember` model should be added.
+- "Active" definition: only counts email sends, not logins or reply-checking. This matches the app's core value (outreach volume).

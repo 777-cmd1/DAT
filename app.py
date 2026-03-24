@@ -710,35 +710,98 @@ def api_admin_change_plan():
         db.session.commit()
     return jsonify({'ok': True, 'email': email, 'plan': plan})
 
+def _admin_date_range(period: str):
+    """Return (start_dt, end_dt) for admin period filter. All times UTC."""
+    now = datetime.utcnow()
+    today = now.date()
+    if period == 'today':
+        return datetime.combine(today, datetime.min.time()), now
+    elif period == 'yesterday':
+        y = today - timedelta(days=1)
+        return datetime.combine(y, datetime.min.time()), datetime.combine(today, datetime.min.time())
+    elif period == '7d':
+        return datetime.combine(today - timedelta(days=7), datetime.min.time()), now
+    elif period == '30d':
+        return datetime.combine(today - timedelta(days=30), datetime.min.time()), now
+    else:  # 'total'
+        return None, None
+
 @app.route('/api/admin/stats/overview', methods=['GET'])
 @login_required
 @admin_required
 def api_admin_stats_overview():
     """System-wide aggregate stats for admin overview panel."""
-    from app.models import User as UserModel, Workspace, Send, Reply, UsageEvent
-    today = date.today()
-    cutoff_24h = datetime.utcnow() - timedelta(hours=24)
+    from app.models import User as UserModel, Workspace, Send, Reply, FollowUp
+    from sqlalchemy import func
 
-    total_users      = UserModel.query.count()
-    total_workspaces = Workspace.query.count()
-    sends_today      = Send.query.filter(Send.status == 'sent',
-                           db.func.date(Send.sent_at) == today).count()
-    replies_total    = Reply.query.count()
-    active_users_24h = db.session.query(Send.user_id).filter(
-                           Send.sent_at >= cutoff_24h).distinct().count()
+    period = request.args.get('period', 'today')
+    start_dt, end_dt = _admin_date_range(period)
 
-    plan_counts = {}
-    for ws in Workspace.query.all():
-        p = ws.plan or 'free'
-        plan_counts[p] = plan_counts.get(p, 0) + 1
+    total_users = UserModel.query.count()
+
+    # --- active_users (distinct senders in period) ---
+    active_q = db.session.query(func.count(func.distinct(Send.user_id))).filter(Send.status == 'sent')
+    if start_dt is not None:
+        active_q = active_q.filter(Send.sent_at >= start_dt, Send.sent_at <= end_dt)
+    active_users = active_q.scalar() or 0
+
+    # --- sends ---
+    sends_q = db.session.query(func.count(Send.id)).filter(Send.status == 'sent')
+    if start_dt is not None:
+        sends_q = sends_q.filter(Send.sent_at >= start_dt, Send.sent_at <= end_dt)
+    sends = sends_q.scalar() or 0
+
+    # --- replies ---
+    replies_q = db.session.query(func.count(Reply.id))
+    if start_dt is not None:
+        replies_q = replies_q.filter(Reply.received_at >= start_dt, Reply.received_at <= end_dt)
+    replies = replies_q.scalar() or 0
+
+    # --- followups ---
+    fu_q = db.session.query(func.count(FollowUp.id)).filter(FollowUp.status == 'sent')
+    if start_dt is not None:
+        fu_q = fu_q.filter(FollowUp.last_fu_sent >= start_dt, FollowUp.last_fu_sent <= end_dt)
+    followups = fu_q.scalar() or 0
+
+    reply_rate = round(replies / sends * 100, 1) if sends else 0.0
+    inactive_accounts = total_users - active_users
+
+    # --- plan distribution ---
+    plan_rows = db.session.query(
+        func.coalesce(Workspace.plan, 'free'), func.count(Workspace.id)
+    ).group_by(func.coalesce(Workspace.plan, 'free')).all()
+    plans = {row[0]: row[1] for row in plan_rows}
+
+    # --- top 3 users by sends ---
+    top_q = db.session.query(Send.user_id, func.count(Send.id).label('cnt')).filter(Send.status == 'sent')
+    if start_dt is not None:
+        top_q = top_q.filter(Send.sent_at >= start_dt, Send.sent_at <= end_dt)
+    top_rows = top_q.group_by(Send.user_id).order_by(func.count(Send.id).desc()).limit(3).all()
+
+    top_users = []
+    for user_id, send_cnt in top_rows:
+        user = UserModel.query.get(user_id)
+        r_q = db.session.query(func.count(Reply.id)).filter(Reply.user_id == user_id)
+        if start_dt is not None:
+            r_q = r_q.filter(Reply.received_at >= start_dt, Reply.received_at <= end_dt)
+        user_replies = r_q.scalar() or 0
+        top_users.append({
+            'email': user.email if user else 'unknown',
+            'sends': send_cnt,
+            'replies': user_replies,
+            'reply_rate': round(user_replies / send_cnt * 100, 1) if send_cnt else 0.0,
+        })
 
     return jsonify({
-        'total_users':      total_users,
-        'total_workspaces': total_workspaces,
-        'sends_today':      sends_today,
-        'replies_total':    replies_total,
-        'active_users_24h': active_users_24h,
-        'plans':            plan_counts,
+        'total_users': total_users,
+        'active_users': active_users,
+        'sends': sends,
+        'replies': replies,
+        'reply_rate': reply_rate,
+        'followups': followups,
+        'inactive_accounts': inactive_accounts,
+        'plans': plans,
+        'top_users': top_users,
     })
 
 
@@ -747,45 +810,83 @@ def api_admin_stats_overview():
 @admin_required
 def api_admin_stats_accounts():
     """Per-account summary table for admin Accounts section."""
-    from app.models import User as UserModel, Workspace, Send, Reply, FollowUp, EmailAccount, UsageEvent
-    today = date.today()
+    from app.models import User as UserModel, Workspace, Send, Reply, FollowUp, EmailAccount
+    from sqlalchemy import func
 
+    period = request.args.get('period', 'today')
+    start_dt, end_dt = _admin_date_range(period)
+    now = datetime.utcnow()
+
+    # 1. Load all users
+    users = UserModel.query.order_by(UserModel.created_at.desc()).all()
+    user_ids = [u.id for u in users]
+
+    if not user_ids:
+        return jsonify([])
+
+    # 2. Batch workspace lookup
+    ws_rows = Workspace.query.filter(Workspace.owner_id.in_(user_ids)).all()
+    ws_map = {ws.owner_id: ws for ws in ws_rows}
+
+    # 3. Batch email accounts
+    ea_rows = EmailAccount.query.filter(EmailAccount.user_id.in_(user_ids)).all()
+    ea_map = {ea.user_id: ea for ea in ea_rows}
+
+    # 4. Batch sends per user
+    sends_q = db.session.query(Send.user_id, func.count(Send.id)).filter(
+        Send.user_id.in_(user_ids), Send.status == 'sent')
+    if start_dt is not None:
+        sends_q = sends_q.filter(Send.sent_at >= start_dt, Send.sent_at <= end_dt)
+    sends_map = dict(sends_q.group_by(Send.user_id).all())
+
+    # 5. Batch replies per user
+    replies_q = db.session.query(Reply.user_id, func.count(Reply.id)).filter(
+        Reply.user_id.in_(user_ids))
+    if start_dt is not None:
+        replies_q = replies_q.filter(Reply.received_at >= start_dt, Reply.received_at <= end_dt)
+    replies_map = dict(replies_q.group_by(Reply.user_id).all())
+
+    # 6. Batch follow-ups per user
+    fu_q = db.session.query(FollowUp.user_id, func.count(FollowUp.id)).filter(
+        FollowUp.user_id.in_(user_ids), FollowUp.status == 'sent')
+    if start_dt is not None:
+        fu_q = fu_q.filter(FollowUp.last_fu_sent >= start_dt, FollowUp.last_fu_sent <= end_dt)
+    fu_map = dict(fu_q.group_by(FollowUp.user_id).all())
+
+    # 7. Batch last activity (always lifetime, NOT filtered)
+    la_rows = db.session.query(Send.user_id, func.max(Send.sent_at)).filter(
+        Send.user_id.in_(user_ids)).group_by(Send.user_id).all()
+    la_map = {row[0]: row[1] for row in la_rows}
+
+    # 8. Build result array
     result = []
-    for u in UserModel.query.order_by(UserModel.created_at.desc()).all():
-        ws   = Workspace.query.filter_by(owner_id=u.id).first()
-        acct = EmailAccount.query.filter_by(user_id=u.id).first()
-        plan  = (ws.plan if ws else None) or 'free'
-        limit = PLAN_QUOTAS.get(plan, 50)
+    for u in users:
+        ws = ws_map.get(u.id)
+        ea = ea_map.get(u.id)
+        plan = (ws.plan if ws else None) or 'free'
+        s = sends_map.get(u.id, 0)
+        r = replies_map.get(u.id, 0)
+        f = fu_map.get(u.id, 0)
+        last_act = la_map.get(u.id)
 
-        sends_total  = Send.query.filter_by(user_id=u.id, status='sent').count()
-        sends_today  = Send.query.filter_by(user_id=u.id, status='sent').filter(
-                           db.func.date(Send.sent_at) == today).count()
-        replies_total   = Reply.query.filter_by(user_id=u.id).count()
-        followups_total = FollowUp.query.filter_by(user_id=u.id).count()
-        quota_used = db.session.query(db.func.sum(UsageEvent.count)).filter(
-                         UsageEvent.user_id == u.id,
-                         UsageEvent.event_type == 'email_sent',
-                         UsageEvent.period_date == today).scalar() or 0
-
-        last_send    = Send.query.filter_by(user_id=u.id).order_by(Send.sent_at.desc()).first()
-        last_activity = (last_send.sent_at.strftime('%Y-%m-%d %H:%M')
-                         if last_send and last_send.sent_at else None)
+        days_inactive = 0
+        if last_act:
+            days_inactive = (now - last_act).days
 
         result.append({
-            'user_id':        u.id,
-            'email':          u.email,
-            'name':           u.name or '',
-            'workspace_name': ws.name if ws else '—',
-            'plan':           plan,
-            'created_at':     u.created_at.strftime('%Y-%m-%d') if u.created_at else '',
-            'sends_total':    sends_total,
-            'sends_today':    sends_today,
-            'replies_total':  replies_total,
-            'followups_total': followups_total,
-            'quota_used_today': int(quota_used),
-            'quota_limit':    limit,
-            'email_connected': bool(acct and acct.gmail_address),
-            'last_activity':  last_activity,
+            'user_id': u.id,
+            'email': u.email,
+            'name': u.name or '',
+            'workspace_name': ws.name if ws else '',
+            'plan': plan,
+            'created_at': u.created_at.strftime('%Y-%m-%d') if u.created_at else '',
+            'sends': s,
+            'replies': r,
+            'reply_rate': round(r / s * 100, 1) if s else 0.0,
+            'followups': f,
+            'email_connected': bool(ea and ea.google_refresh_token),
+            'last_activity': last_act.strftime('%Y-%m-%dT%H:%M:%S') if last_act else None,
+            'days_inactive': days_inactive,
         })
     return jsonify(result)
 

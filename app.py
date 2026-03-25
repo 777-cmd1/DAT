@@ -263,9 +263,6 @@ PLAN_QUOTAS = {
     'pro':     None,   # unlimited
 }
 
-# ── SCHEDULED FOLLOW-UP DELAYS (days after last contact/send) ────────────────
-FU_AUTO_DELAYS = {'FU1': 3, 'FU2': 5, 'FU3': 7}
-
 # ── Follow-up v2: state machine ───────────────────────────────────────────────
 
 VALID_STATES = {'active', 'paused', 'warm', 'loads', 'blocked', 'closed'}

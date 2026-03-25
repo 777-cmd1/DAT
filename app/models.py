@@ -230,6 +230,112 @@ class FollowUp(db.Model):
         }
 
 
+# ── FOLLOW-UP v2 (new models) ────────────────────────────────────────────────
+
+class FollowupContact(db.Model):
+    __tablename__ = 'followup_contacts'
+    id = db.Column(db.String(36), primary_key=True, default=_uuid)
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    workspace_id = db.Column(db.String(36), db.ForeignKey('workspaces.id'), nullable=False)
+    contact_email = db.Column(db.String(255), nullable=False)
+    contact_name = db.Column(db.String(255))
+    company_name = db.Column(db.String(255))
+    state = db.Column(db.String(20), default='active', nullable=False)
+    stage = db.Column(db.String(30), default='fu1_scheduled', nullable=False)
+    is_followup_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    next_followup_at = db.Column(db.DateTime)
+    last_followup_sent_at = db.Column(db.DateTime)
+    last_reply_at = db.Column(db.DateTime)
+    last_activity_at = db.Column(db.DateTime)
+    initial_email_sent_at = db.Column(db.DateTime)
+    fu1_sent_at = db.Column(db.DateTime)
+    fu2_sent_at = db.Column(db.DateTime)
+    fu3_sent_at = db.Column(db.DateTime)
+    completed_fu3_at = db.Column(db.DateTime)
+    loads_at = db.Column(db.DateTime)
+    warm_at = db.Column(db.DateTime)
+    blocked_at = db.Column(db.DateTime)
+    closed_at = db.Column(db.DateTime)
+    paused_at = db.Column(db.DateTime)
+    resumed_at = db.Column(db.DateTime)
+    block_reason = db.Column(db.String(512))
+    pause_reason = db.Column(db.String(512))
+    close_reason = db.Column(db.String(512))
+    source_thread_id = db.Column(db.String(512))
+    source_reply_id = db.Column(db.String(512))
+    reply_subject = db.Column(db.String(512))
+    reply_msg_id = db.Column(db.String(512))
+    current_route = db.Column(db.String(512))
+    notes = db.Column(db.Text, default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User', backref='followup_contacts')
+
+    __table_args__ = (
+        db.Index('ix_fc_ws_state', 'workspace_id', 'state'),
+        db.Index('ix_fc_ws_stage', 'workspace_id', 'stage'),
+        db.Index('ix_fc_ws_next', 'workspace_id', 'next_followup_at'),
+        db.UniqueConstraint('workspace_id', 'contact_email', name='uq_fc_ws_email'),
+        db.Index('ix_fc_user_state', 'user_id', 'state'),
+    )
+
+    def to_dict(self):
+        fmt = lambda dt: dt.strftime('%Y-%m-%dT%H:%M:%SZ') if dt else None
+        return {
+            'id': self.id,
+            'contact_email': self.contact_email,
+            'contact_name': self.contact_name or '',
+            'company_name': self.company_name or '',
+            'state': self.state,
+            'stage': self.stage,
+            'is_followup_enabled': self.is_followup_enabled,
+            'next_followup_at': fmt(self.next_followup_at),
+            'last_followup_sent_at': fmt(self.last_followup_sent_at),
+            'last_reply_at': fmt(self.last_reply_at),
+            'last_activity_at': fmt(self.last_activity_at),
+            'current_route': self.current_route or '',
+            'notes': self.notes or '',
+            'reply_subject': self.reply_subject or '',
+        }
+
+
+class FollowupEvent(db.Model):
+    __tablename__ = 'followup_events'
+    id = db.Column(db.String(36), primary_key=True, default=_uuid)
+    followup_contact_id = db.Column(db.String(36), db.ForeignKey('followup_contacts.id', ondelete='CASCADE'), nullable=False)
+    workspace_id = db.Column(db.String(36), db.ForeignKey('workspaces.id'))
+    event_type = db.Column(db.String(30), nullable=False)
+    from_state = db.Column(db.String(20))
+    to_state = db.Column(db.String(20))
+    from_stage = db.Column(db.String(30))
+    to_stage = db.Column(db.String(30))
+    event_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    actor_type = db.Column(db.String(20), nullable=False)
+    actor_user_id = db.Column(db.String(36))
+    metadata_json = db.Column(db.Text)
+    notes = db.Column(db.String(512))
+
+    contact = db.relationship('FollowupContact', backref=db.backref('events', cascade='all, delete-orphan'))
+
+    __table_args__ = (
+        db.Index('ix_fe_contact_at', 'followup_contact_id', 'event_at'),
+    )
+
+
+class FollowupSettings(db.Model):
+    __tablename__ = 'followup_settings'
+    id = db.Column(db.String(36), primary_key=True, default=_uuid)
+    workspace_id = db.Column(db.String(36), db.ForeignKey('workspaces.id'), unique=True, nullable=False)
+    fu1_delay_days = db.Column(db.Integer, default=3, nullable=False)
+    fu2_delay_days = db.Column(db.Integer, default=5, nullable=False)
+    fu3_delay_days = db.Column(db.Integer, default=7, nullable=False)
+    auto_stop_on_reply = db.Column(db.Boolean, default=True, nullable=False)
+    default_followup_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # ── PIPELINE ─────────────────────────────────────────────────────────────────
 
 class PipelineContact(db.Model):

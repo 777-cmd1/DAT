@@ -33,7 +33,7 @@ The system must remain simple and optimized for daily use by freight brokers.
 | contact_name | String | | nullable |
 | company_name | String | | nullable |
 | state | String | 'active' | Enum: active / paused / warm / loads / blocked / closed |
-| stage | String | 'fu1_scheduled' | Enum: initial / fu1_scheduled / fu1_sent / fu2_scheduled / fu2_sent / fu3_scheduled / fu3_sent / completed_fu3 |
+| stage | String | 'fu1_scheduled' | Enum: fu1_scheduled / fu1_sent / fu2_scheduled / fu2_sent / fu3_scheduled / fu3_sent / completed_fu3 |
 | is_followup_enabled | Boolean | True | Auto-send toggle |
 | next_followup_at | DateTime | | When scheduler should send next FU |
 | last_followup_sent_at | DateTime | | When last FU was actually sent |
@@ -55,6 +55,8 @@ The system must remain simple and optimized for daily use by freight brokers.
 | close_reason | String | | nullable |
 | source_thread_id | String | | Gmail thread ID (if from reply) |
 | source_reply_id | String | | Reply record ID (if from reply) |
+| reply_subject | String | | Original reply subject for "Re: ..." threading |
+| reply_msg_id | String | | Message-ID for In-Reply-To header |
 | current_route | String | | Freight route |
 | notes | Text | | User notes |
 | created_at | DateTime | utcnow | |
@@ -126,8 +128,10 @@ The system must remain simple and optimized for daily use by freight brokers.
 | added_at | created_at | |
 | auto_enabled | is_followup_enabled | |
 | scheduled_at | next_followup_at | |
-| reply_msg_id | source_thread_id | |
+| reply_msg_id | reply_msg_id | For In-Reply-To header |
+| reply_subject | reply_subject | For "Re: ..." subject line |
 | notes | notes | |
+| (none) | company_name | null — old model had no company field |
 
 **Old `Workspace.fu_auto_enabled`** migrates to `followup_settings.default_followup_enabled`.
 
@@ -153,10 +157,10 @@ Terminal states cannot transition to other states. To re-engage a contact, the u
 ### 3.2 Follow-up Stage (sequence position)
 
 ```
-initial → fu1_scheduled → fu1_sent → fu2_scheduled → fu2_sent → fu3_scheduled → fu3_sent → completed_fu3
+fu1_scheduled → fu1_sent → fu2_scheduled → fu2_sent → fu3_scheduled → fu3_sent → completed_fu3
 ```
 
-Stage only moves forward. Never backwards.
+Stage only moves forward. Never backwards. Contacts always enter at `fu1_scheduled`.
 
 ### 3.3 What Stops Follow-ups
 
@@ -234,7 +238,7 @@ When user marks a reply as "follow_up":
 3. If not: create with `stage=fu1_scheduled`, `state=active`, `is_followup_enabled=true`
 4. Set `next_followup_at = now + fu1_delay_days`
 5. Auto-fill: `contact_name`, `company_name`, `current_route` from reply/send data
-6. Set `source_thread_id`, `source_reply_id`
+6. Set `source_thread_id`, `source_reply_id`, `reply_subject`, `reply_msg_id`
 7. Create `followup_events` record (event_type=created, actor_type=user)
 
 ### 5.2 Manual Add (new)
@@ -373,10 +377,10 @@ Returns 409 if contact email already exists in workspace.
 ```json
 {
   "funnel": {
-    "initial": 100,
-    "fu1": 85,
-    "fu2": 60,
-    "fu3": 35,
+    "total": 100,
+    "fu1_sent": 85,
+    "fu2_sent": 60,
+    "fu3_sent": 35,
     "completed_fu3": 20
   },
   "outcomes": {
@@ -393,7 +397,7 @@ Returns 409 if contact email already exists in workspace.
 }
 ```
 
-**Funnel counts:** Based on `followup_events` with `event_type=stage_advance` or `event_type=auto_send`. Count contacts that reached each stage at any point (not just current state).
+**Funnel counts:** `total` = all contacts ever created. `fu1_sent` / `fu2_sent` / `fu3_sent` = contacts that reached each stage (from `followup_events` with `event_type=auto_send|manual_send`). `completed_fu3` = contacts with `stage=completed_fu3` in events.
 
 **Outcomes:** Count contacts currently in each terminal state + warm.
 

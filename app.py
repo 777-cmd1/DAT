@@ -869,7 +869,7 @@ def api_admin_stats_accounts():
         f = fu_map.get(u.id, 0)
         last_act = la_map.get(u.id)
 
-        days_inactive = 0
+        days_inactive = None
         if last_act:
             days_inactive = (now - last_act).days
 

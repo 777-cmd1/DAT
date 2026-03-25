@@ -266,6 +266,124 @@ PLAN_QUOTAS = {
 # ── SCHEDULED FOLLOW-UP DELAYS (days after last contact/send) ────────────────
 FU_AUTO_DELAYS = {'FU1': 3, 'FU2': 5, 'FU3': 7}
 
+# ── Follow-up v2: state machine ───────────────────────────────────────────────
+
+VALID_STATES = {'active', 'paused', 'warm', 'loads', 'blocked', 'closed'}
+TERMINAL_STATES = {'warm', 'loads', 'blocked', 'closed'}
+VALID_STAGES = {'fu1_scheduled', 'fu1_sent', 'fu2_scheduled', 'fu2_sent',
+                'fu3_scheduled', 'fu3_sent', 'completed_fu3'}
+
+ALLOWED_TRANSITIONS = {
+    'active': {'paused', 'warm', 'loads', 'blocked', 'closed'},
+    'paused': {'active', 'warm', 'loads', 'blocked', 'closed'},
+}
+
+STAGE_PROGRESSION = {
+    'fu1_scheduled': ('fu1_sent', 'fu2_scheduled'),
+    'fu2_scheduled': ('fu2_sent', 'fu3_scheduled'),
+    'fu3_scheduled': ('fu3_sent', None),  # None = completed_fu3
+}
+
+STAGE_TO_TEMPLATE = {
+    'fu1_scheduled': 'FU1',
+    'fu2_scheduled': 'FU2',
+    'fu3_scheduled': 'FU3',
+}
+
+STAGE_SENT_FIELD = {
+    'fu1_scheduled': 'fu1_sent_at',
+    'fu2_scheduled': 'fu2_sent_at',
+    'fu3_scheduled': 'fu3_sent_at',
+}
+
+
+def _get_fu_settings(workspace_id):
+    """Get follow-up settings for workspace, with defaults."""
+    from app.models import FollowupSettings
+    s = FollowupSettings.query.filter_by(workspace_id=workspace_id).first()
+    if s:
+        return {'fu1': s.fu1_delay_days, 'fu2': s.fu2_delay_days, 'fu3': s.fu3_delay_days,
+                'auto_stop_on_reply': s.auto_stop_on_reply, 'default_enabled': s.default_followup_enabled}
+    return {'fu1': 3, 'fu2': 5, 'fu3': 7, 'auto_stop_on_reply': True, 'default_enabled': True}
+
+
+def _get_stage_delay(stage, settings):
+    """Return timedelta for the given scheduled stage."""
+    from datetime import timedelta
+    mapping = {'fu1_scheduled': settings['fu1'], 'fu2_scheduled': settings['fu2'], 'fu3_scheduled': settings['fu3']}
+    days = mapping.get(stage, 3)
+    return timedelta(days=days)
+
+
+def _record_event(contact, event_type, actor_type='user', actor_user_id=None,
+                  from_state=None, to_state=None, from_stage=None, to_stage=None,
+                  metadata_json=None, notes=None):
+    """Create a FollowupEvent record."""
+    from app.models import FollowupEvent
+    evt = FollowupEvent(
+        followup_contact_id=contact.id,
+        workspace_id=contact.workspace_id,
+        event_type=event_type,
+        from_state=from_state, to_state=to_state,
+        from_stage=from_stage, to_stage=to_stage,
+        actor_type=actor_type,
+        actor_user_id=actor_user_id,
+        metadata_json=metadata_json,
+        notes=notes,
+    )
+    db.session.add(evt)
+    return evt
+
+
+def _transition_state(contact, new_state, reason=None, actor_user_id=None):
+    """Transition contact state with validation. Returns (success, error_msg)."""
+    old_state = contact.state
+    if old_state in TERMINAL_STATES:
+        return False, f'Cannot transition from terminal state: {old_state}'
+    if new_state not in ALLOWED_TRANSITIONS.get(old_state, set()):
+        return False, f'Invalid transition: {old_state} -> {new_state}'
+
+    now = datetime.utcnow()
+    contact.state = new_state
+    contact.updated_at = now
+
+    if new_state == 'paused':
+        contact.is_followup_enabled = False
+        contact.next_followup_at = None
+        contact.paused_at = now
+        if reason:
+            contact.pause_reason = reason
+    elif new_state == 'active':  # resume
+        contact.resumed_at = now
+        contact.is_followup_enabled = True
+        if contact.stage.endswith('_scheduled'):
+            settings = _get_fu_settings(contact.workspace_id)
+            contact.next_followup_at = now + _get_stage_delay(contact.stage, settings)
+    elif new_state == 'warm':
+        contact.is_followup_enabled = False
+        contact.next_followup_at = None
+        contact.warm_at = now
+    elif new_state == 'loads':
+        contact.is_followup_enabled = False
+        contact.next_followup_at = None
+        contact.loads_at = now
+    elif new_state == 'blocked':
+        contact.is_followup_enabled = False
+        contact.next_followup_at = None
+        contact.blocked_at = now
+        if reason:
+            contact.block_reason = reason
+    elif new_state == 'closed':
+        contact.is_followup_enabled = False
+        contact.next_followup_at = None
+        contact.closed_at = now
+        if reason:
+            contact.close_reason = reason
+
+    _record_event(contact, 'state_change', actor_type='user', actor_user_id=actor_user_id,
+                  from_state=old_state, to_state=new_state)
+    return True, None
+
 # ── Per-user send state ───────────────────────────────────────────────────────
 # Keyed by user_id so concurrent users cannot see or overwrite each other's progress.
 _send_states: dict = {}

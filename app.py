@@ -3376,8 +3376,8 @@ def _run_scheduled_followups():
                 if not template_text:
                     continue
 
-                cfg = {'name': acct.sender_name or '', 'company': acct.company_name or '',
-                       'phone': acct.phone or '', 'route': fc.current_route or ''}
+                cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+                       'phone': acct.your_phone or '', 'route': fc.current_route or ''}
                 fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                            'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
 

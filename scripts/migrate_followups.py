@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """Migrate follow_ups -> followup_contacts. Run once."""
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sys, os, importlib.util
 
-from app import create_app
-from app.extensions import db
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _root)
+
+# Load app.py explicitly (app/ package would shadow it otherwise)
+_spec = importlib.util.spec_from_file_location('_dat_app', os.path.join(_root, 'app.py'))
+_mod = importlib.util.module_from_spec(_spec)
+sys.modules['_dat_app'] = _mod
+_spec.loader.exec_module(_mod)
+app = _mod.app
+db  = _mod.db
+
 from app.models import FollowUp, FollowupContact, FollowupEvent, FollowupSettings, Workspace
 from datetime import datetime
 
@@ -18,7 +26,6 @@ STAGE_MAP = {
     ('closed', 'closed'): ('completed_fu3', 'closed', False),
 }
 
-app = create_app()
 with app.app_context():
     old_records = FollowUp.query.all()
     print(f"Found {len(old_records)} old follow-up records")

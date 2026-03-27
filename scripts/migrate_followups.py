@@ -32,8 +32,18 @@ with app.app_context():
     migrated = 0
     skipped = 0
     for fu in old_records:
+        # Resolve workspace_id — fall back to user's first workspace
+        ws_id = fu.workspace_id
+        if not ws_id:
+            ws = Workspace.query.filter_by(owner_id=fu.user_id).first()
+            if not ws:
+                print(f"  SKIP (no workspace): {fu.contact_email}")
+                skipped += 1
+                continue
+            ws_id = ws.id
+
         exists = FollowupContact.query.filter_by(
-            workspace_id=fu.workspace_id, contact_email=fu.contact_email
+            workspace_id=ws_id, contact_email=fu.contact_email
         ).first()
         if exists:
             skipped += 1
@@ -60,7 +70,7 @@ with app.app_context():
 
         fc = FollowupContact(
             user_id=fu.user_id,
-            workspace_id=fu.workspace_id,
+            workspace_id=ws_id,
             contact_email=fu.contact_email,
             contact_name=fu.contact_name or '',
             state=state,

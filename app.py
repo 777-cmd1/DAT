@@ -478,6 +478,12 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def _current_user_id():
+    """Return current user's DB id from session email."""
+    from app.models import User as _U
+    u = _U.query.filter_by(email=session['user_email']).first()
+    return u.id if u else None
+
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -2830,7 +2836,7 @@ def get_fu_templates():
 def api_followups_list():
     from app.models import FollowupContact
     from sqlalchemy import func, case
-    uid = session['user_id']
+    uid = _current_user_id()
     q = FollowupContact.query.filter_by(user_id=uid)
 
     state_f = request.args.get('state')
@@ -2891,7 +2897,7 @@ def api_followups_list():
 @login_required
 def api_followups_add():
     from app.models import FollowupContact, Workspace
-    uid = session['user_id']
+    uid = _current_user_id()
     data = request.get_json()
     email = (data.get('email') or '').strip().lower()
     if not email:
@@ -2929,7 +2935,7 @@ def api_followups_add():
 @login_required
 def api_followups_action():
     from app.models import FollowupContact, EmailAccount
-    uid = session['user_id']
+    uid = _current_user_id()
     data = request.get_json()
     contact_id = data.get('id')
     action = data.get('action')
@@ -3010,7 +3016,7 @@ def api_followups_action():
 @login_required
 def api_followups_bulk_action():
     from app.models import FollowupContact
-    uid = session['user_id']
+    uid = _current_user_id()
     data = request.get_json()
     ids = data.get('ids', [])
     action = data.get('action')
@@ -3036,7 +3042,7 @@ def api_followups_bulk_action():
 @login_required
 def api_followups_delete():
     from app.models import FollowupContact
-    uid = session['user_id']
+    uid = _current_user_id()
     data = request.get_json()
     fc = FollowupContact.query.get(data.get('id'))
     if not fc or fc.user_id != uid:
@@ -3050,7 +3056,7 @@ def api_followups_delete():
 @login_required
 def api_followups_notes():
     from app.models import FollowupContact
-    uid = session['user_id']
+    uid = _current_user_id()
     data = request.get_json()
     fc = FollowupContact.query.get(data.get('id'))
     if not fc or fc.user_id != uid:
@@ -3066,7 +3072,7 @@ def api_followups_notes():
 @login_required
 def api_followups_candidates():
     from app.models import FollowupContact, Workspace, Send
-    uid = session['user_id']
+    uid = _current_user_id()
     ws = Workspace.query.filter_by(owner_id=uid).first()
     if not ws:
         return jsonify(candidates=[])
@@ -3107,7 +3113,7 @@ def api_followups_candidates():
 @login_required
 def api_settings_followup():
     from app.models import FollowupSettings, Workspace
-    uid = session['user_id']
+    uid = _current_user_id()
     ws = Workspace.query.filter_by(owner_id=uid).first()
     if not ws:
         return jsonify(error='No workspace'), 400
@@ -3140,7 +3146,7 @@ def api_settings_followup():
 def api_followups_analytics():
     from app.models import FollowupContact, FollowupEvent
     from sqlalchemy import func
-    uid = session['user_id']
+    uid = _current_user_id()
 
     total = FollowupContact.query.filter_by(user_id=uid).count()
 

@@ -575,36 +575,20 @@ def api_reset_request():
     base_url = request.host_url.rstrip('/')
     reset_url = f"{base_url}/reset-password?token={token}"
 
-    # Try to send via admin's Gmail account
-    admin_acct = EmailAccount.query.join(User, User.id == EmailAccount.user_id)\
-        .filter(User.email == ADMIN_EMAIL).first()
+    # Try to send via admin's Gmail account (supports both OAuth2 and SMTP)
+    admin_user = User.query.filter_by(email=ADMIN_EMAIL).first()
+    admin_acct = EmailAccount.query.filter_by(user_id=admin_user.id).first() if admin_user else None
 
-    if admin_acct and admin_acct.gmail_address and admin_acct.gmail_password:
-        gmail = admin_acct.gmail_address
-        pw    = decrypt_field(admin_acct.gmail_password)
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = 'DAT Mailer — Password Reset'
-            msg['From']    = f'DAT Mailer <{gmail}>'
-            msg['To']      = email
-            html_body = f"""<div style="font-family:Inter,sans-serif;background:#0a0a0f;color:#e2e2f0;padding:32px;max-width:480px">
-<h2 style="color:#6366f1;margin-bottom:8px">Password Reset</h2>
-<p style="color:#9999bb;margin-bottom:24px">Click the button below to reset your DAT Mailer password. This link expires in <strong>1 hour</strong>.</p>
-<a href="{reset_url}" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#6366f1,#22c55e);color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Reset Password</a>
-<p style="margin-top:24px;font-size:12px;color:#6b6b8a">Or copy this link:<br><span style="color:#6366f1">{reset_url}</span></p>
-<p style="margin-top:24px;font-size:11px;color:#444466">If you didn't request this, ignore this email.</p>
-</div>"""
-            msg.attach(MIMEText(html_body, 'html'))
-            with smtplib.SMTP('smtp.gmail.com', 587) as s:
-                s.starttls()
-                s.login(gmail, pw)
-                s.sendmail(gmail, [email], msg.as_string())
-        except Exception as e:
-            app.logger.error(f'Password reset email failed: {e}')
-            # Fall through — token still saved, admin can share link manually
+    if admin_acct and admin_acct.gmail_address:
+        body = (
+            f"Reset your DAT Mailer password by clicking the link below.\n\n"
+            f"{reset_url}\n\n"
+            f"This link expires in 1 hour. If you didn't request this, ignore this email."
+        )
+        cfg = {'gmail_address': admin_acct.gmail_address}
+        ok, err = send_one_email(email, 'DAT Mailer — Password Reset', body, cfg, uid=admin_user.id)
+        if not ok:
+            app.logger.error(f'Password reset email failed: {err}')
 
     return jsonify({'ok': True, 'msg': 'If that email exists, a reset link has been sent.'})
 

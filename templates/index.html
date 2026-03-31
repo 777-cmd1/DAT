@@ -2931,7 +2931,7 @@ function renderParseResults(data) {
       <td>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap">
           <span class="chip ${chipCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ph-bold ${chipIcon}" style="font-size:10px"></i>${chipLabel}</span>
-          ${l.skip === 'in_batch' ? `<button onclick="swapDuplicate(${i})" style="font-size:10px;padding:2px 8px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer;white-space:nowrap;font-weight:600" title="Use this load instead">Use this</button>` : ''}
+          ${l.skip === 'in_batch' ? '<button onclick="swapDuplicate(' + i + ')" style="font-size:10px;padding:2px 8px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer;white-space:nowrap;font-weight:600" title="Use this load instead">Use this</button>' : ''}
         </div>
       </td>
     </tr>`;

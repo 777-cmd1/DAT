@@ -2959,14 +2959,21 @@ function updateSelectedCount() {
 function swapDuplicate(idx) {
   const load = parsedLoads[idx];
   if (!load || load.skip !== 'in_batch') return;
-  // Find the currently active load for the same email
   const em = load.email.toLowerCase();
   const activeIdx = parsedLoads.findIndex((l, i) => i !== idx && l.email.toLowerCase() === em && !l.skip);
-  if (activeIdx === -1) return; // no active counterpart found — nothing to swap
-  // Swap skip values
+  if (activeIdx === -1) return;
   parsedLoads[activeIdx].skip = 'in_batch';
   parsedLoads[idx].skip = null;
-  renderLoads(parsedLoads);
+  // Re-render using existing stats (only table rows change, counts stay the same)
+  const fakeStats = {new:0, skip_dup:0, skip_today:0, skip_sent:0, skip_stop:0};
+  parsedLoads.forEach(l => {
+    if (!l.skip) fakeStats.new++;
+    else if (l.skip === 'in_batch') fakeStats.skip_dup++;
+    else if (l.skip === 'today') fakeStats.skip_today++;
+    else if (l.skip === 'sent') fakeStats.skip_sent++;
+    else if (l.skip === 'stop_list') fakeStats.skip_stop++;
+  });
+  renderParseResults({loads: parsedLoads, stats: fakeStats});
 }
 
 // Update line count in textarea footer

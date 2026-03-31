@@ -2928,7 +2928,12 @@ function renderParseResults(data) {
       <td class="route-cell" style="font-size:12px;white-space:nowrap">${l.origin} <span style="color:var(--text3)">→</span> ${l.destination}</td>
       <td style="color:var(--text2);font-size:11px;white-space:nowrap">${l.date}</td>
       <td style="color:var(--text2);font-size:11px"><span style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">${l.equip}</span></td>
-      <td><span class="chip ${chipCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ph-bold ${chipIcon}" style="font-size:10px"></i>${chipLabel}</span></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap">
+          <span class="chip ${chipCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ph-bold ${chipIcon}" style="font-size:10px"></i>${chipLabel}</span>
+          ${l.skip === 'in_batch' ? `<button onclick="swapDuplicate(${i})" style="font-size:10px;padding:2px 8px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer;white-space:nowrap;font-weight:600" title="Use this load instead">Use this</button>` : ''}
+        </div>
+      </td>
     </tr>`;
   }).join('');
   updateSelectedCount();
@@ -2949,6 +2954,19 @@ function updateSelectedCount() {
   ['topSendRow','topSendBar'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = show;
   });
+}
+
+function swapDuplicate(idx) {
+  const load = parsedLoads[idx];
+  if (!load || load.skip !== 'in_batch') return;
+  // Find the currently active load for the same email
+  const em = load.email.toLowerCase();
+  const activeIdx = parsedLoads.findIndex((l, i) => i !== idx && l.email.toLowerCase() === em && !l.skip);
+  if (activeIdx === -1) return; // no active counterpart found — nothing to swap
+  // Swap skip values
+  parsedLoads[activeIdx].skip = 'in_batch';
+  parsedLoads[idx].skip = null;
+  renderLoads(parsedLoads);
 }
 
 // Update line count in textarea footer

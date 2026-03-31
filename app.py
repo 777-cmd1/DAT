@@ -836,6 +836,28 @@ def _admin_date_range(period: str):
     else:  # 'total'
         return None, None
 
+@app.route('/api/admin/users/reset-link', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_reset_link():
+    """Generate a password reset link for a user and return it to the admin."""
+    data = request.json or {}
+    email = (data.get('email') or '').lower().strip()
+    if not email:
+        return jsonify({'error': 'Email required'}), 400
+    from app.models import User as UserModel, PasswordResetToken
+    if not UserModel.query.filter_by(email=email).first():
+        return jsonify({'error': 'User not found'}), 404
+    PasswordResetToken.query.filter_by(email=email, used_at=None).delete()
+    token = secrets.token_urlsafe(48)
+    db.session.add(PasswordResetToken(email=email, token=token))
+    db.session.commit()
+    base_url = request.host_url.rstrip('/')
+    reset_url = f"{base_url}/reset-password?token={token}"
+    app.logger.warning(f'ADMIN_RESET_LINK for={email} url={reset_url}')
+    return jsonify({'ok': True, 'url': reset_url})
+
+
 @app.route('/api/admin/stats/overview', methods=['GET'])
 @login_required
 @admin_required

@@ -419,7 +419,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th></th></tr></thead>
+          <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th>Actions</th></tr></thead>
           <tbody id="usersTable"><tr><td colspan="4" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
         </table>
       </div>
@@ -792,7 +792,11 @@ async function loadUsers() {
       <td class="mono">${esc(u.email)}</td>
       <td>${esc(u.name||'—')}</td>
       <td class="muted" style="font-size:12px">${(u.created_at||'').slice(0,10)}</td>
-      <td><button class="del-btn" onclick="deleteUser('${esc(u.email)}')">Remove</button></td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <button style="font-size:11px;padding:4px 10px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600" onclick="getResetLink('${esc(u.email)}')">🔑 Reset Link</button>
+        <button style="font-size:11px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600" onclick="reinviteUser('${esc(u.email)}')">📨 New Invite</button>
+        <button class="del-btn" onclick="deleteUser('${esc(u.email)}')">Remove</button>
+      </td>
     </tr>
   `).join('');
 }
@@ -871,6 +875,43 @@ async function changePlan(email, plan) {
   } else {
     toast('Failed to change plan', 'red');
   }
+}
+
+async function getResetLink(email) {
+  const res = await fetch('/api/admin/users/reset-link', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ email })
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Failed', 'red'); return; }
+  navigator.clipboard.writeText(data.url).then(() => {
+    toast(`Reset link copied for ${email}`, 'green');
+  }).catch(() => {
+    prompt(`Reset link for ${email}:`, data.url);
+  });
+}
+
+async function reinviteUser(email) {
+  if (!confirm(`Send a new invite link for ${email}?`)) return;
+  const res = await fetch('/api/admin/invite', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ email })
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Failed', 'red'); return; }
+  const url = data.invite_url || data.url || (data.token ? `${location.origin}/register/${data.token}` : null);
+  if (url) {
+    navigator.clipboard.writeText(url).then(() => {
+      toast(`Invite link copied for ${email}`, 'green');
+    }).catch(() => {
+      prompt(`Invite link for ${email}:`, url);
+    });
+  } else {
+    toast('Invite sent', 'green');
+  }
+  loadUsers(); invitesLoaded = false; loadInvites();
 }
 
 async function deleteUser(email) {

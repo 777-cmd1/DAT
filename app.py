@@ -579,6 +579,9 @@ def api_reset_request():
     admin_user = User.query.filter_by(email=ADMIN_EMAIL).first()
     admin_acct = EmailAccount.query.filter_by(user_id=admin_user.id).first() if admin_user else None
 
+    # Always log reset URL so admin can retrieve from Railway logs if email fails
+    app.logger.warning(f'PASSWORD_RESET_LINK for={email} url={reset_url}')
+
     if admin_acct and admin_acct.gmail_address:
         body = (
             f"Reset your DAT Mailer password by clicking the link below.\n\n"
@@ -589,6 +592,8 @@ def api_reset_request():
         ok, err = send_one_email(email, 'DAT Mailer — Password Reset', body, cfg, uid=admin_user.id)
         if not ok:
             app.logger.error(f'Password reset email failed: {err}')
+    else:
+        app.logger.warning(f'PASSWORD_RESET no admin Gmail configured — link logged above')
 
     return jsonify({'ok': True, 'msg': 'If that email exists, a reset link has been sent.'})
 

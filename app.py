@@ -1865,7 +1865,7 @@ _EQUIP_RE = re.compile(r'\b(VM|VR|FD|SD|V|F|R)\b')
 _EQUIP_WORD_RE = re.compile(r'\b(Van Air-Ride|Van or Reefer|Flatbed|Reefer|Van)\b', re.IGNORECASE)
 _EQUIP_WORD_MAP = {'van': 'V', 'reefer': 'R', 'flatbed': 'F', 'van or reefer': 'VR', 'van air-ride': 'V'}
 # City pattern: "City Name, ST" optionally followed by "(0)" or "(123)"
-_CITY_RE  = re.compile(r'^([A-Z][a-zA-Z\s\.]+,?\s+[A-Z]{2})(?:\s*\(\d*\))?$')
+_CITY_RE  = re.compile(r'^([A-Z][a-zA-Z\s\.]+,\s*[A-Z]{2})(?:\s*\(\d*\))?$')  # comma required, space optional
 # Words that should NEVER be treated as city names
 _NOT_CITY = frozenset({
     'Full', 'Partial', 'Canceled', 'Equipment', 'Load', 'Truck',

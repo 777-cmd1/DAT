@@ -2420,6 +2420,18 @@ def api_get_stop(): return jsonify(get_stop_list_raw())
 @login_required
 def api_save_stop(): write_stop_list(request.json.get("entries", [])); return jsonify({"ok": True})
 
+@app.route('/api/parse-context', methods=['GET'])
+@login_required
+def api_parse_context():
+    be, bd = load_stop_list()           # TTL-cached (300s)
+    all_sent, sent_today = load_sent_log()  # TTL-cached (90s)
+    return jsonify({
+        'all_sent':     list(all_sent),
+        'sent_today':   list(sent_today),
+        'stop_emails':  list(be),
+        'stop_domains': list(bd),
+    })
+
 @app.route('/api/parse', methods=['POST'])
 @login_required
 def api_parse():

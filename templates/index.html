@@ -2896,8 +2896,8 @@ function _parseLast(regex, txt) {
   while ((m = regex['exec'](txt)) !== null) last = m;
   return last;
 }
-// Fake match object for cases where value is derived without a regex (month dates, equip word map).
-function _parseM(s) { return { group: () => s }; }
+// Fake match "array" — index 0 = full match, consistent with real exec() results.
+function _parseM(s) { return [s]; }
 
 function parseDatText(text) {
   // Tab-expand: split tab-separated lines into individual tokens (handles both DAT formats)
@@ -2988,8 +2988,8 @@ function parseDatText(text) {
     seen.add(key);
     loads.push({
       email, origin, destination,
-      date:   dateM ? dateM.group() : '',
-      equip:  eqM   ? eqM.group()   : '',
+      date:   dateM ? dateM[0] : '',
+      equip:  eqM   ? eqM[0]   : '',
       length: lenM  ? lenM[0]       : '',
       weight: wtM   ? wtM[0]        : '',
       company,

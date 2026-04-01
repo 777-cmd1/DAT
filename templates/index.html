@@ -3033,18 +3033,13 @@ function debounceParse() {
 function parseDat() {
   const text = document.getElementById('datText').value.trim();
   if (!text) { toast('Paste DAT text first', true); return; }
-  try {
-    const loads = parseDatText(text);
-    const data = classifyLoads(loads);
-    parsedLoads = data.loads;
-    sessionStorage.removeItem('dat_loads');
-    sessionStorage.removeItem('dat_checked');
-    renderParseResults(data);
-    document.getElementById('parseResults').style.display = 'block';
-  } catch(e) {
-    console.error('parseDat error:', e);
-    toast('Parse error: ' + e.message, true);
-  }
+  const loads = parseDatText(text);
+  const data = classifyLoads(loads);
+  parsedLoads = data.loads;
+  sessionStorage.removeItem('dat_loads');
+  sessionStorage.removeItem('dat_checked');
+  renderParseResults(data);
+  document.getElementById('parseResults').style.display = 'block';
 }
 
 function renderParseResults(data) {

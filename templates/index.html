@@ -2871,6 +2871,9 @@ const _NOT_CITY = new Set([
   'Length','Weight','Commodity','Reference ID','Van','Reefer',
   'Flatbed','CONTACT INFORMATION','COMMENTS','VIEW ROUTE',
   'Van Air-Ride','Van or Reefer','Post now','Trip',
+  // DAT payment/service metadata tokens — appear in contact block, never company names
+  'Factoring','Factoring Available','Quick Pay','Quick Pay Available',
+  'Fuel Advance','Fuel Advance Available',
 ]);
 
 // Parse context: loaded once per Send tab open, refreshed after sends/stop-list saves
@@ -2902,12 +2905,28 @@ function _parseM(s) { return [s]; }
 function parseDatText(text) {
   // Tab-expand: split tab-separated lines into individual tokens (handles both DAT formats)
   const rawLines = text.trim().split('\n');
-  const lines = [];
+  const expanded = [];
   for (const l of rawLines) {
     if (l.includes('\t')) {
-      for (const t of l.split('\t')) { if (t.trim()) lines.push(t.trim()); }
+      for (const t of l.split('\t')) { if (t.trim()) expanded.push(t.trim()); }
     } else if (l.trim()) {
-      lines.push(l.trim());
+      expanded.push(l.trim());
+    }
+  }
+  // Join 3-line city format: "City Name" / "," / "ST" → "City Name, ST"
+  // DAT board sometimes splits city and state onto separate lines
+  const lines = [];
+  for (let i = 0; i < expanded.length; i++) {
+    if (
+      i + 2 < expanded.length &&
+      /^[A-Z][a-zA-Z\s\.]+$/.test(expanded[i]) &&
+      expanded[i + 1] === ',' &&
+      /^[A-Z]{2}$/.test(expanded[i + 2])
+    ) {
+      lines.push(expanded[i] + ', ' + expanded[i + 2]);
+      i += 2; // skip "," and "ST"
+    } else {
+      lines.push(expanded[i]);
     }
   }
 

@@ -1872,6 +1872,9 @@ _NOT_CITY = frozenset({
     'Length', 'Weight', 'Commodity', 'Reference ID', 'Van', 'Reefer',
     'Flatbed', 'CONTACT INFORMATION', 'COMMENTS', 'VIEW ROUTE',
     'Van Air-Ride', 'Van or Reefer', 'Post now', 'Trip',
+    # DAT payment/service metadata tokens — appear in contact block, never company names
+    'Factoring', 'Factoring Available', 'Quick Pay', 'Quick Pay Available',
+    'Fuel Advance', 'Fuel Advance Available',
 })
 
 def parse_dat_text(text):
@@ -1879,12 +1882,26 @@ def parse_dat_text(text):
     # Expand tab-separated lines into individual tokens so both
     # newline-per-field and tab-per-field DAT board formats work
     raw_lines = text.strip().splitlines()
-    lines = []
+    expanded = []
     for l in raw_lines:
         if '\t' in l:
-            lines.extend([t.strip() for t in l.split('\t') if t.strip()])
+            expanded.extend([t.strip() for t in l.split('\t') if t.strip()])
         elif l.strip():
-            lines.append(l.strip())
+            expanded.append(l.strip())
+    # Join 3-line city format: "City Name" / "," / "ST" → "City Name, ST"
+    # DAT board sometimes splits city and state onto separate lines
+    lines = []
+    i = 0
+    while i < len(expanded):
+        if (i + 2 < len(expanded) and
+                re.match(r'^[A-Z][a-zA-Z\s\.]+$', expanded[i]) and
+                expanded[i + 1] == ',' and
+                re.match(r'^[A-Z]{2}$', expanded[i + 2])):
+            lines.append(expanded[i] + ', ' + expanded[i + 2])
+            i += 3
+        else:
+            lines.append(expanded[i])
+            i += 1
     loads, seen = [], set()
     for i, line in enumerate(lines):
         m = _EMAIL_RE.search(line)

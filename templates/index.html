@@ -1181,6 +1181,18 @@ tr:last-child td { border-bottom: none; }
 .fu-card.fu-needs-action { border-left-color:var(--purple); background:rgba(167,139,250,.05); }
 .fu-card.fu-muted { opacity:.6; }
 .fu-card.fu-terminal { opacity:.5; }
+.fu-card.fu-selected { border-color:var(--accent) !important; box-shadow:0 0 0 2px rgba(5,150,105,.18); }
+/* Checkbox */
+.fu-checkbox-wrap { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:22px; }
+.fu-checkbox { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
+/* Bulk action bar */
+.fu-bulk-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--accent); border-radius:var(--radius); padding:8px 12px; margin-bottom:10px; animation:slideDown .15s ease; }
+@keyframes slideDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+.fu-bulk-count { font-size:12px; font-weight:700; color:var(--text); flex-shrink:0; }
+.fu-bulk-sep { width:1px; height:18px; background:var(--border); flex-shrink:0; margin:0 2px; }
+.fu-bulk-clear { background:none; border:none; color:var(--text3); font-size:16px; cursor:pointer; padding:0 4px; line-height:1; }
+.fu-bulk-clear:hover { color:var(--text); }
+.fu-select-all-filtered { font-size:11px; color:var(--accent); background:none; border:none; cursor:pointer; padding:2px 4px; text-decoration:underline; flex-shrink:0; white-space:nowrap; }
 .fu-card-left { flex:1; min-width:0; }
 .fu-company { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fu-email-text { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
@@ -1237,6 +1249,21 @@ tr:last-child td { border-bottom: none; }
 .fu-modal-row { display:flex; gap:10px; }
 .fu-modal-row .fu-modal-field { flex:1; }
 .fu-candidate { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); }
+/* Schedule modal tabs */
+.fu-sched-tabs { display:flex; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:4px; }
+.fu-sched-tab { flex:1; padding:7px 0; font-size:12px; font-weight:700; text-align:center; background:none; border:none; cursor:pointer; color:var(--text3); transition:background .12s, color .12s; }
+.fu-sched-tab.active { background:var(--accent); color:#fff; }
+.fu-sched-pane { display:none; flex-direction:column; gap:10px; }
+.fu-sched-pane.active { display:flex; }
+/* Day toggles */
+.fu-day-grid { display:flex; gap:5px; flex-wrap:wrap; }
+.fu-day-btn { padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); font-size:12px; font-weight:600; color:var(--text2); cursor:pointer; transition:background .12s, border-color .12s, color .12s; }
+.fu-day-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.fu-time-row { display:flex; align-items:center; gap:8px; }
+.fu-time-row label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); white-space:nowrap; flex-shrink:0; }
+.fu-time-row input[type=time], .fu-time-row input[type=date] { background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:6px 10px; font-size:13px; color:var(--text); font-family:inherit; }
+.fu-time-label { font-size:11px; color:var(--text3); }
+.fu-sched-note { font-size:11px; color:var(--text3); padding:6px 8px; background:var(--bg); border-radius:6px; border:1px solid var(--border); }
 .fu-candidate:hover { border-color:var(--border-h); }
 .fu-cand-info { flex:1; min-width:0; }
 .fu-cand-email { font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -2051,6 +2078,19 @@ tr:last-child td { border-bottom: none; }
         <!-- STATS BAR -->
         <div class="fu-stats-bar" id="fuStatsBar"></div>
 
+        <!-- BULK ACTION BAR (shown when contacts selected) -->
+        <div class="fu-bulk-bar" id="fuBulkBar" style="display:none">
+          <button class="fu-bulk-clear" onclick="clearFuSelection()" title="Clear selection">✕</button>
+          <span class="fu-bulk-count" id="fuBulkCount">0 selected</span>
+          <button class="fu-select-all-filtered" id="fuSelectAllFiltered" onclick="selectAllFilteredFu()" style="display:none"></button>
+          <div class="fu-bulk-sep"></div>
+          <button class="btn btn-sm btn-primary" onclick="bulkFuAction('send-now')">▶ Send Now</button>
+          <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('free-send')">📤 Free Send</button>
+          <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal()">📅 Schedule</button>
+          <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('pause')">⏸ Pause</button>
+          <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('block')">🚫 Block</button>
+        </div>
+
         <!-- LIST -->
         <div id="fuContactsList"></div>
       </div>
@@ -2099,6 +2139,63 @@ tr:last-child td { border-bottom: none; }
 
     <!-- DROPDOWN MENU -->
     <div class="fu-dropdown" id="fuDropdown" onclick="event.stopPropagation()"></div>
+
+    <!-- SCHEDULE MODAL -->
+    <div class="fu-modal-overlay" id="fuSchedModal" onclick="if(event.target===this)closeFuScheduleModal()">
+      <div class="fu-modal" style="width:420px">
+        <div class="fu-modal-head">
+          <span class="fu-modal-title">Schedule Follow-up</span>
+          <button class="fu-modal-close" onclick="closeFuScheduleModal()">✕</button>
+        </div>
+        <div class="fu-modal-body">
+          <div class="fu-sched-tabs">
+            <button class="fu-sched-tab active" id="fuSchedTabOnce" onclick="setFuSchedTab('once')">📅 One-time</button>
+            <button class="fu-sched-tab" id="fuSchedTabRecurring" onclick="setFuSchedTab('recurring')">🔁 Recurring</button>
+          </div>
+
+          <!-- ONE-TIME PANE -->
+          <div class="fu-sched-pane active" id="fuSchedPaneOnce">
+            <div class="fu-time-row">
+              <label>Date</label>
+              <input type="date" id="fuSchedDate">
+            </div>
+            <div class="fu-time-row">
+              <label>Time</label>
+              <input type="time" id="fuSchedTime" value="08:00">
+              <span class="fu-time-label">(UTC)</span>
+            </div>
+            <div class="fu-sched-note" id="fuSchedOnceNote">Schedule for <strong id="fuSchedOnceCount">selected</strong> contacts</div>
+            <button class="btn btn-primary" onclick="submitFuScheduleOnce()">Schedule</button>
+          </div>
+
+          <!-- RECURRING PANE -->
+          <div class="fu-sched-pane" id="fuSchedPaneRecurring">
+            <div>
+              <div class="fu-time-row" style="margin-bottom:6px"><label>Days</label></div>
+              <div class="fu-day-grid" id="fuDayGrid">
+                <button class="fu-day-btn" data-day="0" onclick="toggleFuDay(this)">Mon</button>
+                <button class="fu-day-btn" data-day="1" onclick="toggleFuDay(this)">Tue</button>
+                <button class="fu-day-btn" data-day="2" onclick="toggleFuDay(this)">Wed</button>
+                <button class="fu-day-btn" data-day="3" onclick="toggleFuDay(this)">Thu</button>
+                <button class="fu-day-btn" data-day="4" onclick="toggleFuDay(this)">Fri</button>
+                <button class="fu-day-btn" data-day="5" onclick="toggleFuDay(this)">Sat</button>
+                <button class="fu-day-btn" data-day="6" onclick="toggleFuDay(this)">Sun</button>
+              </div>
+            </div>
+            <div class="fu-time-row">
+              <label>Time</label>
+              <input type="time" id="fuRecurTime" value="08:00">
+              <span class="fu-time-label">(UTC)</span>
+            </div>
+            <div class="fu-sched-note" id="fuSchedRecNote">Set recurring for <strong id="fuSchedRecCount">selected</strong> contacts</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" style="flex:1" onclick="submitFuSetRecurring()">Set Recurring</button>
+              <button class="btn btn-secondary" onclick="submitFuStopRecurring()">Stop Recurring</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
 <!-- INTELLIGENCE -->
 <div class="page" id="page-intelligence">
@@ -2251,6 +2348,36 @@ tr:last-child td { border-bottom: none; }
           </div>
         </div>
         <button class="btn btn-primary" onclick="saveFuTemplates()" style="margin-top:12px">💾 Save Follow-up Templates</button>
+
+        <!-- EXTRA TEMPLATE POOL -->
+        <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text)">Template Pool</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">All active templates are used for random selection when sending</div>
+            </div>
+            <button class="btn btn-secondary" style="font-size:12px" onclick="toggleAddFuTmplForm()">+ Add Template</button>
+          </div>
+
+          <!-- ADD FORM (hidden by default) -->
+          <div id="addFuTmplForm" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;display:none">
+            <div style="margin-bottom:8px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Name (optional)</label>
+              <input id="newFuTmplName" placeholder="e.g. FU4, General, Friendly…" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;color:var(--text);font-family:inherit">
+            </div>
+            <div style="margin-bottom:10px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Body</label>
+              <textarea id="newFuTmplBody" rows="4" placeholder="Hi,&#10;&#10;Just following up…&#10;&#10;{name}&#10;{company} | {phone}" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;color:var(--text);font-family:inherit;resize:vertical"></textarea>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" style="font-size:12px" onclick="saveNewFuTmpl()">Save Template</button>
+              <button class="btn btn-secondary" style="font-size:12px" onclick="toggleAddFuTmplForm()">Cancel</button>
+            </div>
+          </div>
+
+          <!-- LIST -->
+          <div id="extraFuTmplList"></div>
+        </div>
       </div>
     </div>
 
@@ -3423,6 +3550,7 @@ async function loadTemplates() {
     document.getElementById('fu-tmpl-2').value = fuData.FU2 || '';
     document.getElementById('fu-tmpl-3').value = fuData.FU3 || '';
   } catch(e) {}
+  await loadExtraFuTmpls();
 }
 function renderTemplates() {
   document.getElementById('templatesWrap').innerHTML = templates.map((t,i) =>
@@ -3456,6 +3584,68 @@ async function saveFuTemplates() {
   };
   await fetch('/api/fu-templates', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fu)});
   toast('✅ Follow-up templates saved!');
+  await loadExtraFuTmpls();
+}
+
+function toggleAddFuTmplForm() {
+  const f = document.getElementById('addFuTmplForm');
+  if (!f) return;
+  const visible = f.style.display !== 'none';
+  f.style.display = visible ? 'none' : 'block';
+  if (!visible) {
+    document.getElementById('newFuTmplName').value = '';
+    document.getElementById('newFuTmplBody').value = '';
+  }
+}
+
+async function loadExtraFuTmpls() {
+  try {
+    const res = await fetch('/api/fu-templates/list');
+    const { templates } = await res.json();
+    const el = document.getElementById('extraFuTmplList');
+    if (!el) return;
+    if (!templates.length) {
+      el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">No templates yet — add one above or save FU1/FU2/FU3 to populate the pool.</div>';
+      return;
+    }
+    el.innerHTML = templates.map(t => `
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;background:var(--bg)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px">${esc(t.name||t.level||'General')}</div>
+          <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((t.body||'').slice(0,80))}${t.body&&t.body.length>80?'…':''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" ${t.is_active?'checked':''} onchange="toggleFuTmplActive('${t.id}',this.checked)" style="accent-color:var(--accent)">
+            Active
+          </label>
+          <button class="btn btn-secondary" style="font-size:11px;padding:3px 8px" onclick="deleteFuTmpl('${t.id}')">Delete</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error('loadExtraFuTmpls:', e); }
+}
+
+async function saveNewFuTmpl() {
+  const name = (document.getElementById('newFuTmplName').value||'').trim();
+  const body = (document.getElementById('newFuTmplBody').value||'').trim();
+  if (!body) { toast('Template body is required', true); return; }
+  const res = await fetch('/api/fu-templates/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, body})});
+  if (!res.ok) { const d=await res.json(); toast(d.error||'Error', true); return; }
+  toast('Template added');
+  toggleAddFuTmplForm();
+  await loadExtraFuTmpls();
+}
+
+async function toggleFuTmplActive(id, active) {
+  await fetch(`/api/fu-templates/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({is_active:active})});
+  toast(active ? 'Template activated' : 'Template deactivated');
+}
+
+async function deleteFuTmpl(id) {
+  if (!confirm('Delete this template?')) return;
+  await fetch(`/api/fu-templates/${id}`, {method:'DELETE'});
+  toast('Template deleted');
+  await loadExtraFuTmpls();
 }
 
 // ── SETTINGS ─────────────────────────────────────────────────────────────────
@@ -3892,6 +4082,88 @@ async function markRStop(sid) {
 // ── FOLLOW-UP v2 ──────────────────────────────────────────────────────────────
 let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSpecialFilter = '', fuTab = 'contacts';
 let _fuDropdownContactId = null;
+let selectedFuIds = new Set();
+
+function buildFuFilterParams() {
+  const params = new URLSearchParams();
+  if (fuStageFilter) params.set('stage', fuStageFilter);
+  if (fuStateFilter) params.set('state', fuStateFilter);
+  if (fuSpecialFilter) params.set('filter', fuSpecialFilter);
+  const q = (document.getElementById('fuSearch')?.value||'').trim();
+  if (q) params.set('q', q);
+  return params;
+}
+
+function toggleFuSelect(id, e) {
+  if (e) e.stopPropagation();
+  selectedFuIds.has(id) ? selectedFuIds.delete(id) : selectedFuIds.add(id);
+  // update card border
+  const card = document.getElementById('fu-card-' + id);
+  if (card) card.classList.toggle('fu-selected', selectedFuIds.has(id));
+  const cb = document.getElementById('fu-cb-' + id);
+  if (cb) cb.checked = selectedFuIds.has(id);
+  renderFuSelection();
+}
+
+function selectAllVisibleFu() {
+  const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
+  let list = fuContacts;
+  if (search) list = list.filter(c =>
+    (c.contact_email||'').toLowerCase().includes(search) ||
+    (c.contact_name||'').toLowerCase().includes(search) ||
+    (c.company_name||'').toLowerCase().includes(search)
+  );
+  list.forEach(c => selectedFuIds.add(c.id));
+  renderFuContacts();
+  renderFuSelection();
+}
+
+async function selectAllFilteredFu() {
+  try {
+    const res = await fetch('/api/followups/ids?' + buildFuFilterParams());
+    const { ids } = await res.json();
+    ids.forEach(id => selectedFuIds.add(id));
+    renderFuContacts();
+    renderFuSelection();
+  } catch(e) { toast('Error selecting all: ' + e.message, true); }
+}
+
+function clearFuSelection() {
+  selectedFuIds.clear();
+  renderFuContacts();
+  renderFuSelection();
+}
+
+function renderFuSelection() {
+  const bar = document.getElementById('fuBulkBar');
+  const countEl = document.getElementById('fuBulkCount');
+  const allBtn = document.getElementById('fuSelectAllFiltered');
+  if (!bar) return;
+  const n = selectedFuIds.size;
+  bar.style.display = n > 0 ? '' : 'none';
+  if (countEl) countEl.textContent = n + ' selected';
+  // show "Select all filtered" if visible count < server-side total
+  if (allBtn) {
+    const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
+    const visibleCount = search
+      ? fuContacts.filter(c =>
+          (c.contact_email||'').toLowerCase().includes(search) ||
+          (c.contact_name||'').toLowerCase().includes(search) ||
+          (c.company_name||'').toLowerCase().includes(search)
+        ).length
+      : fuContacts.length;
+    const totalFiltered = fuContacts.length;
+    if (!search && totalFiltered > visibleCount) {
+      allBtn.textContent = 'Select all filtered (' + totalFiltered + ')';
+      allBtn.style.display = '';
+    } else if (n < totalFiltered) {
+      allBtn.textContent = 'Select all (' + totalFiltered + ')';
+      allBtn.style.display = '';
+    } else {
+      allBtn.style.display = 'none';
+    }
+  }
+}
 
 // ── Core load/render ──────────────────────────────────────────────────────────
 async function loadFollowups() {
@@ -4063,7 +4335,11 @@ function renderFuContacts() {
     const email = esc(c.contact_email);
     const primaryBtn = getFuPrimaryBtn(c);
 
+    if (selectedFuIds.has(c.id)) cardCls += ' fu-selected';
     return `<div class="${cardCls}" id="fu-card-${c.id}">
+      <div class="fu-checkbox-wrap">
+        <input type="checkbox" class="fu-checkbox" id="fu-cb-${c.id}" ${selectedFuIds.has(c.id)?'checked':''} onclick="toggleFuSelect('${c.id}',event)">
+      </div>
       <div class="fu-card-left">
         <div class="fu-company">${company}</div>
         <div class="fu-email-text">${email}</div>
@@ -4071,6 +4347,7 @@ function renderFuContacts() {
       <div class="fu-card-badges">
         <span class="fu-stage-badge ${si.cls}">${si.label}</span>
         <span class="fu-state-badge ${sti.cls}">${sti.label}</span>
+        ${c.recurring_enabled ? `<span class="fu-state-badge" title="Recurring" style="background:rgba(99,102,241,.12);color:#6366f1;font-size:9px">🔁 Recurring</span>` : ''}
       </div>
       <div class="fu-card-dates">
         ${nextFu ? `<div class="fu-date-label">Next FU</div><div class="fu-date-val${nextFu.overdue?' overdue':''}">${nextFu.text}</div>` : '<div class="fu-date-val" style="color:var(--text3)">—</div>'}
@@ -4086,8 +4363,8 @@ function renderFuContacts() {
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────
-async function fuAction(id, action, reason) {
-  const body = {id, action};
+async function fuAction(id, action, reason, extraPayload) {
+  const body = {id, action, ...(extraPayload||{})};
   if (reason) body.reason = reason;
   try {
     const res = await fetch('/api/followups/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
@@ -4096,6 +4373,92 @@ async function fuAction(id, action, reason) {
     toast(action==='send-now' ? 'Follow-up sent' : action.charAt(0).toUpperCase()+action.slice(1)+' done');
     await loadFollowups();
   } catch(e) { toast('Error: '+e.message, true); }
+}
+
+async function bulkFuAction(action, extraPayload) {
+  if (!selectedFuIds.size) return;
+  const ids = [...selectedFuIds];
+  const body = {ids, action, ...extraPayload};
+  try {
+    const res = await fetch('/api/followups/bulk-action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (!res.ok) { toast('Error: ' + (data.error||'unknown'), true); return; }
+    const sent = data.sent ?? data.updated ?? ids.length;
+    const skipped = data.skipped || 0;
+    let msg = action === 'send-now' ? `Sent ${sent}` : `Done: ${sent}`;
+    if (skipped) msg += `, skipped ${skipped}`;
+    toast(msg);
+    clearFuSelection();
+    await loadFollowups();
+  } catch(e) { toast('Error: '+e.message, true); }
+}
+
+// ── Schedule modal ────────────────────────────────────────────────────────────
+let _fuSchedSingleId = null; // set when opened from per-contact action
+
+function openFuScheduleModal(singleId, tab) {
+  _fuSchedSingleId = singleId || null;
+  setFuSchedTab(tab || 'once');
+  const n = singleId ? 1 : selectedFuIds.size;
+  document.getElementById('fuSchedOnceCount').textContent = n + (n===1?' contact':' contacts');
+  document.getElementById('fuSchedRecCount').textContent  = n + (n===1?' contact':' contacts');
+  // default date = tomorrow
+  const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate()+1);
+  document.getElementById('fuSchedDate').value = tomorrow.toISOString().slice(0,10);
+  document.getElementById('fuSchedModal').classList.add('open');
+}
+
+function closeFuScheduleModal() {
+  document.getElementById('fuSchedModal').classList.remove('open');
+  _fuSchedSingleId = null;
+}
+
+function setFuSchedTab(tab) {
+  document.getElementById('fuSchedPaneOnce').classList.toggle('active', tab==='once');
+  document.getElementById('fuSchedPaneRecurring').classList.toggle('active', tab==='recurring');
+  document.getElementById('fuSchedTabOnce').classList.toggle('active', tab==='once');
+  document.getElementById('fuSchedTabRecurring').classList.toggle('active', tab==='recurring');
+}
+
+function toggleFuDay(btn) {
+  btn.classList.toggle('active');
+}
+
+async function submitFuScheduleOnce() {
+  const dateVal = document.getElementById('fuSchedDate').value;
+  const timeVal = document.getElementById('fuSchedTime').value || '08:00';
+  if (!dateVal) { toast('Pick a date', true); return; }
+  const dt = new Date(dateVal + 'T' + timeVal + ':00Z');
+  if (dt <= new Date()) { toast('Must be at least 1 minute in the future', true); return; }
+  const isoStr = dt.toISOString();
+  if (_fuSchedSingleId) {
+    await fuAction(_fuSchedSingleId, 'schedule-once', null, {scheduled_at: isoStr});
+  } else {
+    await bulkFuAction('schedule-once', {scheduled_at: isoStr});
+  }
+  closeFuScheduleModal();
+}
+
+async function submitFuSetRecurring() {
+  const activeDays = [...document.querySelectorAll('#fuDayGrid .fu-day-btn.active')].map(b=>b.dataset.day);
+  if (!activeDays.length) { toast('Select at least one day', true); return; }
+  const timeVal = document.getElementById('fuRecurTime').value || '08:00';
+  const payload = {recurring_days: activeDays.join(','), recurring_time: timeVal};
+  if (_fuSchedSingleId) {
+    await fuAction(_fuSchedSingleId, 'set-recurring', null, payload);
+  } else {
+    await bulkFuAction('set-recurring', payload);
+  }
+  closeFuScheduleModal();
+}
+
+async function submitFuStopRecurring() {
+  if (_fuSchedSingleId) {
+    await fuAction(_fuSchedSingleId, 'stop-recurring');
+  } else {
+    await bulkFuAction('stop-recurring');
+  }
+  closeFuScheduleModal();
 }
 
 function toggleFuDropdown(event, contactId) {
@@ -4112,6 +4475,7 @@ function toggleFuDropdown(event, contactId) {
   const isActive = c.state==='active';
   const isPaused = c.state==='paused';
 
+  const notBlocked = !['blocked','closed'].includes(c.state);
   let items = '';
   if (isActive)  items += `<button class="fu-dd-item" onclick="fuDropdownAction('pause')"><i class="ph-bold ph-pause"></i> Pause</button>`;
   if (isPaused)  items += `<button class="fu-dd-item" onclick="fuDropdownAction('resume')"><i class="ph-bold ph-play"></i> Resume</button>`;
@@ -4120,6 +4484,13 @@ function toggleFuDropdown(event, contactId) {
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('loads')"><i class="ph-bold ph-truck"></i> Mark as Loads</button>`;
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('block')"><i class="ph-bold ph-prohibit"></i> Block</button>`;
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('close')"><i class="ph-bold ph-check-circle"></i> Close</button>`;
+    items += `<div class="fu-dd-sep"></div>`;
+  }
+  if (notBlocked) {
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('free-send')"><i class="ph-bold ph-paper-plane-tilt"></i> Free Send</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('schedule-once')"><i class="ph-bold ph-calendar"></i> Schedule once</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('set-recurring')"><i class="ph-bold ph-arrows-clockwise"></i> Set recurring</button>`;
+    if (c.recurring_enabled) items += `<button class="fu-dd-item" onclick="fuDropdownAction('stop-recurring')"><i class="ph-bold ph-stop-circle"></i> Stop recurring</button>`;
     items += `<div class="fu-dd-sep"></div>`;
   }
   items += `<button class="fu-dd-item" onclick="fuDropdownAction('note')"><i class="ph-bold ph-note-pencil"></i> Add Note</button>`;
@@ -4149,6 +4520,10 @@ async function fuDropdownAction(action) {
     await fetch('/api/followups/notes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, notes:txt})});
     toast('Note saved'); return;
   }
+  if (action==='schedule-once') { openFuScheduleModal(id, 'once'); return; }
+  if (action==='set-recurring')  { openFuScheduleModal(id, 'recurring'); return; }
+  if (action==='stop-recurring') { await fuAction(id, 'stop-recurring'); return; }
+  if (action==='free-send')      { await fuAction(id, 'free-send'); return; }
   let reason = '';
   if (action==='block' || action==='close') { reason = prompt(`Reason for ${action} (optional):`)||''; if (reason===null) return; }
   await fuAction(id, action, reason);

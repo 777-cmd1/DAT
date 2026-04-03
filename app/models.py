@@ -408,7 +408,7 @@ class Template(db.Model):
     user_id      = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     workspace_id = db.Column(db.String(36), db.ForeignKey('workspaces.id'))
     type         = db.Column(db.String(20), nullable=False)  # 'outreach' | 'followup'
-    level        = db.Column(db.String(10))                   # NULL for outreach, 'FU1/FU2/FU3' for fu
+    level        = db.Column(db.String(50))                   # NULL for outreach; any name for followup templates
     name         = db.Column(db.String(255), default='')
     body         = db.Column(db.Text, nullable=False)
     sort_order   = db.Column(db.Integer, default=0)

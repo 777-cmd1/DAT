@@ -3474,6 +3474,62 @@ def api_save_fu_templates():
     db.session.commit()
     return jsonify({'ok': True})
 
+@app.route('/api/fu-templates/list', methods=['GET'])
+@login_required
+def api_list_fu_templates():
+    """Return all FU templates for user as a list (for management UI)."""
+    uid = current_user_id()
+    if not uid: return jsonify({'error': 'Not authenticated'}), 401
+    from app.models import Template
+    rows = Template.query.filter_by(user_id=uid, type='followup').order_by(Template.sort_order, Template.created_at).all()
+    return jsonify({'templates': [r.to_dict() for r in rows]})
+
+@app.route('/api/fu-templates/add', methods=['POST'])
+@login_required
+def api_add_fu_template():
+    """Add a new FU template (any name allowed)."""
+    uid = current_user_id()
+    if not uid: return jsonify({'error': 'Not authenticated'}), 401
+    from app.models import Template
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    body = (data.get('body') or '').strip()
+    if not body:
+        return jsonify({'error': 'Template body is required'}), 400
+    tmpl = Template(user_id=uid, type='followup', level=name or 'General', name=name, body=body)
+    db.session.add(tmpl)
+    db.session.commit()
+    return jsonify({'ok': True, 'template': tmpl.to_dict()})
+
+@app.route('/api/fu-templates/<tmpl_id>', methods=['PUT'])
+@login_required
+def api_update_fu_template(tmpl_id):
+    uid = current_user_id()
+    if not uid: return jsonify({'error': 'Not authenticated'}), 401
+    from app.models import Template
+    tmpl = Template.query.filter_by(id=tmpl_id, user_id=uid, type='followup').first_or_404()
+    data = request.json or {}
+    if 'name' in data:
+        tmpl.name = data['name'].strip()
+        tmpl.level = data['name'].strip() or 'General'
+    if 'body' in data:
+        tmpl.body = data['body']
+    if 'is_active' in data:
+        tmpl.is_active = bool(data['is_active'])
+    db.session.commit()
+    return jsonify({'ok': True, 'template': tmpl.to_dict()})
+
+@app.route('/api/fu-templates/<tmpl_id>', methods=['DELETE'])
+@login_required
+def api_delete_fu_template(tmpl_id):
+    uid = current_user_id()
+    if not uid: return jsonify({'error': 'Not authenticated'}), 401
+    from app.models import Template
+    tmpl = Template.query.filter_by(id=tmpl_id, user_id=uid, type='followup').first_or_404()
+    tmpl.is_active = False
+    db.session.commit()
+    return jsonify({'ok': True})
+
 # ── PIPELINE ──────────────────────────────────────────────────────────────────
 STAGES = ['new_lead', 'contacted', 'replied', 'interested', 'deal', 'lost']
 
@@ -3672,9 +3728,7 @@ def _run_scheduled_followups():
                 if not acct:
                     continue
 
-                template_key = STAGE_TO_TEMPLATE[fc.stage]
-                templates = _get_fu_templates_for_user(fc.user_id)
-                template_text = templates.get(template_key, DEFAULT_FU_TEMPLATES.get(template_key, ''))
+                template_text = _get_random_fu_template(fc.user_id)
                 if not template_text:
                     continue
 
@@ -3718,7 +3772,75 @@ def _run_scheduled_followups():
 
         if sent_total:
             app.logger.info(f'FU scheduler: sent {sent_total} follow-ups')
-        return sent_total
+
+        # ── Path 2: Recurring sends ──────────────────────────────────────────
+        processed_ids = {fc.id for fc in contacts}  # avoid double-send
+        try:
+            rq = FollowupContact.query.filter(
+                FollowupContact.state == 'active',
+                FollowupContact.recurring_enabled == True,
+                FollowupContact.next_followup_at <= now,
+            )
+            try:
+                recurring = rq.with_for_update(skip_locked=True).all()
+            except Exception:
+                recurring = rq.all()
+        except Exception as e:
+            app.logger.error(f'FU recurring scheduler query error: {e}')
+            return sent_total
+
+        rec_total = 0
+        for fc in recurring:
+            if fc.id in processed_ids:
+                continue  # already sent in Path 1 this run
+            try:
+                if fc.state != 'active' or not fc.recurring_enabled:
+                    continue
+                if not fc.recurring_days or not fc.recurring_time:
+                    continue
+
+                template_text = _get_random_fu_template(fc.user_id)
+                if not template_text:
+                    continue
+
+                acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
+                if not acct:
+                    continue
+
+                cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+                       'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+                fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
+                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+
+                ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
+
+                if ok:
+                    fc.last_followup_sent_at = now
+                    fc.last_activity_at = now
+                    try:
+                        fc.next_followup_at = _next_recurring_datetime(fc.recurring_days, fc.recurring_time)
+                    except ValueError as ve:
+                        app.logger.error(f'FU recurring next-date error for {fc.contact_email}: {ve}')
+                        fc.next_followup_at = None
+
+                    _record_event(fc, 'recurring_sent', actor_type='scheduler',
+                                  from_stage=fc.stage, to_stage=fc.stage)
+                    rec_total += 1
+                else:
+                    _record_event(fc, 'recurring_sent', actor_type='scheduler',
+                                  from_stage=fc.stage, to_stage=fc.stage,
+                                  metadata_json=json.dumps({'error': str(err)}),
+                                  notes='Send failed - will retry')
+
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f'FU recurring scheduler error for {fc.contact_email}: {e}')
+
+        if rec_total:
+            app.logger.info(f'FU scheduler: sent {rec_total} recurring follow-ups')
+
+        return sent_total + rec_total
 
 def scheduled_followup_worker():
     """Daemon thread: checks for due follow-ups every 15 minutes."""
@@ -3785,6 +3907,17 @@ with app.app_context():
                     _conn.rollback()  # column already exists — ignore
     except Exception as _e:
         print(f'Migration check skipped: {_e}')
+    # Extend templates.level column to VARCHAR(50) to allow custom FU template names
+    try:
+        with db.engine.connect() as _conn:
+            try:
+                _conn.execute(db.text('ALTER TABLE templates ALTER COLUMN level TYPE VARCHAR(50)'))
+                _conn.commit()
+                print('✓ Migration: extended templates.level to VARCHAR(50)')
+            except Exception:
+                _conn.rollback()
+    except Exception as _e:
+        print(f'templates.level migration skipped: {_e}')
     # Ensure parse-critical index exists: (user_id, status) on sends
     try:
         with db.engine.connect() as _conn:

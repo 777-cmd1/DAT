@@ -3514,6 +3514,9 @@ with app.app_context():
         ('follow_ups',     'scheduled_at',          'TIMESTAMP'),
         ('follow_ups',     'last_error',            'TEXT'),
         ('workspaces',     'fu_auto_enabled',       'BOOLEAN DEFAULT TRUE'),
+        ('followup_contacts', 'recurring_enabled',  'BOOLEAN NOT NULL DEFAULT FALSE'),
+        ('followup_contacts', 'recurring_days',     'VARCHAR(20)'),
+        ('followup_contacts', 'recurring_time',     'VARCHAR(5)'),
     ]
     try:
         with db.engine.connect() as _conn:

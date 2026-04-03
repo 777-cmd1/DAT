@@ -269,6 +269,9 @@ class FollowupContact(db.Model):
     notes = db.Column(db.Text, default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    recurring_enabled = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
+    recurring_days    = db.Column(db.String(20))   # "0,2,4" = Mon/Wed/Fri (0=Mon...6=Sun)
+    recurring_time    = db.Column(db.String(5))    # "HH:MM" stored as UTC
 
     user = db.relationship('User', backref='followup_contacts')
 
@@ -297,6 +300,9 @@ class FollowupContact(db.Model):
             'current_route': self.current_route or '',
             'notes': self.notes or '',
             'reply_subject': self.reply_subject or '',
+            'recurring_enabled': self.recurring_enabled,
+            'recurring_days':    self.recurring_days or '',
+            'recurring_time':    self.recurring_time or '',
         }
 
 

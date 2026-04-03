@@ -2933,6 +2933,46 @@ def api_followups_list():
     return jsonify(contacts=[c.to_dict() for c in contacts], counts=counts)
 
 
+@app.route('/api/followups/ids')
+@login_required
+def api_followups_ids():
+    """Return all contact IDs matching current filters (for select-all-filtered)."""
+    from app.models import FollowupContact
+    uid = _current_user_id()
+    q = FollowupContact.query.filter_by(user_id=uid)
+    state_f = request.args.get('state')
+    stage_f = request.args.get('stage')
+    special = request.args.get('filter')
+    search  = request.args.get('q', '').strip().lower()
+    if state_f and state_f in VALID_STATES:
+        q = q.filter_by(state=state_f)
+    if stage_f:
+        stage_map = {'FU1': ['fu1_scheduled', 'fu1_sent'], 'FU2': ['fu2_scheduled', 'fu2_sent'],
+                     'FU3': ['fu3_scheduled', 'fu3_sent'], 'Done': ['completed_fu3']}
+        stages = stage_map.get(stage_f, [])
+        if stages:
+            q = q.filter(FollowupContact.stage.in_(stages))
+    if search:
+        q = q.filter(db.or_(
+            FollowupContact.contact_email.ilike(f'%{search}%'),
+            FollowupContact.contact_name.ilike(f'%{search}%'),
+            FollowupContact.company_name.ilike(f'%{search}%'),
+        ))
+    now = datetime.utcnow()
+    if special == 'needs_action':
+        q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
+    elif special == 'overdue':
+        q = q.filter(FollowupContact.next_followup_at < now, FollowupContact.state == 'active',
+                     FollowupContact.is_followup_enabled == True)
+    elif special == 'due_today':
+        end_of_day = now.replace(hour=23, minute=59, second=59)
+        q = q.filter(FollowupContact.next_followup_at <= end_of_day,
+                     FollowupContact.next_followup_at >= now,
+                     FollowupContact.state == 'active', FollowupContact.is_followup_enabled == True)
+    ids = [row[0] for row in q.with_entities(FollowupContact.id).all()]
+    return jsonify(ids=ids)
+
+
 @app.route('/api/followups/add', methods=['POST'])
 @login_required
 def api_followups_add():
@@ -3132,7 +3172,7 @@ def api_followups_action():
 @app.route('/api/followups/bulk-action', methods=['POST'])
 @login_required
 def api_followups_bulk_action():
-    from app.models import FollowupContact
+    from app.models import FollowupContact, EmailAccount
     uid = _current_user_id()
     data = request.get_json()
     ids = data.get('ids', [])
@@ -3145,14 +3185,126 @@ def api_followups_bulk_action():
         if not fc or fc.user_id != uid:
             results.append({'id': cid, 'ok': False, 'error': 'Not found'})
             continue
+
         if action in ('pause', 'resume', 'warm', 'loads', 'block', 'close'):
             target = 'active' if action == 'resume' else ('blocked' if action == 'block' else action)
             ok, err = _transition_state(fc, target, reason=reason, actor_user_id=uid)
             results.append({'id': cid, 'ok': ok, 'error': err})
+
+        elif action == 'send-now':
+            if fc.state != 'active' or fc.stage not in STAGE_TO_TEMPLATE or not fc.is_followup_enabled:
+                results.append({'id': cid, 'ok': False, 'error': 'Not eligible for sequence send'})
+                continue
+            template_text = _get_random_fu_template(fc.user_id)
+            if not template_text:
+                results.append({'id': cid, 'ok': False, 'error': 'No active templates'})
+                continue
+            acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
+            if not acct:
+                results.append({'id': cid, 'ok': False, 'error': 'No email account'})
+                continue
+            cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+                   'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+            fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
+                       'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+            ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
+            if ok:
+                now_dt = datetime.utcnow()
+                old_stage = fc.stage
+                setattr(fc, STAGE_SENT_FIELD[fc.stage], now_dt)
+                fc.last_followup_sent_at = now_dt
+                fc.last_activity_at = now_dt
+                sent_stage, next_scheduled = STAGE_PROGRESSION[fc.stage]
+                if next_scheduled:
+                    settings = _get_fu_settings(fc.workspace_id)
+                    fc.stage = next_scheduled
+                    fc.next_followup_at = now_dt + _get_stage_delay(next_scheduled, settings)
+                else:
+                    fc.stage = 'completed_fu3'
+                    fc.is_followup_enabled = False
+                    fc.next_followup_at = None
+                    fc.completed_fu3_at = now_dt
+                _record_event(fc, 'manual_send', actor_user_id=uid,
+                              from_stage=old_stage, to_stage=fc.stage)
+                results.append({'id': cid, 'ok': True})
+            else:
+                results.append({'id': cid, 'ok': False, 'error': err})
+
+        elif action == 'free-send':
+            if fc.state in ('blocked', 'closed'):
+                results.append({'id': cid, 'ok': False, 'error': 'Blocked or closed'})
+                continue
+            template_text = _get_random_fu_template(fc.user_id)
+            if not template_text:
+                results.append({'id': cid, 'ok': False, 'error': 'No active templates'})
+                continue
+            acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
+            if not acct:
+                results.append({'id': cid, 'ok': False, 'error': 'No email account'})
+                continue
+            cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+                   'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+            fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
+                       'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+            ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
+            if ok:
+                now_dt = datetime.utcnow()
+                fc.is_followup_enabled = False
+                fc.last_followup_sent_at = now_dt
+                fc.last_activity_at = now_dt
+                _record_event(fc, 'free_send', actor_user_id=uid,
+                              from_stage=fc.stage, to_stage=fc.stage)
+                results.append({'id': cid, 'ok': True})
+            else:
+                results.append({'id': cid, 'ok': False, 'error': err})
+
+        elif action == 'schedule-once':
+            if fc.state in ('blocked', 'closed'):
+                results.append({'id': cid, 'ok': False, 'error': 'Blocked or closed'})
+                continue
+            dt_str = data.get('scheduled_at', '')
+            try:
+                scheduled_at = datetime.fromisoformat(dt_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                if scheduled_at < datetime.utcnow() + timedelta(minutes=1):
+                    results.append({'id': cid, 'ok': False, 'error': 'Date must be in future'})
+                    continue
+            except (ValueError, TypeError):
+                results.append({'id': cid, 'ok': False, 'error': 'Invalid date format'})
+                continue
+            fc.next_followup_at = scheduled_at
+            _record_event(fc, 'scheduled_once', actor_user_id=uid,
+                          notes=f'Scheduled {scheduled_at.strftime("%Y-%m-%d %H:%M")} UTC')
+            results.append({'id': cid, 'ok': True})
+
+        elif action == 'set-recurring':
+            if fc.state in ('blocked', 'closed'):
+                results.append({'id': cid, 'ok': False, 'error': 'Blocked or closed'})
+                continue
+            r_days = (data.get('recurring_days') or '').strip()
+            r_time = (data.get('recurring_time') or '').strip()
+            try:
+                fc.recurring_enabled = True
+                fc.recurring_days    = r_days
+                fc.recurring_time    = r_time
+                fc.next_followup_at  = _next_recurring_datetime(r_days, r_time)
+                _record_event(fc, 'recurring_set', actor_user_id=uid,
+                              notes=f'Recurring days={r_days} time={r_time} UTC')
+                results.append({'id': cid, 'ok': True})
+            except ValueError as e:
+                results.append({'id': cid, 'ok': False, 'error': str(e)})
+
+        elif action == 'stop-recurring':
+            fc.recurring_enabled = False
+            _record_event(fc, 'recurring_stopped', actor_user_id=uid)
+            results.append({'id': cid, 'ok': True})
+
         else:
             results.append({'id': cid, 'ok': False, 'error': f'Unknown action: {action}'})
+
     db.session.commit()
-    return jsonify(results=results)
+    ok_count   = sum(1 for r in results if r.get('ok'))
+    skip_count = len(results) - ok_count
+    return jsonify(results=results, sent=ok_count, skipped=skip_count)
 
 
 @app.route('/api/followups/delete', methods=['POST'])

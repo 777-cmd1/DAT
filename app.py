@@ -2991,15 +2991,15 @@ def api_followups_action():
         if fc.stage not in STAGE_TO_TEMPLATE:
             return jsonify(error='No scheduled follow-up to send'), 400
 
-        template_key = STAGE_TO_TEMPLATE[fc.stage]
-        templates = _get_fu_templates_for_user(uid)
-        template_text = templates.get(template_key, DEFAULT_FU_TEMPLATES.get(template_key, ''))
+        template_text = _get_random_fu_template(uid)
+        if not template_text:
+            return jsonify(error='No active follow-up templates. Add at least one before sending.'), 400
         acct = EmailAccount.query.filter_by(user_id=uid).first()
         if not acct:
             return jsonify(error='No email account configured'), 400
 
-        cfg = {'name': acct.sender_name or '', 'company': acct.company_name or '',
-               'phone': acct.phone or '', 'route': fc.current_route or ''}
+        cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+               'phone': acct.your_phone or '', 'route': fc.current_route or ''}
         fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                    'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
         ok, err = send_followup_email(fu_dict, template_text, cfg, uid=uid)
@@ -3382,6 +3382,33 @@ def _get_fu_templates_for_user(uid):
     rows = Template.query.filter_by(user_id=uid, type='followup', is_active=True).all()
     if not rows: return DEFAULT_FU_TEMPLATES.copy()
     return {r.level: r.body for r in rows if r.level}
+
+def _get_random_fu_template(uid):
+    """Pick a random active follow-up template body for the given user.
+    Falls back to DEFAULT_FU_TEMPLATES pool if no custom templates exist."""
+    from app.models import Template
+    rows = Template.query.filter_by(user_id=uid, type='followup', is_active=True).all()
+    if rows:
+        return random.choice(rows).body or ''
+    return random.choice(list(DEFAULT_FU_TEMPLATES.values()))
+
+def _next_recurring_datetime(recurring_days, recurring_time):
+    """Return next UTC datetime matching one of recurring_days at recurring_time (UTC).
+    recurring_days: comma-separated weekday ints string, 0=Mon...6=Sun
+    recurring_time: "HH:MM" UTC
+    Checks today first — if today matches and time is still future, schedules today.
+    """
+    days = [int(d) for d in recurring_days.split(',') if d.strip().isdigit()]
+    if not days:
+        raise ValueError(f'recurring_days is empty or invalid: {recurring_days!r}')
+    h, m = map(int, recurring_time.split(':'))
+    now = datetime.utcnow()
+    for offset in range(0, 8):
+        candidate = (now + timedelta(days=offset)).replace(
+            hour=h, minute=m, second=0, microsecond=0)
+        if candidate.weekday() in days and candidate > now:
+            return candidate
+    raise ValueError(f'No valid day found — unreachable with valid input: days={days}')
 
 def _run_scheduled_followups():
     """Process due follow-up contacts and send emails. Called from daemon thread.

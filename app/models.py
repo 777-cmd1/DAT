@@ -272,6 +272,7 @@ class FollowupContact(db.Model):
     recurring_enabled = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
     recurring_days    = db.Column(db.String(20))   # "0,2,4" = Mon/Wed/Fri (0=Mon...6=Sun)
     recurring_time    = db.Column(db.String(5))    # "HH:MM" stored as UTC
+    scheduled_once    = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
 
     user = db.relationship('User', backref='followup_contacts')
 
@@ -303,6 +304,7 @@ class FollowupContact(db.Model):
             'recurring_enabled': self.recurring_enabled,
             'recurring_days':    self.recurring_days or '',
             'recurring_time':    self.recurring_time or '',
+            'scheduled_once':    self.scheduled_once,
         }
 
 

@@ -2910,6 +2910,9 @@ def api_followups_list():
         q = q.filter(FollowupContact.next_followup_at <= end_of_day,
                      FollowupContact.next_followup_at >= now,
                      FollowupContact.state == 'active', FollowupContact.is_followup_enabled == True)
+    elif special == 'scheduled':
+        q = q.filter(FollowupContact.scheduled_once == True,
+                     FollowupContact.next_followup_at > now)
 
     contacts = q.order_by(FollowupContact.created_at.desc()).all()
 
@@ -2923,12 +2926,14 @@ def api_followups_list():
         func.count(case((FollowupContact.state == 'closed', 1))).label('closed'),
         func.count(case(((FollowupContact.stage == 'completed_fu3') & (FollowupContact.state == 'active'), 1))).label('needs_action'),
         func.count(case(((FollowupContact.next_followup_at < now) & (FollowupContact.state == 'active') & (FollowupContact.is_followup_enabled == True), 1))).label('overdue'),
+        func.count(case(((FollowupContact.scheduled_once == True) & (FollowupContact.next_followup_at > now), 1))).label('scheduled'),
     ).filter(FollowupContact.user_id == uid).first()
 
     counts = {
         'total': count_q.total, 'active': count_q.active, 'paused': count_q.paused,
         'warm': count_q.warm, 'loads': count_q.loads, 'blocked': count_q.blocked,
         'closed': count_q.closed, 'needs_action': count_q.needs_action, 'overdue': count_q.overdue,
+        'scheduled': count_q.scheduled,
     }
     return jsonify(contacts=[c.to_dict() for c in contacts], counts=counts)
 
@@ -2969,6 +2974,9 @@ def api_followups_ids():
         q = q.filter(FollowupContact.next_followup_at <= end_of_day,
                      FollowupContact.next_followup_at >= now,
                      FollowupContact.state == 'active', FollowupContact.is_followup_enabled == True)
+    elif special == 'scheduled':
+        q = q.filter(FollowupContact.scheduled_once == True,
+                     FollowupContact.next_followup_at > now)
     ids = [row[0] for row in q.with_entities(FollowupContact.id).all()]
     return jsonify(ids=ids)
 
@@ -3112,6 +3120,7 @@ def api_followups_action():
         except (ValueError, TypeError):
             return jsonify(error='Invalid scheduled_at format — use ISO8601 UTC'), 400
         fc.next_followup_at = scheduled_at
+        fc.scheduled_once = True
         _record_event(fc, 'scheduled_once', actor_user_id=uid,
                       notes=f'Scheduled for {scheduled_at.strftime("%Y-%m-%d %H:%M")} UTC')
         db.session.commit()
@@ -3145,6 +3154,13 @@ def api_followups_action():
     elif action == 'stop-recurring':
         fc.recurring_enabled = False
         _record_event(fc, 'recurring_stopped', actor_user_id=uid)
+        db.session.commit()
+        return jsonify(ok=True, contact=fc.to_dict())
+
+    elif action == 'cancel-schedule':
+        fc.scheduled_once = False
+        fc.next_followup_at = None
+        _record_event(fc, 'schedule_cancelled', actor_user_id=uid)
         db.session.commit()
         return jsonify(ok=True, contact=fc.to_dict())
 
@@ -3296,6 +3312,12 @@ def api_followups_bulk_action():
         elif action == 'stop-recurring':
             fc.recurring_enabled = False
             _record_event(fc, 'recurring_stopped', actor_user_id=uid)
+            results.append({'id': cid, 'ok': True})
+
+        elif action == 'cancel-schedule':
+            fc.scheduled_once = False
+            fc.next_followup_at = None
+            _record_event(fc, 'schedule_cancelled', actor_user_id=uid)
             results.append({'id': cid, 'ok': True})
 
         else:
@@ -3773,8 +3795,60 @@ def _run_scheduled_followups():
         if sent_total:
             app.logger.info(f'FU scheduler: sent {sent_total} follow-ups')
 
+        # ── Path 0: One-time scheduled sends ────────────────────────────────
+        processed_ids = {fc.id for fc in contacts}
+        try:
+            sq = FollowupContact.query.filter(
+                FollowupContact.scheduled_once == True,
+                FollowupContact.next_followup_at <= now,
+            )
+            try:
+                sched_contacts = sq.with_for_update(skip_locked=True).all()
+            except Exception:
+                sched_contacts = sq.all()
+        except Exception as e:
+            app.logger.error(f'FU scheduled-once query error: {e}')
+            sched_contacts = []
+
+        sched_total = 0
+        for fc in sched_contacts:
+            if fc.id in processed_ids:
+                continue
+            try:
+                template_text = _get_random_fu_template(fc.user_id)
+                if not template_text:
+                    continue
+                acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
+                if not acct:
+                    continue
+                cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+                       'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+                fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
+                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+                ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
+                if ok:
+                    fc.scheduled_once = False
+                    fc.last_followup_sent_at = now
+                    fc.last_activity_at = now
+                    _record_event(fc, 'scheduled_once_sent', actor_type='scheduler',
+                                  from_stage=fc.stage, to_stage=fc.stage)
+                    processed_ids.add(fc.id)
+                    sched_total += 1
+                else:
+                    _record_event(fc, 'scheduled_once_sent', actor_type='scheduler',
+                                  from_stage=fc.stage, to_stage=fc.stage,
+                                  metadata_json=json.dumps({'error': str(err)}),
+                                  notes='Send failed - will retry')
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f'FU scheduled-once error for {fc.contact_email}: {e}')
+
+        if sched_total:
+            app.logger.info(f'FU scheduler: sent {sched_total} one-time scheduled follow-ups')
+
         # ── Path 2: Recurring sends ──────────────────────────────────────────
-        processed_ids = {fc.id for fc in contacts}  # avoid double-send
+        # processed_ids already includes Path 0 + 1
         try:
             rq = FollowupContact.query.filter(
                 FollowupContact.state == 'active',
@@ -3895,6 +3969,7 @@ with app.app_context():
         ('followup_contacts', 'recurring_enabled',  'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('followup_contacts', 'recurring_days',     'VARCHAR(20)'),
         ('followup_contacts', 'recurring_time',     'VARCHAR(5)'),
+        ('followup_contacts', 'scheduled_once',     'BOOLEAN NOT NULL DEFAULT FALSE'),
     ]
     try:
         with db.engine.connect() as _conn:

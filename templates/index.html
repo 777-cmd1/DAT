@@ -2072,6 +2072,7 @@ tr:last-child td { border-bottom: none; }
             <div class="fu-filter-divider"></div>
             <button class="fu-filter-btn needs-action" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')">Needs Action <span id="fuNeedsActionCount" style="font-family:'JetBrains Mono',monospace"></span></button>
             <button class="fu-filter-btn overdue" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')">Overdue <span id="fuOverdueCount" style="font-family:'JetBrains Mono',monospace"></span></button>
+            <button class="fu-filter-btn" id="fuf-special-scheduled" onclick="setFuSpecialFilter('scheduled')" style="color:var(--accent)">📅 Scheduled <span id="fuScheduledCount" style="font-family:'JetBrains Mono',monospace"></span></button>
           </div>
         </div>
 
@@ -2087,6 +2088,7 @@ tr:last-child td { border-bottom: none; }
           <button class="btn btn-sm btn-primary" onclick="bulkFuAction('send-now')">▶ Send Now</button>
           <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('free-send')">📤 Free Send</button>
           <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal()">📅 Schedule</button>
+          <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('cancel-schedule')">❌ Cancel Schedule</button>
           <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('pause')">⏸ Pause</button>
           <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('block')">🚫 Block</button>
         </div>
@@ -4188,8 +4190,10 @@ function updateFuBadge() {
   if (b) { b.textContent = n; b.style.display = n > 0 ? 'inline' : 'none'; }
   const na = document.getElementById('fuNeedsActionCount');
   const ov = document.getElementById('fuOverdueCount');
+  const sc = document.getElementById('fuScheduledCount');
   if (na && fuCounts.needs_action) na.textContent = '(' + fuCounts.needs_action + ')';
   if (ov && fuCounts.overdue)      ov.textContent = '(' + fuCounts.overdue + ')';
+  if (sc) sc.textContent = fuCounts.scheduled ? '(' + fuCounts.scheduled + ')' : '';
 }
 
 function renderFuStatsBar() {
@@ -4348,6 +4352,7 @@ function renderFuContacts() {
         <span class="fu-stage-badge ${si.cls}">${si.label}</span>
         <span class="fu-state-badge ${sti.cls}">${sti.label}</span>
         ${c.recurring_enabled ? `<span class="fu-state-badge" title="Recurring" style="background:rgba(99,102,241,.12);color:#6366f1;font-size:9px">🔁 Recurring</span>` : ''}
+        ${c.scheduled_once ? `<span class="fu-state-badge" title="One-time scheduled: ${c.next_followup_at||''}" style="background:rgba(5,150,105,.10);color:var(--accent);font-size:9px">📅 ${formatFuDate(c.next_followup_at)?.text||'Scheduled'}</span>` : ''}
       </div>
       <div class="fu-card-dates">
         ${nextFu ? `<div class="fu-date-label">Next FU</div><div class="fu-date-val${nextFu.overdue?' overdue':''}">${nextFu.text}</div>` : '<div class="fu-date-val" style="color:var(--text3)">—</div>'}
@@ -4370,7 +4375,8 @@ async function fuAction(id, action, reason, extraPayload) {
     const res = await fetch('/api/followups/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     const data = await res.json();
     if (!res.ok) { toast('Error: ' + (data.error||'unknown'), true); return; }
-    toast(action==='send-now' ? 'Follow-up sent' : action.charAt(0).toUpperCase()+action.slice(1)+' done');
+    const toastMsgs = {'send-now':'Follow-up sent','free-send':'Sent (free)','cancel-schedule':'Schedule cancelled','stop-recurring':'Recurring stopped'};
+    toast(toastMsgs[action] || (action.charAt(0).toUpperCase()+action.slice(1).replace(/-/g,' ')+' done'));
     await loadFollowups();
   } catch(e) { toast('Error: '+e.message, true); }
 }
@@ -4491,6 +4497,7 @@ function toggleFuDropdown(event, contactId) {
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('schedule-once')"><i class="ph-bold ph-calendar"></i> Schedule once</button>`;
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('set-recurring')"><i class="ph-bold ph-arrows-clockwise"></i> Set recurring</button>`;
     if (c.recurring_enabled) items += `<button class="fu-dd-item" onclick="fuDropdownAction('stop-recurring')"><i class="ph-bold ph-stop-circle"></i> Stop recurring</button>`;
+    if (c.scheduled_once) items += `<button class="fu-dd-item danger" onclick="fuDropdownAction('cancel-schedule')"><i class="ph-bold ph-calendar-x"></i> Cancel schedule</button>`;
     items += `<div class="fu-dd-sep"></div>`;
   }
   items += `<button class="fu-dd-item" onclick="fuDropdownAction('note')"><i class="ph-bold ph-note-pencil"></i> Add Note</button>`;
@@ -4522,7 +4529,8 @@ async function fuDropdownAction(action) {
   }
   if (action==='schedule-once') { openFuScheduleModal(id, 'once'); return; }
   if (action==='set-recurring')  { openFuScheduleModal(id, 'recurring'); return; }
-  if (action==='stop-recurring') { await fuAction(id, 'stop-recurring'); return; }
+  if (action==='stop-recurring')   { await fuAction(id, 'stop-recurring'); return; }
+  if (action==='cancel-schedule')  { await fuAction(id, 'cancel-schedule'); return; }
   if (action==='free-send')      { await fuAction(id, 'free-send'); return; }
   let reason = '';
   if (action==='block' || action==='close') { reason = prompt(`Reason for ${action} (optional):`)||''; if (reason===null) return; }

@@ -3031,6 +3031,83 @@ def api_followups_action():
         db.session.commit()
         return jsonify(ok=True, contact=fc.to_dict())
 
+    elif action == 'free-send':
+        if fc.state in ('blocked', 'closed'):
+            return jsonify(error='Cannot send to blocked or closed contact'), 400
+        template_text = _get_random_fu_template(uid)
+        if not template_text:
+            return jsonify(error='No active follow-up templates. Add at least one before sending.'), 400
+        acct = EmailAccount.query.filter_by(user_id=uid).first()
+        if not acct:
+            return jsonify(error='No email account configured'), 400
+        cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+               'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+        fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
+                   'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+        ok, err = send_followup_email(fu_dict, template_text, cfg, uid=uid)
+        if not ok:
+            _record_event(fc, 'free_send', actor_user_id=uid,
+                          metadata_json=json.dumps({'error': err}), notes='Send failed')
+            db.session.commit()
+            return jsonify(error=f'Send failed: {err}'), 500
+        now = datetime.utcnow()
+        fc.is_followup_enabled = False
+        fc.last_followup_sent_at = now
+        fc.last_activity_at = now
+        _record_event(fc, 'free_send', actor_user_id=uid,
+                      from_stage=fc.stage, to_stage=fc.stage)
+        db.session.commit()
+        return jsonify(ok=True, contact=fc.to_dict())
+
+    elif action == 'schedule-once':
+        if fc.state in ('blocked', 'closed'):
+            return jsonify(error='Cannot schedule blocked or closed contact'), 400
+        dt_str = data.get('scheduled_at', '')
+        if not dt_str:
+            return jsonify(error='scheduled_at is required (ISO8601 UTC)'), 400
+        try:
+            scheduled_at = datetime.fromisoformat(dt_str.replace('Z', '+00:00')).replace(tzinfo=None)
+            if scheduled_at < datetime.utcnow() + timedelta(minutes=1):
+                return jsonify(error='scheduled_at must be at least 1 minute in the future'), 400
+        except (ValueError, TypeError):
+            return jsonify(error='Invalid scheduled_at format — use ISO8601 UTC'), 400
+        fc.next_followup_at = scheduled_at
+        _record_event(fc, 'scheduled_once', actor_user_id=uid,
+                      notes=f'Scheduled for {scheduled_at.strftime("%Y-%m-%d %H:%M")} UTC')
+        db.session.commit()
+        return jsonify(ok=True, contact=fc.to_dict())
+
+    elif action == 'set-recurring':
+        if fc.state in ('blocked', 'closed'):
+            return jsonify(error='Cannot set recurring for blocked or closed contact'), 400
+        r_days = (data.get('recurring_days') or '').strip()
+        r_time = (data.get('recurring_time') or '').strip()
+        if not r_days:
+            return jsonify(error='recurring_days is required'), 400
+        try:
+            parsed_days = [int(d) for d in r_days.split(',') if d.strip()]
+            if not parsed_days or any(d < 0 or d > 6 for d in parsed_days):
+                raise ValueError
+        except (ValueError, TypeError):
+            return jsonify(error='recurring_days must be comma-separated integers 0-6'), 400
+        import re as _re
+        if not _re.match(r'^\d{2}:\d{2}$', r_time):
+            return jsonify(error='recurring_time must be HH:MM'), 400
+        fc.recurring_enabled = True
+        fc.recurring_days    = r_days
+        fc.recurring_time    = r_time
+        fc.next_followup_at  = _next_recurring_datetime(r_days, r_time)
+        _record_event(fc, 'recurring_set', actor_user_id=uid,
+                      notes=f'Recurring days={r_days} time={r_time} UTC')
+        db.session.commit()
+        return jsonify(ok=True, contact=fc.to_dict())
+
+    elif action == 'stop-recurring':
+        fc.recurring_enabled = False
+        _record_event(fc, 'recurring_stopped', actor_user_id=uid)
+        db.session.commit()
+        return jsonify(ok=True, contact=fc.to_dict())
+
     elif action == 'pause':
         ok, err = _transition_state(fc, 'paused', reason=reason, actor_user_id=uid)
     elif action == 'resume':

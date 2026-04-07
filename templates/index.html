@@ -2164,7 +2164,7 @@ tr:last-child td { border-bottom: none; }
             <div class="fu-time-row">
               <label>Time</label>
               <input type="time" id="fuSchedTime" value="08:00">
-              <span class="fu-time-label">(UTC)</span>
+              <span class="fu-time-label" id="fuTimeLabelOnce"></span>
             </div>
             <div class="fu-sched-note" id="fuSchedOnceNote">Schedule for <strong id="fuSchedOnceCount">selected</strong> contacts</div>
             <button class="btn btn-primary" onclick="submitFuScheduleOnce()">Schedule</button>
@@ -2187,7 +2187,7 @@ tr:last-child td { border-bottom: none; }
             <div class="fu-time-row">
               <label>Time</label>
               <input type="time" id="fuRecurTime" value="08:00">
-              <span class="fu-time-label">(UTC)</span>
+              <span class="fu-time-label" id="fuTimeLabelRecur"></span>
             </div>
             <div class="fu-sched-note" id="fuSchedRecNote">Set recurring for <strong id="fuSchedRecCount">selected</strong> contacts</div>
             <div style="display:flex;gap:8px">
@@ -4402,15 +4402,29 @@ async function bulkFuAction(action, extraPayload) {
 // ── Schedule modal ────────────────────────────────────────────────────────────
 let _fuSchedSingleId = null; // set when opened from per-contact action
 
+function _getTZLabel() {
+  try {
+    return new Date().toLocaleTimeString('en-US', {timeZoneName:'short'}).split(' ').pop();
+  } catch(e) { return 'local'; }
+}
+
 function openFuScheduleModal(singleId, tab) {
   _fuSchedSingleId = singleId || null;
   setFuSchedTab(tab || 'once');
+  const tzLabel = `(${_getTZLabel()})`;
+  const el1 = document.getElementById('fuTimeLabelOnce');
+  const el2 = document.getElementById('fuTimeLabelRecur');
+  if (el1) el1.textContent = tzLabel;
+  if (el2) el2.textContent = tzLabel;
   const n = singleId ? 1 : selectedFuIds.size;
   document.getElementById('fuSchedOnceCount').textContent = n + (n===1?' contact':' contacts');
   document.getElementById('fuSchedRecCount').textContent  = n + (n===1?' contact':' contacts');
-  // default date = tomorrow
-  const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate()+1);
-  document.getElementById('fuSchedDate').value = tomorrow.toISOString().slice(0,10);
+  // default date = tomorrow in local time
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const yyyy = tomorrow.getFullYear();
+  const mm   = String(tomorrow.getMonth()+1).padStart(2,'0');
+  const dd   = String(tomorrow.getDate()).padStart(2,'0');
+  document.getElementById('fuSchedDate').value = `${yyyy}-${mm}-${dd}`;
   document.getElementById('fuSchedModal').classList.add('open');
 }
 
@@ -4434,7 +4448,7 @@ async function submitFuScheduleOnce() {
   const dateVal = document.getElementById('fuSchedDate').value;
   const timeVal = document.getElementById('fuSchedTime').value || '08:00';
   if (!dateVal) { toast('Pick a date', true); return; }
-  const dt = new Date(dateVal + 'T' + timeVal + ':00Z');
+  const dt = new Date(dateVal + 'T' + timeVal + ':00');  // no Z → treated as local time
   if (dt <= new Date()) { toast('Must be at least 1 minute in the future', true); return; }
   const isoStr = dt.toISOString();
   if (_fuSchedSingleId) {
@@ -4445,11 +4459,18 @@ async function submitFuScheduleOnce() {
   closeFuScheduleModal();
 }
 
+function _localTimeToUTC(timeStr) {
+  // Convert HH:MM in browser local time to HH:MM in UTC
+  const [h, m] = timeStr.split(':').map(Number);
+  const d = new Date(); d.setHours(h, m, 0, 0);
+  return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+}
+
 async function submitFuSetRecurring() {
   const activeDays = [...document.querySelectorAll('#fuDayGrid .fu-day-btn.active')].map(b=>b.dataset.day);
   if (!activeDays.length) { toast('Select at least one day', true); return; }
   const timeVal = document.getElementById('fuRecurTime').value || '08:00';
-  const payload = {recurring_days: activeDays.join(','), recurring_time: timeVal};
+  const payload = {recurring_days: activeDays.join(','), recurring_time: _localTimeToUTC(timeVal)};
   if (_fuSchedSingleId) {
     await fuAction(_fuSchedSingleId, 'set-recurring', null, payload);
   } else {

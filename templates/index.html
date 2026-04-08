@@ -2155,6 +2155,18 @@ tr:last-child td { border-bottom: none; }
             <button class="fu-sched-tab" id="fuSchedTabRecurring" onclick="setFuSchedTab('recurring')">🔁 Recurring</button>
           </div>
 
+          <!-- TIMEZONE ROW (shared for both tabs) -->
+          <div class="fu-time-row" style="margin-bottom:8px">
+            <label>Timezone</label>
+            <select id="fuSchedTZ" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px">
+              <option value="America/New_York">Eastern (ET)</option>
+              <option value="America/Chicago" selected>Central (CT)</option>
+              <option value="America/Denver">Mountain (MT)</option>
+              <option value="America/Los_Angeles">Pacific (PT)</option>
+              <option value="local">My local time</option>
+            </select>
+          </div>
+
           <!-- ONE-TIME PANE -->
           <div class="fu-sched-pane active" id="fuSchedPaneOnce">
             <div class="fu-time-row">
@@ -2163,8 +2175,7 @@ tr:last-child td { border-bottom: none; }
             </div>
             <div class="fu-time-row">
               <label>Time</label>
-              <input type="time" id="fuSchedTime" value="08:00">
-              <span class="fu-time-label" id="fuTimeLabelOnce"></span>
+              <input type="time" id="fuSchedTime" value="09:00">
             </div>
             <div class="fu-sched-note" id="fuSchedOnceNote">Schedule for <strong id="fuSchedOnceCount">selected</strong> contacts</div>
             <button class="btn btn-primary" onclick="submitFuScheduleOnce()">Schedule</button>
@@ -2186,8 +2197,7 @@ tr:last-child td { border-bottom: none; }
             </div>
             <div class="fu-time-row">
               <label>Time</label>
-              <input type="time" id="fuRecurTime" value="08:00">
-              <span class="fu-time-label" id="fuTimeLabelRecur"></span>
+              <input type="time" id="fuRecurTime" value="09:00">
             </div>
             <div class="fu-sched-note" id="fuSchedRecNote">Set recurring for <strong id="fuSchedRecCount">selected</strong> contacts</div>
             <div style="display:flex;gap:8px">
@@ -4402,20 +4412,43 @@ async function bulkFuAction(action, extraPayload) {
 // ── Schedule modal ────────────────────────────────────────────────────────────
 let _fuSchedSingleId = null; // set when opened from per-contact action
 
-function _getTZLabel() {
-  try {
-    return new Date().toLocaleTimeString('en-US', {timeZoneName:'short'}).split(' ').pop();
-  } catch(e) { return 'local'; }
+function _wallClockToUTC(dateStr, timeStr, ianaTimezone) {
+  // Convert wall-clock time in the given IANA timezone to a UTC Date object.
+  // Handles DST correctly via the Intl API.
+  if (!ianaTimezone || ianaTimezone === 'local') {
+    return new Date(dateStr + 'T' + timeStr + ':00');  // browser local time
+  }
+  const fakeUTC = new Date(`${dateStr}T${timeStr}:00Z`);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: ianaTimezone,
+      year:'numeric', month:'numeric', day:'numeric',
+      hour:'numeric', minute:'numeric', second:'numeric', hour12:false
+    }).formatToParts(fakeUTC).map(({type,value}) => [type,value])
+  );
+  const tzHour = parseInt(parts.hour) % 24;
+  const tzMin  = parseInt(parts.minute);
+  const [wantH, wantM] = timeStr.split(':').map(Number);
+  let diffMins = (tzHour * 60 + tzMin) - (wantH * 60 + wantM);
+  if (diffMins >  720) diffMins -= 1440;
+  if (diffMins < -720) diffMins += 1440;
+  return new Date(fakeUTC.getTime() - diffMins * 60000);
+}
+
+function _wallClockTimeToUTC(timeStr, ianaTimezone) {
+  // Returns "HH:MM" in UTC for the given wall-clock HH:MM in ianaTimezone.
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const utcDt = _wallClockToUTC(dateStr, timeStr, ianaTimezone);
+  return `${String(utcDt.getUTCHours()).padStart(2,'0')}:${String(utcDt.getUTCMinutes()).padStart(2,'0')}`;
 }
 
 function openFuScheduleModal(singleId, tab) {
   _fuSchedSingleId = singleId || null;
   setFuSchedTab(tab || 'once');
-  const tzLabel = `(${_getTZLabel()})`;
-  const el1 = document.getElementById('fuTimeLabelOnce');
-  const el2 = document.getElementById('fuTimeLabelRecur');
-  if (el1) el1.textContent = tzLabel;
-  if (el2) el2.textContent = tzLabel;
+  // Restore last-used timezone (default: CST)
+  const savedTZ = localStorage.getItem('fuScheduleTZ') || 'America/Chicago';
+  document.getElementById('fuSchedTZ').value = savedTZ;
   const n = singleId ? 1 : selectedFuIds.size;
   document.getElementById('fuSchedOnceCount').textContent = n + (n===1?' contact':' contacts');
   document.getElementById('fuSchedRecCount').textContent  = n + (n===1?' contact':' contacts');
@@ -4446,9 +4479,11 @@ function toggleFuDay(btn) {
 
 async function submitFuScheduleOnce() {
   const dateVal = document.getElementById('fuSchedDate').value;
-  const timeVal = document.getElementById('fuSchedTime').value || '08:00';
+  const timeVal = document.getElementById('fuSchedTime').value || '09:00';
+  const iana    = document.getElementById('fuSchedTZ').value;
   if (!dateVal) { toast('Pick a date', true); return; }
-  const dt = new Date(dateVal + 'T' + timeVal + ':00');  // no Z → treated as local time
+  localStorage.setItem('fuScheduleTZ', iana);
+  const dt = _wallClockToUTC(dateVal, timeVal, iana);
   if (dt <= new Date()) { toast('Must be at least 1 minute in the future', true); return; }
   const isoStr = dt.toISOString();
   if (_fuSchedSingleId) {
@@ -4459,18 +4494,13 @@ async function submitFuScheduleOnce() {
   closeFuScheduleModal();
 }
 
-function _localTimeToUTC(timeStr) {
-  // Convert HH:MM in browser local time to HH:MM in UTC
-  const [h, m] = timeStr.split(':').map(Number);
-  const d = new Date(); d.setHours(h, m, 0, 0);
-  return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
-}
-
 async function submitFuSetRecurring() {
   const activeDays = [...document.querySelectorAll('#fuDayGrid .fu-day-btn.active')].map(b=>b.dataset.day);
   if (!activeDays.length) { toast('Select at least one day', true); return; }
-  const timeVal = document.getElementById('fuRecurTime').value || '08:00';
-  const payload = {recurring_days: activeDays.join(','), recurring_time: _localTimeToUTC(timeVal)};
+  const timeVal = document.getElementById('fuRecurTime').value || '09:00';
+  const iana    = document.getElementById('fuSchedTZ').value;
+  localStorage.setItem('fuScheduleTZ', iana);
+  const payload = {recurring_days: activeDays.join(','), recurring_time: _wallClockTimeToUTC(timeVal, iana)};
   if (_fuSchedSingleId) {
     await fuAction(_fuSchedSingleId, 'set-recurring', null, payload);
   } else {

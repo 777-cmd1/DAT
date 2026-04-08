@@ -2093,6 +2093,16 @@ tr:last-child td { border-bottom: none; }
           <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('block')">🚫 Block</button>
         </div>
 
+        <!-- LIST HEADER with master checkbox -->
+        <div id="fuListHeader" style="display:flex;align-items:center;padding:6px 14px 4px;border-bottom:1px solid var(--border)">
+          <div class="fu-checkbox-wrap" style="margin-right:0">
+            <input type="checkbox" id="fuMasterCheckbox"
+              onclick="fuMasterCheckboxChange(this)"
+              style="accent-color:var(--accent);cursor:pointer;width:14px;height:14px">
+          </div>
+          <span id="fuMasterLabel" style="font-size:11px;color:var(--muted);margin-left:8px;user-select:none;cursor:pointer" onclick="document.getElementById('fuMasterCheckbox').click()">Select all</span>
+        </div>
+
         <!-- LIST -->
         <div id="fuContactsList"></div>
       </div>
@@ -4146,14 +4156,43 @@ function clearFuSelection() {
   renderFuSelection();
 }
 
+async function fuMasterCheckboxChange(cb) {
+  if (cb.checked) {
+    await selectAllFilteredFu();  // select all from server
+  } else {
+    clearFuSelection();
+  }
+}
+
 function renderFuSelection() {
   const bar = document.getElementById('fuBulkBar');
   const countEl = document.getElementById('fuBulkCount');
   const allBtn = document.getElementById('fuSelectAllFiltered');
+  const master = document.getElementById('fuMasterCheckbox');
+  const masterLabel = document.getElementById('fuMasterLabel');
   if (!bar) return;
   const n = selectedFuIds.size;
   bar.style.display = n > 0 ? '' : 'none';
   if (countEl) countEl.textContent = n + ' selected';
+
+  // sync master checkbox state
+  const total = fuContacts.length;
+  if (master) {
+    if (n === 0) {
+      master.checked = false;
+      master.indeterminate = false;
+    } else if (n >= total && total > 0) {
+      master.checked = true;
+      master.indeterminate = false;
+    } else {
+      master.checked = false;
+      master.indeterminate = true;
+    }
+  }
+  if (masterLabel) {
+    masterLabel.textContent = n > 0 ? `${n} selected` : 'Select all';
+  }
+
   // show "Select all filtered" if visible count < server-side total
   if (allBtn) {
     const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();

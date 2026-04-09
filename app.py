@@ -2038,14 +2038,18 @@ def _smtp_send_with_retry(msg_obj, from_addr, to_addr, password, retries=3, base
     raise last_exc or RuntimeError('SMTP failed with no exception captured')
 
 
-def _gmail_send_with_retry(service, raw_message, max_retries=3):
-    """Send via Gmail API with exponential backoff on transient errors."""
+def _gmail_send_with_retry(service, raw_message, max_retries=3, thread_id=None):
+    """Send via Gmail API with exponential backoff on transient errors.
+    Pass thread_id to add message to an existing Gmail thread."""
     from googleapiclient.errors import HttpError
     last_exc = None
+    body = {'raw': raw_message}
+    if thread_id:
+        body['threadId'] = thread_id
     for attempt in range(max_retries):
         try:
             return service.users().messages().send(
-                userId='me', body={'raw': raw_message}
+                userId='me', body=body
             ).execute()
         except HttpError as e:
             status_code = e.resp.status
@@ -2843,7 +2847,7 @@ def send_followup_email(fu, template_text, cfg, uid=None):
                     mime_msg['References']  = fu['reply_msg_id']
                 import base64 as _b64
                 raw = _b64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
-                _gmail_send_with_retry(service, raw)
+                _gmail_send_with_retry(service, raw, thread_id=fu.get('source_thread_id') or None)
                 return True, None
             except RuntimeError as _e:
                 if 'not connected' not in str(_e).lower():

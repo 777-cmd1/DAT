@@ -2824,7 +2824,12 @@ def send_followup_email(fu, template_text, cfg, uid=None):
     try:
         to_email = fu.get('contact_email') or fu.get('email', '')
         route = fu.get('current_route') or fu.get('route', '')
-        subject = ('Re: ' + fu['reply_subject']) if fu.get('reply_subject') else 'Follow-up'
+        if fu.get('reply_subject'):
+            subject = 'Re: ' + fu['reply_subject']
+        elif fu.get('current_route'):
+            subject = f'Following up — {fu["current_route"]}'
+        else:
+            subject = 'Following up'
         body = template_text.format(
             name=cfg.get('your_name', '') or cfg.get('name', ''),
             company=cfg.get('your_company', '') or cfg.get('company', ''),

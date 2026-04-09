@@ -3051,7 +3051,8 @@ def api_followups_action():
         cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                'phone': acct.your_phone or '', 'route': fc.current_route or ''}
         fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                   'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+                   'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                   'source_thread_id': fc.source_thread_id or ''}
         ok, err = send_followup_email(fu_dict, template_text, cfg, uid=uid)
         if not ok:
             _record_event(fc, 'manual_send', actor_user_id=uid,
@@ -3093,7 +3094,8 @@ def api_followups_action():
         cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                'phone': acct.your_phone or '', 'route': fc.current_route or ''}
         fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                   'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+                   'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                   'source_thread_id': fc.source_thread_id or ''}
         ok, err = send_followup_email(fu_dict, template_text, cfg, uid=uid)
         if not ok:
             _record_event(fc, 'free_send', actor_user_id=uid,
@@ -3224,7 +3226,8 @@ def api_followups_bulk_action():
             cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                    'phone': acct.your_phone or '', 'route': fc.current_route or ''}
             fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                       'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+                       'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                       'source_thread_id': fc.source_thread_id or ''}
             ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
             if ok:
                 now_dt = datetime.utcnow()
@@ -3263,7 +3266,8 @@ def api_followups_bulk_action():
             cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                    'phone': acct.your_phone or '', 'route': fc.current_route or ''}
             fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                       'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+                       'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                       'source_thread_id': fc.source_thread_id or ''}
             ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
             if ok:
                 now_dt = datetime.utcnow()
@@ -3760,7 +3764,8 @@ def _run_scheduled_followups():
                 cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                        'phone': acct.your_phone or '', 'route': fc.current_route or ''}
                 fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                           'source_thread_id': fc.source_thread_id or ''}
 
                 ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
 
@@ -3827,7 +3832,8 @@ def _run_scheduled_followups():
                 cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                        'phone': acct.your_phone or '', 'route': fc.current_route or ''}
                 fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                           'source_thread_id': fc.source_thread_id or ''}
                 ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
                 if ok:
                     fc.scheduled_once = False
@@ -3887,7 +3893,8 @@ def _run_scheduled_followups():
                 cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                        'phone': acct.your_phone or '', 'route': fc.current_route or ''}
                 fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or ''}
+                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                           'source_thread_id': fc.source_thread_id or ''}
 
                 ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
 

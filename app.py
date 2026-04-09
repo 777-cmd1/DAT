@@ -3058,7 +3058,8 @@ def api_followups_action():
             return jsonify(error='No email account configured'), 400
 
         cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-               'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+               'phone': acct.your_phone or '', 'route': fc.current_route or '',
+               'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
         fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                    'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
                    'source_thread_id': fc.source_thread_id or ''}
@@ -3101,7 +3102,8 @@ def api_followups_action():
         if not acct:
             return jsonify(error='No email account configured'), 400
         cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-               'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+               'phone': acct.your_phone or '', 'route': fc.current_route or '',
+               'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
         fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                    'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
                    'source_thread_id': fc.source_thread_id or ''}
@@ -3221,8 +3223,8 @@ def api_followups_bulk_action():
             results.append({'id': cid, 'ok': ok, 'error': err})
 
         elif action == 'send-now':
-            if fc.state != 'active' or fc.stage not in STAGE_TO_TEMPLATE or not fc.is_followup_enabled:
-                results.append({'id': cid, 'ok': False, 'error': 'Not eligible for sequence send'})
+            if fc.state != 'active' or fc.stage not in STAGE_TO_TEMPLATE:
+                results.append({'id': cid, 'ok': False, 'skip': True, 'error': 'Not eligible for sequence send'})
                 continue
             template_text = _get_random_fu_template(fc.user_id)
             if not template_text:
@@ -3233,7 +3235,8 @@ def api_followups_bulk_action():
                 results.append({'id': cid, 'ok': False, 'error': 'No email account'})
                 continue
             cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-                   'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+                   'phone': acct.your_phone or '', 'route': fc.current_route or '',
+                   'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
             fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                        'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
                        'source_thread_id': fc.source_thread_id or ''}
@@ -3273,7 +3276,8 @@ def api_followups_bulk_action():
                 results.append({'id': cid, 'ok': False, 'error': 'No email account'})
                 continue
             cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-                   'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+                   'phone': acct.your_phone or '', 'route': fc.current_route or '',
+                   'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
             fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                        'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
                        'source_thread_id': fc.source_thread_id or ''}
@@ -3339,9 +3343,10 @@ def api_followups_bulk_action():
             results.append({'id': cid, 'ok': False, 'error': f'Unknown action: {action}'})
 
     db.session.commit()
-    ok_count   = sum(1 for r in results if r.get('ok'))
-    skip_count = len(results) - ok_count
-    return jsonify(results=results, sent=ok_count, skipped=skip_count)
+    ok_count     = sum(1 for r in results if r.get('ok'))
+    skip_count   = sum(1 for r in results if not r.get('ok') and r.get('skip'))
+    failed_count = sum(1 for r in results if not r.get('ok') and not r.get('skip'))
+    return jsonify(results=results, sent=ok_count, skipped=skip_count, failed=failed_count)
 
 
 @app.route('/api/followups/delete', methods=['POST'])

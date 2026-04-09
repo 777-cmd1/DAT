@@ -4433,16 +4433,24 @@ async function fuAction(id, action, reason, extraPayload) {
 async function bulkFuAction(action, extraPayload) {
   if (!selectedFuIds.size) return;
   const ids = [...selectedFuIds];
-  const body = {ids, action, ...extraPayload};
+  const body = {ids, action, ...(extraPayload||{})};
   try {
     const res = await fetch('/api/followups/bulk-action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     const data = await res.json();
     if (!res.ok) { toast('Error: ' + (data.error||'unknown'), true); return; }
     const sent = data.sent ?? data.updated ?? ids.length;
+    const failed = data.failed || 0;
     const skipped = data.skipped || 0;
-    let msg = action === 'send-now' ? `Sent ${sent}` : `Done: ${sent}`;
-    if (skipped) msg += `, skipped ${skipped}`;
-    toast(msg);
+    let msg;
+    if (action === 'send-now' || action === 'free-send') {
+      msg = sent > 0 ? `Sent ${sent}` : 'Nothing sent';
+      if (failed) msg += ` — ${failed} failed`;
+      if (skipped) msg += ` — ${skipped} not eligible`;
+    } else {
+      msg = `Done: ${sent}`;
+      if (skipped) msg += `, skipped ${skipped}`;
+    }
+    toast(msg, failed > 0 && sent === 0);
     clearFuSelection();
     await loadFollowups();
   } catch(e) { toast('Error: '+e.message, true); }

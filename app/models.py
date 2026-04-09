@@ -152,6 +152,7 @@ class Reply(db.Model):
     user_id      = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     workspace_id = db.Column(db.String(36), db.ForeignKey('workspaces.id'))
     msg_id       = db.Column(db.String(512), unique=True, nullable=False)
+    thread_id    = db.Column(db.String(255), nullable=True)   # Gmail threadId
     from_email   = db.Column(db.String(255), default='')
     from_name    = db.Column(db.String(255), default='')
     subject      = db.Column(db.String(512), default='')

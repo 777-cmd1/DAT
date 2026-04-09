@@ -4605,7 +4605,7 @@ function toggleFuDropdown(event, contactId) {
 
   const btn = event.currentTarget;
   const r = btn.getBoundingClientRect();
-  dd.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+  dd.style.top  = (r.bottom + 4) + 'px';  // position:fixed is viewport-relative, no scrollY needed
   dd.style.left = Math.min(r.right - 160, window.innerWidth - 172) + 'px';
   dd.classList.add('open');
 }

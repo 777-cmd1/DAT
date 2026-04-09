@@ -3654,6 +3654,7 @@ def add_to_followups(reply_obj):
         reply_subject=reply_obj.subject or '',
         reply_msg_id=getattr(reply_obj, 'msg_id', '') or '',
         source_reply_id=reply_obj.id,
+        source_thread_id=getattr(reply_obj, 'thread_id', '') or '',
         current_route=getattr(reply_obj, 'route', '') or '',
     )
     db.session.add(fc)

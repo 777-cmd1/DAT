@@ -1411,6 +1411,7 @@ def save_replies(replies):
         else:
             db.session.add(Reply(
                 user_id=uid, msg_id=r['msg_id'],
+                thread_id=r.get('thread_id', '') or None,
                 from_email=r.get('email', ''), from_name=r.get('from', ''),
                 subject=r.get('subject', ''), body=r.get('body', ''),
                 route=r.get('route', ''), status=r.get('status', 'new'),
@@ -1538,6 +1539,7 @@ def fetch_replies_from_gmail():
 
                 _pending_replies.append({
                     'msg_id':      msg_id,
+                    'thread_id':   msg_data.get('threadId', ''),
                     'email':       sender,
                     'from':        from_addr,
                     'subject':     headers.get('Subject', ''),

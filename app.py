@@ -1279,7 +1279,7 @@ def api_admin_stats_overview():
 @admin_required
 def api_admin_stats_accounts():
     """Per-account summary table for admin Accounts section."""
-    from app.models import User as UserModel, Workspace, Send, Reply, FollowupContact, FollowupEvent, EmailAccount
+    from app.models import User as UserModel, Workspace, Send, Reply, FollowupContact, FollowupEvent, EmailAccount, UsageEvent
     from sqlalchemy import func
 
     period = request.args.get('period', 'today')
@@ -1308,6 +1308,13 @@ def api_admin_stats_accounts():
         sends_q = sends_q.filter(Send.sent_at >= start_dt, Send.sent_at <= end_dt)
     sends_map = dict(sends_q.group_by(Send.user_id).all())
 
+    # 4b. Batch send errors per user
+    errors_q = db.session.query(Send.user_id, func.count(Send.id)).filter(
+        Send.user_id.in_(user_ids), Send.status == 'error')
+    if start_dt is not None:
+        errors_q = errors_q.filter(Send.sent_at >= start_dt, Send.sent_at <= end_dt)
+    error_map = dict(errors_q.group_by(Send.user_id).all())
+
     # 5. Batch replies per user
     replies_q = db.session.query(Reply.user_id, func.count(Reply.id)).filter(
         Reply.user_id.in_(user_ids))
@@ -1331,6 +1338,15 @@ def api_admin_stats_accounts():
         Send.user_id.in_(user_ids)).group_by(Send.user_id).all()
     la_map = {row[0]: row[1] for row in la_rows}
 
+    # 7b. Batch today's quota usage
+    today = date.today()
+    quota_rows = db.session.query(UsageEvent.user_id, func.coalesce(func.sum(UsageEvent.count), 0)).filter(
+        UsageEvent.user_id.in_(user_ids),
+        UsageEvent.event_type == 'email_sent',
+        UsageEvent.period_date == today
+    ).group_by(UsageEvent.user_id).all()
+    quota_map = {row[0]: int(row[1] or 0) for row in quota_rows}
+
     # 8. Build result array
     result = []
     for u in users:
@@ -1340,7 +1356,11 @@ def api_admin_stats_accounts():
         s = sends_map.get(u.id, 0)
         r = replies_map.get(u.id, 0)
         f = fu_map.get(u.id, 0)
+        e = error_map.get(u.id, 0)
         last_act = la_map.get(u.id)
+        quota_used = quota_map.get(u.id, 0)
+        quota_limit = PLAN_QUOTAS.get(plan, 50)
+        quota_pct = int(min(100, round((quota_used / quota_limit) * 100))) if quota_limit else 0
 
         days_inactive = None
         if last_act:
@@ -1357,9 +1377,13 @@ def api_admin_stats_accounts():
             'replies': r,
             'reply_rate': round(r / s * 100, 1) if s else 0.0,
             'followups': f,
+            'errors': e,
             'email_connected': bool(ea and ea.google_refresh_token),
             'last_activity': last_act.strftime('%Y-%m-%dT%H:%M:%S') if last_act else None,
             'days_inactive': days_inactive,
+            'quota_used': quota_used,
+            'quota_limit': quota_limit,
+            'quota_pct': quota_pct,
         })
     return jsonify(result)
 
@@ -2160,13 +2184,16 @@ def _gmail_get_body(payload):
             return result
     return ''
 
-def get_stats():
-    """Compute dashboard stats using SQL aggregation (not Python loops over all rows)."""
+def get_stats(period='lifetime'):
+    """Compute dashboard stats using SQL aggregation.
+    period: 'today' | 'week' (last 7 days) | 'lifetime' (all time, default)
+    """
     empty={"total":0,"sent":0,"errors":0,"today":0,"by_day":[],"by_variant":[],"by_hour":[],
            "top_recipients":[],"top_routes":[],"replied_emails":[],"replied_domains":[],"response_rate":{}}
     uid = current_user_id()
     if not uid: return empty
-    cache_key = f'stats:{uid}'
+    period = period if period in ('today', 'week', 'lifetime') else 'lifetime'
+    cache_key = f'stats:{uid}:{period}'
     cached, hit = _cache_get(cache_key, _STATS_TTL)
     if hit: return cached
     from app.models import Send, Reply
@@ -2174,68 +2201,89 @@ def get_stats():
 
     today_dt = date.today()
 
-    # ── Single aggregate query: total, sent, errors, today ────────────────
-    agg = db.session.query(
+    # ── Date cutoff for the selected period ───────────────────────────────
+    if period == 'today':
+        period_cutoff = today_dt          # only today
+    elif period == 'week':
+        period_cutoff = today_dt - timedelta(days=6)   # last 7 days inclusive
+    else:
+        period_cutoff = None              # no filter = lifetime
+
+    def _period_filter(q):
+        """Apply period date filter to a Send query."""
+        if period_cutoff is not None:
+            q = q.filter(cast(Send.sent_at, Date) >= period_cutoff)
+        return q
+
+    # ── Counts: sent, errors (period-scoped) + today always ──────────────
+    base_q = db.session.query(
         func.count(Send.id).label('total'),
         func.count(case((Send.status == 'sent', 1))).label('sent'),
         func.count(case((Send.status == 'error', 1))).label('errors'),
-        func.count(case((
-            db.and_(Send.status == 'sent', cast(Send.sent_at, Date) == today_dt), 1
-        ))).label('today'),
-    ).filter(Send.user_id == uid).first()
+    ).filter(Send.user_id == uid)
+    agg = _period_filter(base_q).first()
     total = agg.total or 0
-    sent = agg.sent or 0
+    sent  = agg.sent  or 0
     errors = agg.errors or 0
-    today_count = agg.today or 0
 
-    # ── By-day (last 14 days) ─────────────────────────────────────────────
-    cutoff = today_dt - timedelta(days=14)
+    # today count always shown as context
+    today_count = db.session.query(
+        func.count(case((db.and_(Send.status == 'sent', cast(Send.sent_at, Date) == today_dt), 1)))
+    ).filter(Send.user_id == uid).scalar() or 0
+
+    # ── By-day: 14-day window (or just today when period=today) ──────────
+    if period == 'today':
+        chart_cutoff = today_dt
+    else:
+        chart_cutoff = today_dt - timedelta(days=13)
     by_day_rows = db.session.query(
         func.date(Send.sent_at).label('day'),
         func.count(Send.id)
-    ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at >= cutoff)\
+    ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at >= chart_cutoff)\
      .group_by(func.date(Send.sent_at)).order_by(func.date(Send.sent_at)).all()
     by_day = [{"date": str(d), "count": c} for d, c in by_day_rows if d]
 
-    # ── By-variant ────────────────────────────────────────────────────────
-    by_var_rows = db.session.query(
+    # ── By-variant (period-scoped) ────────────────────────────────────────
+    by_var_q = db.session.query(
         Send.template_variant, func.count(Send.id)
-    ).filter(Send.user_id == uid, Send.status == 'sent')\
-     .group_by(Send.template_variant).all()
-    by_variant = [{"variant": str(v), "count": c} for v, c in by_var_rows]
+    ).filter(Send.user_id == uid, Send.status == 'sent')
+    by_variant = [{"variant": str(v), "count": c}
+                  for v, c in _period_filter(by_var_q).group_by(Send.template_variant).all()]
 
-    # ── By-hour ───────────────────────────────────────────────────────────
-    # Use extract for hour — works on both PostgreSQL and SQLite
+    # ── By-hour (period-scoped) ───────────────────────────────────────────
     try:
         from sqlalchemy import extract
-        by_hr_rows = db.session.query(
+        by_hr_q = db.session.query(
             extract('hour', Send.sent_at).label('hr'),
             func.count(Send.id)
-        ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at.isnot(None))\
-         .group_by('hr').all()
+        ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at.isnot(None))
+        by_hr_rows = _period_filter(by_hr_q).group_by('hr').all()
         by_hr = {int(h): c for h, c in by_hr_rows if h is not None}
     except Exception:
         by_hr = {}
     by_hour = [{"hour": f"{h:02d}:00", "count": by_hr.get(h, 0)} for h in range(24)]
 
-    # ── Top recipients (top 10) ───────────────────────────────────────────
-    top_recip = db.session.query(
+    # ── Top recipients (period-scoped) ────────────────────────────────────
+    top_recip_q = db.session.query(
         func.lower(Send.recipient_email), func.count(Send.id)
-    ).filter(Send.user_id == uid, Send.status == 'sent')\
-     .group_by(func.lower(Send.recipient_email))\
-     .order_by(func.count(Send.id).desc()).limit(10).all()
+    ).filter(Send.user_id == uid, Send.status == 'sent')
+    top_recip = _period_filter(top_recip_q)\
+        .group_by(func.lower(Send.recipient_email))\
+        .order_by(func.count(Send.id).desc()).limit(10).all()
 
-    # ── Top routes (top 10) ───────────────────────────────────────────────
-    top_rt = db.session.query(
+    # ── Top routes (period-scoped) ────────────────────────────────────────
+    top_rt_q = db.session.query(
         Send.origin, Send.destination, func.count(Send.id)
     ).filter(
         Send.user_id == uid, Send.status == 'sent',
         Send.origin.isnot(None), Send.destination.isnot(None),
         Send.origin != '', Send.destination != ''
-    ).group_by(Send.origin, Send.destination)\
-     .order_by(func.count(Send.id).desc()).limit(10).all()
+    )
+    top_rt = _period_filter(top_rt_q)\
+        .group_by(Send.origin, Send.destination)\
+        .order_by(func.count(Send.id).desc()).limit(10).all()
 
-    # ── Reply stats (SQL aggregation) ─────────────────────────────────────
+    # ── Reply stats — always lifetime (replies don't have a clear send date) ─
     reply_agg = db.session.query(
         func.count(Reply.id).label('total'),
         func.count(case((Reply.status == 'interested', 1))).label('interested'),
@@ -2250,7 +2298,7 @@ def get_stats():
     response_rate_pct = round(100 * tr / sent, 1) if sent > 0 else 0
     interest_rate_pct = round(100 * interested / tr, 1) if tr > 0 else 0
 
-    # ── Replied emails/domains (SQL) ──────────────────────────────────────
+    # ── Replied emails/domains (lifetime) ────────────────────────────────
     reply_rows = db.session.query(
         func.lower(Reply.from_email), Reply.status, func.count(Reply.id)
     ).filter(Reply.user_id == uid, Reply.from_email != '')\
@@ -2267,15 +2315,16 @@ def get_stats():
             dc[em.split('@')[1]] += rc[em]
 
     result = {
-        "total":total,"sent":sent,"errors":errors,"today":today_count,
+        "total": total, "sent": sent, "errors": errors, "today": today_count,
+        "period": period,
         "by_day": by_day,
         "by_variant": by_variant,
         "by_hour": by_hour,
-        "top_recipients":[{"email":e,"count":c} for e,c in top_recip],
-        "top_routes":[{"route":f"{o} → {d}","count":c} for o,d,c in top_rt],
-        "replied_emails":[{"email":e,"count":c,"status":rs.get(e,'new')} for e,c in rc.most_common()],
-        "replied_domains":[{"domain":d,"count":c} for d,c in dc.most_common()],
-        "response_rate":{
+        "top_recipients": [{"email": e, "count": c} for e, c in top_recip],
+        "top_routes":     [{"route": f"{o} → {d}", "count": c} for o, d, c in top_rt],
+        "replied_emails": [{"email": e, "count": c, "status": rs.get(e, 'new')} for e, c in rc.most_common()],
+        "replied_domains": [{"domain": d, "count": c} for d, c in dc.most_common()],
+        "response_rate": {
             "total_replies": tr,
             "interested": interested,
             "not_interested": not_int,
@@ -3184,7 +3233,7 @@ def api_smtp_test():
 
 @app.route('/api/stats', methods=['GET'])
 @login_required
-def api_stats(): return jsonify(get_stats())
+def api_stats(): return jsonify(get_stats(period=request.args.get('period', 'lifetime')))
 
 # ── OUTREACH INTELLIGENCE ─────────────────────────────────────────────────────
 

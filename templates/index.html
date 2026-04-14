@@ -6238,7 +6238,10 @@ function setHtml(id, html) { const e = document.getElementById(id); if (e) e.inn
 
 async function loadAnalytics() {
   try {
-    const [sRes, aRes] = await Promise.all([fetch('/api/stats'), fetch('/api/automation-impact')]);
+    const [sRes, aRes] = await Promise.all([
+      fetch('/api/stats?period=' + _anPeriod),
+      fetch('/api/automation-impact')
+    ]);
     if (sRes.ok)  _anStats  = await sRes.json();
     if (aRes.ok)  _anAiData = await aRes.json();
     renderAnalytics();
@@ -6253,7 +6256,7 @@ function renderAnalytics() {
 function setAnPeriod(p) {
   _anPeriod = p;
   document.querySelectorAll('.an-tab').forEach(b => b.classList.toggle('active', b.getAttribute('onclick').includes("'" + p + "'")));
-  renderAnalytics();
+  loadAnalytics();
 }
 
 function setAnAiTab(t) {

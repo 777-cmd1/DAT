@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>[YOUR_APP_NAME] — Terms of Service</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --text: #e2e2f0;
+    --muted: #6b6b8a;
+    --accent: #6366f1;
+    --accent-hover: #4f52d6;
+    --green: #22c55e;
+    --red: #ef4444;
+    --radius: 12px;
+  }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+    line-height: 1.7;
+  }
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+  }
+  .container {
+    position: relative; z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 48px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    text-decoration: none;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #6366f1, #22c55e);
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .logo-text {
+    font-size: 18px; font-weight: 700; color: var(--text);
+  }
+  .nav-links { display: flex; gap: 16px; }
+  .nav-links a {
+    font-size: 14px; color: var(--muted);
+    text-decoration: none; transition: color .2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 48px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  }
+  .badge {
+    display: inline-block;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.3);
+    color: var(--accent);
+    font-size: 12px; font-weight: 600;
+    padding: 4px 12px; border-radius: 99px;
+    margin-bottom: 20px; letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+  h1 {
+    font-size: 32px; font-weight: 700;
+    margin-bottom: 8px; color: var(--text);
+  }
+  .meta {
+    font-size: 13px; color: var(--muted);
+    margin-bottom: 40px;
+  }
+  .divider {
+    height: 1px; background: var(--border);
+    margin: 32px 0;
+  }
+  h2 {
+    font-size: 18px; font-weight: 600;
+    color: var(--text); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  h2 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 8px;
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    flex-shrink: 0;
+  }
+  p { color: #b0b0c8; margin-bottom: 14px; font-size: 15px; }
+  ul {
+    margin: 0 0 14px 0;
+    padding-left: 0;
+    list-style: none;
+  }
+  ul li {
+    color: #b0b0c8; font-size: 15px;
+    padding: 6px 0 6px 20px;
+    position: relative;
+  }
+  ul li::before {
+    content: '›';
+    position: absolute; left: 0;
+    color: var(--accent); font-weight: 700;
+  }
+
+  /* Warning box */
+  .warn-box {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 16px 0 20px;
+  }
+  .warn-box p { color: #c07070; font-size: 14px; margin-bottom: 6px; }
+  .warn-box p:last-child { margin-bottom: 0; }
+
+  /* Contact block */
+  .contact-block {
+    background: rgba(99,102,241,0.06);
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-top: 16px;
+  }
+  .contact-block p { font-size: 14px; color: #9898b8; margin-bottom: 4px; }
+  .contact-block a { color: var(--accent); text-decoration: none; }
+  .contact-block a:hover { text-decoration: underline; }
+
+  .footer {
+    text-align: center;
+    margin-top: 48px;
+    font-size: 13px; color: var(--muted);
+  }
+  .footer a { color: var(--muted); text-decoration: none; margin: 0 8px; }
+  .footer a:hover { color: var(--text); }
+
+  @media (max-width: 600px) {
+    .card { padding: 28px 20px; }
+    h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="container">
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="/" class="logo">
+      <div class="logo-icon">✉</div>
+      <span class="logo-text">[YOUR_APP_NAME]</span>
+    </a>
+    <div class="nav-links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/">← Back to App</a>
+    </div>
+  </nav>
+
+  <!-- Card -->
+  <div class="card">
+    <div class="badge">Legal</div>
+    <h1>Terms of Service</h1>
+    <p class="meta">Last updated: March 19, 2026 &nbsp;·&nbsp; Applies to [YOUR_DOMAIN]</p>
+
+    <p>
+      Please read these Terms of Service ("Terms") carefully before using
+      <strong>[YOUR_APP_NAME]</strong> ("Service", "we", "us", or "our").
+      By accessing or using the Service, you agree to be bound by these Terms.
+      If you do not agree, you may not use the Service.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 1 -->
+    <h2><span class="num">1</span> Description of Service</h2>
+    <p>
+      [YOUR_APP_NAME] is an invite-only freight email outreach platform that allows authorized
+      users to send outreach emails, manage replies, schedule follow-ups, and track freight
+      pipeline activity using their connected Gmail accounts.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 2 -->
+    <h2><span class="num">2</span> Eligibility &amp; Account Access</h2>
+    <ul>
+      <li>The Service is invite-only. You may only register using a valid invitation token issued by an administrator.</li>
+      <li>You must be at least 18 years old to use the Service.</li>
+      <li>You are responsible for maintaining the confidentiality of your account credentials.</li>
+      <li>You agree to notify us immediately of any unauthorized use of your account.</li>
+      <li>One person may not maintain more than one active account without explicit permission from an administrator.</li>
+    </ul>
+
+    <div class="divider"></div>
+
+    <!-- 3 -->
+    <h2><span class="num">3</span> Acceptable Use</h2>
+    <p>You agree to use the Service only for lawful freight business outreach purposes. You agree <strong>not</strong> to:</p>
+    <ul>
+      <li>Use the Service to send spam, unsolicited bulk email, or any communication that violates the CAN-SPAM Act, CASL, GDPR, or other applicable anti-spam laws.</li>
+      <li>Use the Service to harass, threaten, or defraud any individual or organization.</li>
+      <li>Attempt to gain unauthorized access to other accounts, the server, or any connected systems.</li>
+      <li>Reverse-engineer, decompile, or attempt to extract source code from the Service.</li>
+      <li>Use automated scripts or bots to interact with the Service beyond its intended functionality.</li>
+      <li>Upload or transmit any malicious code, viruses, or harmful data.</li>
+    </ul>
+
+    <div class="divider"></div>
+
+    <!-- 4 -->
+    <h2><span class="num">4</span> Gmail Credentials &amp; Connected Accounts</h2>
+    <p>
+      By connecting your Gmail account to the Service, you authorize us to access that Gmail
+      account solely for sending outreach emails and retrieving replies on your behalf.
+    </p>
+    <ul>
+      <li>You must only connect Gmail accounts that you own or have explicit authority to use for business outreach.</li>
+      <li>You are solely responsible for all emails sent from your connected Gmail account through the Service.</li>
+      <li>You acknowledge that Gmail App Passwords can be revoked at any time from your Google Account settings, which will disconnect your account from the Service.</li>
+      <li>We store your credentials encrypted, but you accept responsibility for the security of your Google Account.</li>
+    </ul>
+
+    <div class="divider"></div>
+
+    <!-- 5 -->
+    <h2><span class="num">5</span> Intellectual Property</h2>
+    <p>
+      The Service, including its design, code, and functionality, is the exclusive property of
+      [YOUR_APP_NAME] and is protected by applicable intellectual property laws.
+    </p>
+    <ul>
+      <li>You retain ownership of all content you create using the Service (email templates, pipeline data, contacts).</li>
+      <li>You grant us a limited, non-exclusive license to process and store your content solely as necessary to provide the Service.</li>
+      <li>You may not copy, redistribute, or create derivative works based on the Service's code or design.</li>
+    </ul>
+
+    <div class="divider"></div>
+
+    <!-- 6 -->
+    <h2><span class="num">6</span> Data &amp; Privacy</h2>
+    <p>
+      Your use of the Service is also governed by our
+      <a href="/privacy" style="color:var(--accent)">Privacy Policy</a>,
+      which is incorporated into these Terms by reference. By using the Service, you consent
+      to the data practices described therein.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 7 -->
+    <h2><span class="num">7</span> Suspension &amp; Termination</h2>
+    <p>We reserve the right to suspend or terminate your account if:</p>
+    <ul>
+      <li>You violate these Terms or our Acceptable Use Policy.</li>
+      <li>Your outreach activity is flagged as spam or generates abuse complaints.</li>
+      <li>Your account has been inactive for more than 12 months.</li>
+      <li>We are required to do so by law or court order.</li>
+    </ul>
+    <p>
+      You may close your account at any time by contacting us. Upon termination, your data
+      will be deleted in accordance with our Privacy Policy.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 8 -->
+    <h2><span class="num">8</span> Disclaimers</h2>
+    <div class="warn-box">
+      <p>
+        THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND,
+        EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.
+      </p>
+      <p>
+        We do not guarantee that the Service will be uninterrupted, error-free, or that emails
+        sent through the Service will be delivered or not classified as spam by recipient
+        mail servers.
+      </p>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 9 -->
+    <h2><span class="num">9</span> Limitation of Liability</h2>
+    <p>
+      To the maximum extent permitted by applicable law, [YOUR_APP_NAME] shall not be liable
+      for any indirect, incidental, special, consequential, or punitive damages, including
+      but not limited to loss of profits, data, or goodwill, arising out of or in connection
+      with your use of the Service, even if we have been advised of the possibility of such
+      damages.
+    </p>
+    <p>
+      Our total liability for any claim arising from use of the Service shall not exceed
+      the amount you paid us in the twelve (12) months preceding the claim, or $100 USD,
+      whichever is greater.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 10 -->
+    <h2><span class="num">10</span> Governing Law</h2>
+    <p>
+      These Terms shall be governed by and construed in accordance with applicable law.
+      Any disputes shall be resolved through good-faith negotiation first. If unresolved,
+      disputes shall be submitted to binding arbitration or the courts of the applicable
+      jurisdiction.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 11 -->
+    <h2><span class="num">11</span> Changes to These Terms</h2>
+    <p>
+      We reserve the right to modify these Terms at any time. When we make material changes,
+      we will update the "Last updated" date at the top of this page. Continued use of the
+      Service after changes take effect constitutes your acceptance of the revised Terms.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 12 -->
+    <h2><span class="num">12</span> Contact</h2>
+    <p>For questions about these Terms, please contact us:</p>
+    <div class="contact-block">
+      <p><strong>[YOUR_APP_NAME]</strong></p>
+      <p>Email: <a href="mailto:[YOUR_EMAIL]">[YOUR_EMAIL]</a></p>
+      <p>Website: <a href="https://[YOUR_DOMAIN]" target="_blank">https://[YOUR_DOMAIN]</a></p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <a href="/terms">Terms of Service</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/">App</a>
+    <br><br>
+    © 2026 [YOUR_APP_NAME]. All rights reserved.
+  </div>
+
+</div>
+</body>
+</html>

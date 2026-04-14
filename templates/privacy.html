@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>[YOUR_APP_NAME] — Privacy Policy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --text: #e2e2f0;
+    --muted: #6b6b8a;
+    --accent: #6366f1;
+    --accent-hover: #4f52d6;
+    --green: #22c55e;
+    --radius: 12px;
+  }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+    line-height: 1.7;
+  }
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+  }
+  .container {
+    position: relative; z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 48px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    text-decoration: none;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #6366f1, #22c55e);
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .logo-text {
+    font-size: 18px; font-weight: 700; color: var(--text);
+  }
+  .nav-links { display: flex; gap: 16px; }
+  .nav-links a {
+    font-size: 14px; color: var(--muted);
+    text-decoration: none; transition: color .2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+
+  /* ── Content card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 48px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  }
+  .badge {
+    display: inline-block;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.3);
+    color: var(--accent);
+    font-size: 12px; font-weight: 600;
+    padding: 4px 12px; border-radius: 99px;
+    margin-bottom: 20px; letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+  h1 {
+    font-size: 32px; font-weight: 700;
+    margin-bottom: 8px; color: var(--text);
+  }
+  .meta {
+    font-size: 13px; color: var(--muted);
+    margin-bottom: 40px;
+  }
+  .divider {
+    height: 1px; background: var(--border);
+    margin: 32px 0;
+  }
+  h2 {
+    font-size: 18px; font-weight: 600;
+    color: var(--text); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  h2 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 8px;
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    flex-shrink: 0;
+  }
+  p { color: #b0b0c8; margin-bottom: 14px; font-size: 15px; }
+  ul {
+    margin: 0 0 14px 0;
+    padding-left: 0;
+    list-style: none;
+  }
+  ul li {
+    color: #b0b0c8; font-size: 15px;
+    padding: 6px 0 6px 20px;
+    position: relative;
+  }
+  ul li::before {
+    content: '›';
+    position: absolute; left: 0;
+    color: var(--accent); font-weight: 700;
+  }
+
+  /* ── Gmail highlight box ── */
+  .gmail-box {
+    background: rgba(34,197,94,0.06);
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin: 16px 0 20px;
+  }
+  .gmail-box .gmail-title {
+    font-size: 14px; font-weight: 600;
+    color: var(--green);
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 8px;
+  }
+  .gmail-box p {
+    font-size: 14px; color: #9abba0; margin-bottom: 8px;
+  }
+  .gmail-box p:last-child { margin-bottom: 0; }
+  .gmail-box ul li { color: #9abba0; font-size: 14px; }
+  .gmail-box ul li::before { color: var(--green); }
+
+  /* ── Contact block ── */
+  .contact-block {
+    background: rgba(99,102,241,0.06);
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-top: 16px;
+  }
+  .contact-block p { font-size: 14px; color: #9898b8; margin-bottom: 4px; }
+  .contact-block a { color: var(--accent); text-decoration: none; }
+  .contact-block a:hover { text-decoration: underline; }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    margin-top: 48px;
+    font-size: 13px; color: var(--muted);
+  }
+  .footer a { color: var(--muted); text-decoration: none; margin: 0 8px; }
+  .footer a:hover { color: var(--text); }
+
+  @media (max-width: 600px) {
+    .card { padding: 28px 20px; }
+    h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="container">
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="/" class="logo">
+      <div class="logo-icon">✉</div>
+      <span class="logo-text">[YOUR_APP_NAME]</span>
+    </a>
+    <div class="nav-links">
+      <a href="/terms">Terms of Service</a>
+      <a href="/">← Back to App</a>
+    </div>
+  </nav>
+
+  <!-- Card -->
+  <div class="card">
+    <div class="badge">Legal</div>
+    <h1>Privacy Policy</h1>
+    <p class="meta">Last updated: March 19, 2026 &nbsp;·&nbsp; Applies to [YOUR_DOMAIN]</p>
+
+    <p>
+      This Privacy Policy explains how <strong>[YOUR_APP_NAME]</strong> ("we", "us", or "our")
+      collects, uses, stores, and protects your personal information when you use our
+      freight email outreach platform.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 1 -->
+    <h2><span class="num">1</span> Information We Collect</h2>
+    <p>We collect the following types of information:</p>
+    <ul>
+      <li><strong>Account data:</strong> email address, hashed password, account role, and invitation token used during registration.</li>
+      <li><strong>Email account credentials:</strong> Gmail address and app password you connect to the platform. Passwords are encrypted at rest using Fernet symmetric encryption and are never stored in plaintext.</li>
+      <li><strong>Usage data:</strong> records of outreach emails sent, replies received, follow-ups scheduled, and pipeline entries you create.</li>
+      <li><strong>Session data:</strong> browser session tokens and CSRF tokens stored in secure, HTTP-only cookies.</li>
+    </ul>
+    <p>We do <strong>not</strong> collect payment information, location data, or any data beyond what is necessary to provide the service.</p>
+
+    <div class="divider"></div>
+
+    <!-- 2 -->
+    <h2><span class="num">2</span> Gmail &amp; Google API Access</h2>
+
+    <div class="gmail-box">
+      <div class="gmail-title">🔒 Gmail Security — Key Points</div>
+      <ul>
+        <li>Your Gmail credentials (address + app password) are encrypted with <strong>Fernet symmetric encryption</strong> before being stored in our database. The encryption key is held separately as an environment secret and is never committed to source code.</li>
+        <li>We access your Gmail account <strong>only</strong> to send outreach emails and check for replies on your behalf — no other actions are performed.</li>
+        <li>Your credentials and tokens are <strong>never shared with, sold to, or transmitted to any third party</strong> under any circumstances.</li>
+        <li>Gmail access uses SMTP/IMAP with your App Password, which can be revoked at any time directly from your Google Account settings without affecting your main Google password.</li>
+        <li>If you delete your account, all stored credentials are permanently removed from our database.</li>
+      </ul>
+    </div>
+
+    <p>
+      Our use of Google APIs complies with the
+      <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener" style="color:var(--accent)">
+        Google API Services User Data Policy</a>,
+      including the Limited Use requirements.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 3 -->
+    <h2><span class="num">3</span> How We Store Your Data</h2>
+    <ul>
+      <li><strong>Database:</strong> PostgreSQL hosted on Railway's secure infrastructure. All database connections use TLS.</li>
+      <li><strong>Passwords:</strong> User account passwords are hashed with <strong>bcrypt</strong> (never stored in plaintext).</li>
+      <li><strong>Gmail credentials:</strong> Encrypted with Fernet before database insertion; the encryption key is stored as a separate environment variable.</li>
+      <li><strong>Session cookies:</strong> HTTP-only, SameSite=Lax, and Secure flags enabled in production.</li>
+      <li><strong>Backups:</strong> Managed by Railway's database service. Backup data is subject to the same security controls.</li>
+    </ul>
+
+    <div class="divider"></div>
+
+    <!-- 4 -->
+    <h2><span class="num">4</span> How We Use Your Data</h2>
+    <p>Your data is used exclusively to:</p>
+    <ul>
+      <li>Authenticate you and manage your session.</li>
+      <li>Send freight outreach emails from your connected Gmail account.</li>
+      <li>Retrieve and display replies to your outreach emails.</li>
+      <li>Schedule and send follow-up emails.</li>
+      <li>Maintain your pipeline and send history.</li>
+    </ul>
+    <p>We do <strong>not</strong> use your data for advertising, profiling, analytics resale, or any purpose beyond the core functionality described above.</p>
+
+    <div class="divider"></div>
+
+    <!-- 5 -->
+    <h2><span class="num">5</span> Data Sharing &amp; Third Parties</h2>
+    <p>
+      We do <strong>not</strong> sell, rent, or share your personal data with third parties, except:
+    </p>
+    <ul>
+      <li><strong>Railway (hosting &amp; database):</strong> Your data is stored on Railway's infrastructure. Railway's own privacy policy governs their data handling.</li>
+      <li><strong>Google (SMTP/IMAP):</strong> Emails are sent through Google's mail servers using your credentials. Google's own terms and privacy policy apply to that transmission.</li>
+      <li><strong>Legal obligation:</strong> If required by law or valid legal process, we may disclose information as legally required.</li>
+    </ul>
+
+    <div class="divider"></div>
+
+    <!-- 6 -->
+    <h2><span class="num">6</span> Data Retention &amp; Deletion</h2>
+    <ul>
+      <li>Your data is retained for as long as your account is active.</li>
+      <li>You may request deletion of your account and all associated data at any time by contacting us at the email below.</li>
+      <li>Upon deletion: account record, email credentials, send/reply history, and pipeline data are permanently removed from our production database.</li>
+      <li>Residual data in database backups may persist for up to <strong>30 days</strong> before being purged on backup rotation.</li>
+    </ul>
+
+    <div class="divider"></div>
+
+    <!-- 7 -->
+    <h2><span class="num">7</span> Your Rights</h2>
+    <p>Depending on your jurisdiction, you may have the right to:</p>
+    <ul>
+      <li>Access the personal data we hold about you.</li>
+      <li>Request correction of inaccurate data.</li>
+      <li>Request deletion of your data ("right to be forgotten").</li>
+      <li>Withdraw consent to data processing at any time.</li>
+    </ul>
+    <p>To exercise any of these rights, contact us using the information below.</p>
+
+    <div class="divider"></div>
+
+    <!-- 8 -->
+    <h2><span class="num">8</span> Cookies</h2>
+    <p>
+      We use a single session cookie strictly necessary for authentication. We do not use
+      tracking, advertising, or analytics cookies. No third-party cookie consent banner is
+      required.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 9 -->
+    <h2><span class="num">9</span> Children's Privacy</h2>
+    <p>
+      This service is not directed at individuals under the age of 18. We do not knowingly
+      collect personal data from minors. If you believe a minor has provided us with data,
+      please contact us and we will promptly delete it.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 10 -->
+    <h2><span class="num">10</span> Changes to This Policy</h2>
+    <p>
+      We may update this Privacy Policy from time to time. When we do, we will update the
+      "Last updated" date at the top of this page. Continued use of the service after
+      changes constitutes your acceptance of the revised policy.
+    </p>
+
+    <div class="divider"></div>
+
+    <!-- 11 -->
+    <h2><span class="num">11</span> Contact</h2>
+    <p>If you have any questions about this Privacy Policy or your data, please contact us:</p>
+    <div class="contact-block">
+      <p><strong>[YOUR_APP_NAME]</strong></p>
+      <p>Email: <a href="mailto:[YOUR_EMAIL]">[YOUR_EMAIL]</a></p>
+      <p>Website: <a href="https://[YOUR_DOMAIN]" target="_blank">https://[YOUR_DOMAIN]</a></p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <a href="/terms">Terms of Service</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/">App</a>
+    <br><br>
+    © 2026 [YOUR_APP_NAME]. All rights reserved.
+  </div>
+
+</div>
+</body>
+</html>

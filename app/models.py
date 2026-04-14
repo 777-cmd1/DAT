@@ -90,6 +90,7 @@ class EmailAccount(db.Model):
     your_phone     = db.Column(db.String(100), default='')
     delay_min      = db.Column(db.Integer, default=20)
     delay_max      = db.Column(db.Integer, default=45)
+    daily_target   = db.Column(db.Integer, default=100)
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -105,6 +106,7 @@ class EmailAccount(db.Model):
             'your_phone':         self.your_phone,
             'delay_min':          self.delay_min,
             'delay_max':          self.delay_max,
+            'daily_target':       self.daily_target or 100,
         }
 
 
@@ -163,6 +165,12 @@ class Reply(db.Model):
     classified_at = db.Column(db.DateTime)
 
     user = db.relationship('User', backref='replies')
+
+    __table_args__ = (
+        db.Index('ix_reply_user_received', 'user_id', 'received_at'),
+        db.Index('ix_reply_user_status', 'user_id', 'status'),
+        db.Index('ix_reply_user_email', 'user_id', 'from_email'),
+    )
 
     def to_dict(self):
         return {
@@ -329,6 +337,8 @@ class FollowupEvent(db.Model):
 
     __table_args__ = (
         db.Index('ix_fe_contact_at', 'followup_contact_id', 'event_at'),
+        db.Index('ix_fe_workspace_type_at', 'workspace_id', 'event_type', 'event_at'),
+        db.Index('ix_fe_actor_type_at', 'actor_user_id', 'event_type', 'event_at'),
     )
 
 
@@ -418,6 +428,10 @@ class Template(db.Model):
     is_active    = db.Column(db.Boolean, default=True)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
 
+    __table_args__ = (
+        db.Index('ix_template_user_type_active', 'user_id', 'type', 'is_active'),
+    )
+
     def to_dict(self):
         return {
             'id': self.id, 'type': self.type, 'level': self.level,
@@ -485,7 +499,7 @@ class SendJob(db.Model):
 
     id          = db.Column(db.String(36), primary_key=True, default=_uuid)
     user_id     = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
-    status      = db.Column(db.String(20), default='running')  # running|done|interrupted
+    status      = db.Column(db.String(20), default='queued')  # queued|running|done|interrupted
     total       = db.Column(db.Integer, default=0)
     sent        = db.Column(db.Integer, default=0)
     errors      = db.Column(db.Integer, default=0)
@@ -493,6 +507,15 @@ class SendJob(db.Model):
     started_at  = db.Column(db.DateTime, default=datetime.utcnow)
     finished_at = db.Column(db.DateTime, nullable=True)
     error_msg   = db.Column(db.Text, nullable=True)
+
+
+class SystemLease(db.Model):
+    __tablename__ = 'system_leases'
+
+    name        = db.Column(db.String(100), primary_key=True)
+    owner       = db.Column(db.String(255), nullable=False)
+    lease_until = db.Column(db.DateTime, nullable=False)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # ── PERFORMANCE INDEXES ───────────────────────────────────────────────────────

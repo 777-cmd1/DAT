@@ -462,6 +462,29 @@
 <div class="toast" id="toast"></div>
 
 <script>
+const CSRF_TOKEN = '{{ csrf_token|default("", true) }}';
+
+(function() {
+  const _nativeFetch = window.fetch.bind(window);
+  window.fetch = function(resource, init = {}) {
+    const request = new Request(resource, init);
+    const method = (request.method || 'GET').toUpperCase();
+    const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    const url = new URL(request.url, window.location.origin);
+    const isSameOrigin = url.origin === window.location.origin;
+
+    if (!isMutation || !isSameOrigin || !CSRF_TOKEN) {
+      return _nativeFetch(resource, init);
+    }
+
+    const nextInit = { ...init };
+    const headers = new Headers(init.headers || request.headers || {});
+    if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', CSRF_TOKEN);
+    nextInit.headers = headers;
+    return _nativeFetch(resource, nextInit);
+  };
+})();
+
 /* ─── State + Period switching ─── */
 let currentTab = 'overview';
 let currentPeriod = 'today';

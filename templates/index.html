@@ -457,6 +457,194 @@ select { cursor: pointer; }
 .field { margin-bottom: 14px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
+/* ── SETTINGS ───────────────────────────────────────────────────────── */
+.settings-shell { max-width: 1120px; display: grid; gap: 18px; }
+.settings-grid { display: grid; grid-template-columns: 1.2fr .9fr; gap: 18px; }
+.settings-card {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface2) 58%, transparent), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  box-shadow: var(--shadow);
+}
+.settings-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.settings-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--text);
+}
+.settings-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.45;
+}
+.settings-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.settings-status-badge.ok {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface2));
+}
+.settings-status-badge.warn {
+  color: var(--yellow);
+  border-color: color-mix(in srgb, var(--yellow) 28%, var(--border));
+  background: color-mix(in srgb, var(--yellow) 10%, var(--surface2));
+}
+.settings-ready-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+.settings-ready-panel {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.settings-ready-email {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.settings-ready-copy {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.settings-warning {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--yellow) 26%, var(--border));
+  background: color-mix(in srgb, var(--yellow) 10%, var(--surface2));
+  color: color-mix(in srgb, var(--yellow) 88%, var(--text));
+  font-size: 12px;
+  line-height: 1.45;
+}
+.settings-signoff-preview {
+  margin-top: 12px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.settings-preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.settings-preview-text {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.settings-stack-sm { display: grid; gap: 12px; }
+.settings-note {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 6px;
+  line-height: 1.45;
+}
+.settings-followup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.settings-mini {
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.settings-mini-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.settings-toggle-copy { min-width: 0; }
+.settings-toggle-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.settings-toggle-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.settings-savebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface2) 66%, transparent), var(--surface));
+  box-shadow: var(--shadow);
+}
+.settings-savecopy { min-width: 0; }
+.settings-savecopy .settings-title { font-size: 15px; }
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+@media (max-width: 1080px) {
+  .settings-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .settings-followup-grid { grid-template-columns: 1fr; }
+  .settings-ready-row,
+  .settings-savebar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .settings-actions { justify-content: flex-start; }
+}
+
 /* ── TABLE ──────────────────────────────────────────────────────────── */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -496,7 +684,11 @@ tr:last-child td { border-bottom: none; }
 .chip-history { background: rgba(148,163,184,.06); color: var(--text3);  border: 1px solid var(--border); opacity:.7; }
 
 /* ── SEND PAGE ──────────────────────────────────────────────────────── */
-.send-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+.send-layout { display:flex; flex-direction:column; gap:18px; }
+.send-main { display:flex; flex-direction:column; gap:14px; }
+.send-secondary-grid { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1.1fr) minmax(280px,.7fr); gap:14px; align-items:start; }
+.send-secondary-grid .sb-card { margin-top:0; }
+.send-section-note { font-size:11px; color:var(--text3); }
 
 /* ── DAT TEXTAREA — terminal style ─────────────────────────────────── */
 .dat-input-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
@@ -531,6 +723,7 @@ tr:last-child td { border-bottom: none; }
   display: block;
   box-sizing: border-box;
 }
+#parseResults[data-has-results="true"] #datText { min-height: 150px; }
 #datText::placeholder { color: var(--text3); font-style: italic; }
 #datText:focus { background: var(--surface); outline: none; box-shadow: none; border: none; }
 
@@ -551,16 +744,18 @@ tr:last-child td { border-bottom: none; }
   background: var(--surface2);
 }
 .loads-card-title { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); }
-.loads-stats-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); border-bottom:1px solid var(--border); }
+.loads-stats-strip { display:flex; gap:8px; flex-wrap:wrap; padding:12px 14px; border-bottom:1px solid var(--border); background:rgba(255,255,255,.015); }
 .loads-stat {
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  padding:14px 8px; background:var(--surface); gap:3px;
-  transition: background .15s;
+  display:inline-flex; align-items:center; justify-content:flex-start; gap:8px;
+  padding:8px 12px; background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:999px;
+  transition: background .15s, border-color .15s, transform .15s;
+  cursor:pointer;
 }
-.loads-stat:hover { background:var(--surface2); }
-.loads-stat-val { font-size:24px; font-weight:800; line-height:1; font-family:'DM Mono',monospace; }
-.loads-stat-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); }
-.loads-stat-sub { font-size:9px; color:var(--text3); }
+.loads-stat:hover { background:var(--surface2); border-color:var(--border-h); transform:translateY(-1px); }
+.loads-stat.active { border-color:var(--accent); background:rgba(52,211,153,.08); box-shadow:0 0 0 1px rgba(52,211,153,.12) inset; }
+.loads-stat-val { font-size:13px; font-weight:800; line-height:1; font-family:'DM Mono',monospace; min-width:1.8em; text-align:right; }
+.loads-stat-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); }
+.loads-stat-sub { display:none; }
 
 /* Email progress bar in stats strip */
 .loads-email-bar { height:3px; border-radius:99px; margin-top:4px; width:100%; }
@@ -578,19 +773,26 @@ tr:last-child td { border-bottom: none; }
 #loadsTable tbody tr:hover td { background:var(--surface2); }
 #loadsTable tbody tr.row-skip td { opacity:.45; }
 #loadsTable tbody tr.row-stop td { opacity:.3; }
+#loadsTable tbody tr.row-issue td { background:rgba(239,68,68,.03); }
 #loadsTable td { padding:10px 12px; vertical-align:middle; }
 
 /* Send CTA bar */
 .send-cta-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-top: 1px solid var(--border);
-  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.96);
   gap: 12px;
+  position: sticky;
+  top: 10px;
+  z-index: 8;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 20px rgba(15,23,42,.06);
 }
 .send-cta-btn {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 11px 24px;
+  padding: 10px 18px;
   border-radius: var(--radius-sm);
   font-size: 13px; font-weight: 700;
   background: var(--accent);
@@ -606,11 +808,27 @@ tr:last-child td { border-bottom: none; }
 .send-kbd { font-size:10px; color:var(--text3); display:flex;align-items:center;gap:4px; }
 .send-kbd kbd { background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-family:'DM Mono',monospace;font-size:10px; }
 .send-selected-count { font-size:12px; font-weight:600; color:var(--text2); }
-.send-cta-top { border-top:none; border-bottom:1px solid var(--border); }
+.send-cta-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.send-cta-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.send-select-btn {
+  font-size:11px; font-weight:700; padding:6px 10px; border-radius:999px; cursor:pointer;
+  border:1px solid var(--border); background:var(--surface2); color:var(--text2); transition:all .15s;
+}
+.send-select-btn:hover { border-color:var(--border-h); color:var(--text); }
+[data-theme="light"] .send-cta-bar,
+html:not([data-theme="dark"]) .send-cta-bar {
+  background:#ffffff !important;
+  border-top:1px solid var(--border) !important;
+  border-bottom:1px solid var(--border) !important;
+  box-shadow:0 6px 16px rgba(15,23,42,.04) !important;
+}
+[data-theme="dark"] .send-cta-bar { background: rgba(17,24,39,.9); box-shadow: 0 10px 24px rgba(0,0,0,.24); }
 
 /* ── SIDEBAR — Broadcast Pulse ─────────────────────────────────────── */
 .sb-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
 .sb-card + .sb-card { margin-top:12px; }
+.send-secondary-grid .sb-card-head { padding-bottom:0; }
+.send-secondary-grid .sb-card-body { padding-top:14px; }
 .sb-card-head {
   padding:14px 16px 0; display:flex; align-items:center; justify-content:space-between;
 }
@@ -644,12 +862,12 @@ tr:last-child td { border-bottom: none; }
 
 /* ── Sending Progress — enhanced ─────────────────── */
 .sp-bar-wrap {
-  position:relative; height:32px; border-radius:12px;
+  position:relative; height:24px; border-radius:10px;
   background:var(--surface2); border:1px solid var(--border);
-  overflow:hidden; margin-bottom:16px;
+  overflow:hidden; margin-bottom:12px;
 }
 .sp-bar-fill {
-  height:100%; border-radius:12px;
+  height:100%; border-radius:10px;
   background:linear-gradient(90deg,var(--accent),#34d399,var(--blue));
   background-size:200% 100%;
   animation:spGradientShift 3s ease infinite;
@@ -682,10 +900,10 @@ tr:last-child td { border-bottom: none; }
 .sp-bar-label .sp-pct { font-family:'DM Mono',monospace; }
 
 /* Sent/Error counters */
-.sp-counters { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+.sp-counters { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
 .sp-counter {
   display:flex; align-items:center; gap:10px;
-  padding:12px 14px; border-radius:12px;
+  padding:10px 12px; border-radius:10px;
   border:1px solid;
 }
 .sp-counter-icon {
@@ -842,6 +1060,16 @@ tr:last-child td { border-bottom: none; }
 .log-row-sent  { color: var(--accent); }
 .log-row-error { color: var(--red); }
 
+@media (max-width:1100px) {
+  .send-secondary-grid { grid-template-columns:1fr; }
+}
+
+@media (max-width:760px) {
+  .send-cta-bar { flex-direction:column; align-items:flex-start; }
+  .send-cta-actions, .send-cta-meta { width:100%; }
+  .loads-stats-strip { gap:6px; }
+}
+
 /* ── CHART ──────────────────────────────────────────────────────────── */
 .chart-wrap {
   display: flex;
@@ -928,14 +1156,22 @@ tr:last-child td { border-bottom: none; }
 
 /* ── REPLIES TRIAGE QUEUE ───────────────────────────────────────────── */
 /* Progress bar */
-.tq-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:12px; }
-.tq-progress-wrap { display:flex; align-items:center; gap:10px; }
-.tq-progress-label { font-size:12px; color:var(--text2); white-space:nowrap; }
+.tq-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:12px; }
+.tq-progress-wrap { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.tq-progress-label { font-size:12px; color:var(--text2); white-space:nowrap; font-weight:600; }
 .tq-progress-track { width:140px; height:5px; background:var(--surface2); border-radius:99px; overflow:hidden; }
 .tq-progress-fill { height:100%; background:var(--accent); border-radius:99px; transition:width .5s var(--ease); }
 .tq-inbox-zero { font-size:13px; color:var(--accent); font-weight:600; }
+.tq-queue-chip {
+  display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px;
+  border:1px solid var(--border); background:rgba(255,255,255,.7); font-size:11px; font-weight:700; color:var(--text2);
+}
+.tq-queue-chip strong { color:var(--text); font-family:'DM Mono',monospace; font-size:12px; }
+[data-theme="dark"] .tq-queue-chip { background:rgba(255,255,255,.03); }
 
 /* Filter tabs */
+.tq-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.tq-search { width:220px; font-size:12px; }
 .tq-filters { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
 .tq-tab { padding:6px 14px; border-radius:99px; font-size:12px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:transparent; color:var(--text2); transition:all .15s; display:inline-flex; align-items:center; gap:5px; font-family:'Plus Jakarta Sans',sans-serif; }
 .tq-tab:hover { border-color:var(--border2); color:var(--text); background:var(--surface2); }
@@ -944,8 +1180,8 @@ tr:last-child td { border-bottom: none; }
 .tq-tab.active .tq-tab-count { background:rgba(0,0,0,.18); }
 
 /* Section labels */
-.tq-section { margin-bottom:4px; }
-.tq-section-label { display:flex; align-items:center; gap:8px; padding:18px 0 8px; font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--text3); }
+.tq-section { margin-bottom:8px; }
+.tq-section-label { display:flex; align-items:center; gap:8px; padding:12px 0 7px; font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--text3); }
 .tq-section-label::after { content:''; flex:1; height:1px; background:var(--border); }
 .tq-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .tq-dot-new { background:#f87171; box-shadow:0 0 6px rgba(248,113,113,.6); }
@@ -954,18 +1190,18 @@ tr:last-child td { border-bottom: none; }
 .tq-dot-interested { background:var(--accent); }
 .tq-dot-ignored { background:var(--text3); }
 
-/* ── QUEUE CARD — 2-column layout ─────────────────────────────────── */
+/* ── QUEUE CARD — decision row layout ─────────────────────────────── */
 .tq-card {
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:var(--radius);
-  margin-bottom:7px;
+  margin-bottom:6px;
   border-left:4px solid transparent;
   transition:box-shadow .18s, border-color .18s, opacity .2s, transform .2s;
   overflow:hidden;
   position:relative;
 }
-.tq-card:hover { box-shadow:0 2px 14px rgba(0,0,0,.07); }
+.tq-card:hover { box-shadow:0 4px 18px rgba(15,23,42,.07); border-color:var(--border-h); }
 .tq-card.state-new       { border-left-color:#f87171; }
 .tq-card.state-viewed    { border-left-color:#60a5fa; }
 .tq-card.state-follow_up { border-left-color:#fb923c; }
@@ -973,12 +1209,12 @@ tr:last-child td { border-bottom: none; }
 .tq-card.state-ignored   { border-left-color:var(--border); opacity:.5; }
 
 /* 2-column inner */
-.tq-card-inner { display:flex; min-height:90px; }
+.tq-card-inner { display:flex; min-height:76px; }
 
 /* Left — contact info */
 .tq-card-left {
-  flex:1; min-width:0; padding:12px 14px 12px 14px;
-  display:flex; gap:12px; align-items:flex-start;
+  flex:1; min-width:0; padding:10px 12px;
+  display:flex; gap:10px; align-items:flex-start;
   cursor:pointer;
   transition:background .12s;
 }
@@ -987,9 +1223,9 @@ tr:last-child td { border-bottom: none; }
 
 /* Avatar with initials */
 .tq-avatar {
-  width:38px; height:38px; border-radius:10px; flex-shrink:0;
+  width:32px; height:32px; border-radius:9px; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
-  font-size:12px; font-weight:800; color:#fff; letter-spacing:.3px;
+  font-size:11px; font-weight:800; color:#fff; letter-spacing:.3px;
   margin-top:1px; position:relative;
 }
 .tq-avatar-dot {
@@ -1003,7 +1239,7 @@ tr:last-child td { border-bottom: none; }
 
 /* Contact content */
 .tq-card-content { flex:1; min-width:0; }
-.tq-card-meta { display:flex; align-items:center; gap:7px; margin-bottom:5px; flex-wrap:wrap; }
+.tq-card-meta { display:flex; align-items:center; gap:7px; margin-bottom:4px; flex-wrap:wrap; }
 .tq-state-pill {
   display:inline-flex; align-items:center; gap:4px;
   font-size:9px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
@@ -1015,24 +1251,24 @@ tr:last-child td { border-bottom: none; }
 .tq-state-pill.interested { background:rgba(5,150,105,.1);    color:var(--accent); }
 .tq-state-pill.ignored    { background:var(--surface2);       color:var(--text3); }
 .tq-reply-badge {
-  font-size:10px; font-weight:600; color:var(--text3);
+  font-size:10px; font-weight:700; color:var(--text3);
   display:inline-flex; align-items:center; gap:3px;
 }
 .tq-time { font-size:10px; color:var(--text3); margin-left:auto; white-space:nowrap; }
-.tq-company { font-size:14px; font-weight:700; color:var(--text); line-height:1.25; margin-bottom:1px; }
-.tq-email   { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; margin-bottom:7px; }
+.tq-company { font-size:13px; font-weight:700; color:var(--text); line-height:1.2; margin-bottom:1px; }
+.tq-email   { font-size:10px; color:var(--text3); font-family:'DM Mono',monospace; margin-bottom:5px; }
 .tq-preview {
-  font-size:12.5px; color:var(--text2); line-height:1.45;
+  font-size:12px; color:var(--text2); line-height:1.35;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   margin-bottom:3px;
 }
-.tq-route   { font-size:11px; color:var(--text3); display:flex; align-items:center; gap:4px; }
+.tq-route   { font-size:10px; color:var(--text3); display:flex; align-items:center; gap:4px; }
 
 /* Expanded full body (click to expand) */
 .tq-expanded-body {
-  display:none; margin-top:9px; padding:10px 12px;
+  display:none; margin-top:8px; padding:9px 11px;
   background:var(--surface2); border-radius:var(--radius-sm);
-  font-size:12px; color:var(--text2); line-height:1.7;
+  font-size:11px; color:var(--text2); line-height:1.65;
   white-space:pre-wrap; max-height:180px; overflow-y:auto;
   font-family:'DM Mono',monospace; border:1px solid var(--border);
 }
@@ -1040,29 +1276,31 @@ tr:last-child td { border-bottom: none; }
 
 /* Right — action column */
 .tq-card-right {
-  width:148px; flex-shrink:0;
+  width:128px; flex-shrink:0;
   border-left:1px solid var(--border);
   display:flex; flex-direction:column;
+  background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
 }
 .tq-action {
   flex:1; display:flex; align-items:center; gap:8px;
-  padding:0 14px;
+  padding:0 12px;
   background:transparent; border:none; border-bottom:1px solid var(--border);
-  font-size:12px; font-weight:600; font-family:'Plus Jakarta Sans',sans-serif;
+  font-size:11px; font-weight:700; font-family:'Plus Jakarta Sans',sans-serif;
   cursor:pointer; color:var(--text3);
   transition:background .13s, color .13s;
   white-space:nowrap;
   position:relative;
 }
 .tq-action:last-child { border-bottom:none; }
-.tq-action i { font-size:14px; flex-shrink:0; }
+.tq-action i { font-size:13px; flex-shrink:0; }
 .tq-action-key {
   margin-left:auto; font-size:9px; font-weight:700; letter-spacing:.5px;
   opacity:.35; font-family:'DM Mono',monospace;
 }
+.tq-action-fu { color:var(--accent); }
 .tq-action-yes { }
 .tq-action-yes:hover { background:rgba(5,150,105,.08); color:var(--accent); }
-.tq-action-fu:hover  { background:rgba(251,146,60,.08); color:#fb923c; }
+.tq-action-fu:hover  { background:rgba(5,150,105,.08); color:var(--accent); }
 .tq-action-no:hover    { background:rgba(248,113,113,.08); color:#f87171; }
 .tq-action-block:hover { background:rgba(248,113,113,.14); color:#ef4444; font-weight:700; }
 
@@ -1082,13 +1320,13 @@ tr:last-child td { border-bottom: none; }
 /* Compact row (processed) */
 .tq-compact {
   display:flex; align-items:center; gap:10px;
-  padding:7px 12px; background:var(--surface);
+  padding:7px 12px; background:rgba(255,255,255,.55);
   border:1px solid var(--border); border-radius:var(--radius-sm);
-  margin-bottom:4px; border-left:3px solid transparent; opacity:.65;
+  margin-bottom:4px; border-left:3px solid transparent; opacity:.72;
 }
 .tq-compact.state-interested { border-left-color:var(--accent); }
 .tq-compact.state-follow_up  { border-left-color:#fb923c; }
-.tq-compact.state-ignored    { opacity:.38; }
+.tq-compact.state-ignored    { opacity:.42; }
 .tq-compact-avatar { width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:#fff; flex-shrink:0; }
 .tq-compact-name { font-size:12px; font-weight:600; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tq-compact-email { font-size:10px; color:var(--text3); font-family:'DM Mono',monospace; }
@@ -1100,6 +1338,13 @@ tr:last-child td { border-bottom: none; }
 /* Empty state */
 .tq-empty { text-align:center; padding:60px 0; color:var(--text3); font-size:13px; }
 .tq-empty-icon { font-size:36px; margin-bottom:10px; opacity:.35; }
+[data-theme="dark"] .tq-compact { background:rgba(255,255,255,.02); }
+
+@media (max-width:900px) {
+  .tq-card-inner { flex-direction:column; }
+  .tq-card-right { width:100%; border-left:none; border-top:1px solid var(--border); display:grid; grid-template-columns:1fr 1fr 1fr; }
+  .tq-action { min-height:42px; justify-content:center; }
+}
 
 /* Existing reply-body kept for compat */
 .reply-body { font-size:12px; color:var(--text2); line-height:1.7; background:var(--surface2); padding:12px 14px; border-radius:var(--radius-sm); margin-bottom:12px; white-space:pre-wrap; max-height:180px; overflow-y:auto; font-family:'DM Mono',monospace; border:1px solid var(--border); }
@@ -1186,13 +1431,14 @@ tr:last-child td { border-bottom: none; }
 .fu-checkbox-wrap { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:22px; }
 .fu-checkbox { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
 /* Bulk action bar */
-.fu-bulk-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--accent); border-radius:var(--radius); padding:8px 12px; margin-bottom:10px; animation:slideDown .15s ease; }
+.fu-bulk-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:rgba(12,18,32,.92); border:1px solid rgba(52,211,153,.35); border-radius:12px; padding:8px 10px; margin-bottom:10px; box-shadow:0 10px 26px rgba(0,0,0,.2); animation:slideDown .15s ease; backdrop-filter:blur(8px); }
 @keyframes slideDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 .fu-bulk-count { font-size:12px; font-weight:700; color:var(--text); flex-shrink:0; }
 .fu-bulk-sep { width:1px; height:18px; background:var(--border); flex-shrink:0; margin:0 2px; }
-.fu-bulk-clear { background:none; border:none; color:var(--text3); font-size:16px; cursor:pointer; padding:0 4px; line-height:1; }
+.fu-bulk-clear { background:none; border:none; color:var(--text3); font-size:16px; cursor:pointer; padding:0 4px; line-height:1; min-height:28px; }
 .fu-bulk-clear:hover { color:var(--text); }
-.fu-select-all-filtered { font-size:11px; color:var(--accent); background:none; border:none; cursor:pointer; padding:2px 4px; text-decoration:underline; flex-shrink:0; white-space:nowrap; }
+.fu-select-all-filtered { font-size:11px; color:var(--accent); background:none; border:none; cursor:pointer; padding:2px 4px; text-decoration:none; flex-shrink:0; white-space:nowrap; font-weight:700; }
+.fu-select-all-filtered:hover { color:#6ee7b7; }
 .fu-card-left { flex:1; min-width:0; }
 .fu-company { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fu-email-text { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
@@ -1210,16 +1456,17 @@ tr:last-child td { border-bottom: none; }
 .fu-stage-done { background:rgba(167,139,250,.1); color:var(--purple); }
 /* State badges */
 .fu-state-badge { font-size:10px; font-weight:700; padding:3px 8px; border-radius:20px; white-space:nowrap; }
-.fu-state-active  { background:var(--green-dim); color:var(--green); }
-.fu-state-paused  { background:var(--yellow-dim); color:var(--yellow); }
+.fu-state-active  { background:rgba(59,130,246,.12); color:#60a5fa; }
+.fu-state-paused  { background:rgba(148,163,184,.12); color:#94a3b8; }
 .fu-state-warm    { background:rgba(251,146,60,.1); color:#fb923c; }
 .fu-state-loads   { background:var(--green-dim); color:var(--green); }
 .fu-state-blocked { background:var(--red-dim); color:var(--red); }
 .fu-state-closed  { background:rgba(148,163,184,.1); color:#94a3b8; }
 /* Action buttons */
-.fu-btn-primary { font-size:11px; font-weight:700; padding:5px 12px; border-radius:6px; cursor:pointer; border:none; background:var(--accent); color:#fff; transition:opacity .15s; white-space:nowrap; }
+.fu-btn-primary { font-size:11px; font-weight:700; padding:4px 10px; min-height:28px; border-radius:6px; cursor:pointer; border:none; background:var(--accent); color:#fff; transition:opacity .15s, transform .15s; white-space:nowrap; }
 .fu-btn-primary:hover { opacity:.85; }
-.fu-btn-secondary { font-size:11px; font-weight:600; padding:5px 8px; border-radius:6px; cursor:pointer; border:1px solid var(--border); background:var(--surface2); color:var(--text2); transition:all .15s; }
+.fu-btn-primary:active { transform:translateY(1px); }
+.fu-btn-secondary { font-size:11px; font-weight:600; padding:4px 8px; min-height:28px; border-radius:6px; cursor:pointer; border:1px solid var(--border); background:var(--surface2); color:var(--text2); transition:all .15s; }
 .fu-btn-secondary:hover { border-color:var(--border-h); color:var(--text); }
 /* Dropdown menu */
 .fu-dropdown { position:fixed; z-index:1100; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.25); min-width:160px; display:none; }
@@ -1273,10 +1520,124 @@ tr:last-child td { border-bottom: none; }
 /* Empty state */
 .fu-empty { padding:48px 0; text-align:center; color:var(--text3); font-size:13px; }
 .fu-empty i { font-size:28px; display:block; margin-bottom:8px; opacity:.4; }
+.fu-empty-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.fu-empty-copy { max-width:420px; margin:0 auto; line-height:1.5; }
+.fu-empty-actions { display:flex; justify-content:center; gap:8px; margin-top:14px; flex-wrap:wrap; }
 /* Analytics */
 .fu-analytics { display:flex; flex-direction:column; gap:20px; }
 .fu-analytics-section { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; }
 .fu-analytics-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-bottom:14px; }
+.fu-header-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.fu-tabs-compact { margin-bottom:0; }
+.fu-tabs-compact .fu-tab { padding:7px 14px; font-weight:700; }
+.fu-tabs-compact .fu-tab.active { background:var(--accent); color:#fff; box-shadow:none; }
+.fu-queue-shell { display:flex; flex-direction:column; gap:14px; }
+.fu-toolbar {
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:10px 12px;
+}
+.fu-toolbar-main { display:flex; align-items:center; gap:10px; flex:1; min-width:280px; flex-wrap:wrap; }
+.fu-toolbar-side { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.fu-search-wide { width:260px; padding:6px 10px; border-radius:8px; }
+.fu-segment {
+  display:flex; gap:4px; flex-wrap:wrap; background:var(--surface2);
+  border:1px solid var(--border); border-radius:10px; padding:4px;
+}
+.fu-segment-btn {
+  border:none; background:transparent; color:var(--text2); cursor:pointer;
+  font-size:11px; font-weight:700; padding:5px 9px; border-radius:8px; transition:all .15s;
+}
+.fu-segment-btn:hover { color:var(--text); background:rgba(255,255,255,.04); }
+.fu-segment-btn.active { background:var(--text); color:var(--bg); }
+.fu-select {
+  min-width:120px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+  color:var(--text); font-size:12px; padding:6px 10px; font-family:inherit;
+}
+.fu-select:focus { outline:none; border-color:var(--accent); }
+.fu-summary-strip { display:flex; gap:8px; flex-wrap:wrap; }
+.fu-summary-card {
+  background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:999px; padding:8px 12px;
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer; transition:border-color .15s, transform .15s, background .15s, color .15s;
+}
+.fu-summary-card:hover { border-color:var(--border-h); transform:translateY(-1px); }
+.fu-summary-card.active { border-color:var(--accent); background:rgba(52,211,153,.08); box-shadow:0 0 0 1px rgba(52,211,153,.12) inset; }
+.fu-summary-label { font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--text2); }
+.fu-summary-value { font-size:13px; font-weight:800; line-height:1; font-family:'JetBrains Mono',monospace; color:var(--text); min-width:1.8em; text-align:right; }
+.fu-summary-meta { display:none; }
+.fu-summary-card.overdue .fu-summary-label, .fu-summary-card.overdue .fu-summary-value { color:var(--red); }
+.fu-summary-card.today .fu-summary-label, .fu-summary-card.today .fu-summary-value { color:var(--yellow); }
+.fu-summary-card.needs-action .fu-summary-label, .fu-summary-card.needs-action .fu-summary-value { color:var(--purple); }
+.fu-summary-card.scheduled .fu-summary-label, .fu-summary-card.scheduled .fu-summary-value { color:var(--blue); }
+.fu-bulk-bar {
+  justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px;
+  position:sticky; top:10px; z-index:15;
+}
+.fu-bulk-group { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.fu-bulk-actions { row-gap:6px; }
+.fu-table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:auto; max-height:calc(100vh - 310px); }
+.fu-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.fu-table thead th {
+  background:var(--surface2); border-bottom:1px solid var(--border); padding:10px 10px;
+  font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); text-align:left;
+  position:sticky; top:0; z-index:5;
+}
+.fu-table tbody td {
+  padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:12px; color:var(--text2);
+}
+.fu-table tbody tr:last-child td { border-bottom:none; }
+.fu-col-select { width:40px; }
+.fu-table thead th:nth-child(2) { width:26%; }
+.fu-table thead th:nth-child(3) { width:12%; }
+.fu-table thead th:nth-child(4) { width:10%; }
+.fu-table thead th:nth-child(5) { width:15%; }
+.fu-table thead th:nth-child(6) { width:14%; }
+.fu-table thead th:nth-child(7) { width:15%; }
+.fu-table thead th:nth-child(8) { width:110px; }
+.fu-col-menu { width:62px; text-align:right; }
+.fu-table-row { transition:background .15s, box-shadow .15s; }
+.fu-table-row:hover td { background:rgba(255,255,255,.022); }
+.fu-table-row.selected td { background:rgba(52,211,153,.1); }
+.fu-table-row.overdue td { background:rgba(239,68,68,.06); }
+.fu-table-row.needs-action td { background:rgba(167,139,250,.07); }
+.fu-table-row.selected.overdue td { background:linear-gradient(0deg, rgba(52,211,153,.08), rgba(52,211,153,.08)), rgba(239,68,68,.06); }
+.fu-table-row.selected.needs-action td { background:linear-gradient(0deg, rgba(52,211,153,.08), rgba(52,211,153,.08)), rgba(167,139,250,.07); }
+.fu-table-row.muted td { opacity:.68; }
+.fu-table-row.terminal td { opacity:.52; }
+.fu-contact-cell { min-width:0; }
+.fu-contact-primary { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fu-contact-secondary { margin-top:1px; font-size:10px; color:var(--text3); font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fu-time-cell { display:flex; flex-direction:column; gap:2px; }
+.fu-time-main { font-size:12px; font-weight:700; color:var(--text); }
+.fu-time-main.overdue { color:var(--red); }
+.fu-time-main.today { color:var(--yellow); }
+.fu-time-sub { font-size:10px; color:var(--text3); }
+.fu-route-cell { max-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text3); }
+.fu-route-text { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fu-meta-stack { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+.fu-row-action { display:flex; justify-content:flex-start; }
+.fu-row-menu-btn {
+  font-size:11px; font-weight:700; padding:4px 8px; min-height:28px; border-radius:6px; cursor:pointer;
+  border:1px solid var(--border); background:var(--surface2); color:var(--text2); transition:all .15s;
+}
+.fu-row-menu-btn:hover { border-color:var(--border-h); color:var(--text); }
+
+@media (max-width:1100px) {
+  .fu-table { min-width:980px; }
+}
+
+@media (max-width:760px) {
+  .fu-toolbar-main, .fu-toolbar-side, .fu-header-actions { width:100%; }
+  .fu-search-wide { width:100%; }
+  .fu-summary-strip { display:grid; grid-template-columns:1fr 1fr; }
+  .fu-summary-card { border-radius:12px; justify-content:space-between; }
+  .fu-bulk-bar { top:8px; }
+}
+
+@media (max-width:560px) {
+  .fu-summary-strip { grid-template-columns:1fr; }
+  .fu-bulk-group, .fu-bulk-actions { width:100%; }
+  .fu-bulk-actions { justify-content:flex-start; }
+}
 .fu-funnel-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
 .fu-funnel-label { font-size:12px; font-weight:600; color:var(--text2); width:90px; flex-shrink:0; }
 .fu-funnel-bar-wrap { flex:1; background:var(--surface2); border-radius:4px; height:14px; overflow:hidden; }
@@ -1298,47 +1659,221 @@ tr:last-child td { border-bottom: none; }
 .fu-conv-num { font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text2); width:30px; text-align:right; flex-shrink:0; }
 
 /* ── INTELLIGENCE PAGE ───────────────────────────────────────────────────── */
-.intel-kpi-row { display:flex; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
+.intel-context-bar {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  margin-bottom:18px; padding:12px 14px;
+  background:linear-gradient(180deg, rgba(255,255,255,.9) 0%, rgba(248,250,252,.98) 100%);
+  border:1px solid rgba(148,163,184,.14); border-radius:16px;
+  box-shadow:0 10px 26px rgba(15,23,42,.04);
+}
+[data-theme=dark] .intel-context-bar {
+  background:linear-gradient(180deg, rgba(17,24,39,.86) 0%, rgba(15,23,42,.96) 100%);
+  border-color:rgba(148,163,184,.12); box-shadow:none;
+}
+.intel-context-text { font-size:12px; color:var(--text2); }
+.intel-context-pill {
+  font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
+  padding:6px 10px; border-radius:999px; color:var(--accent);
+  background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.16);
+}
+.intel-kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
 .intel-kpi {
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-  padding:18px 22px; flex:1; min-width:160px;
-  display:flex; flex-direction:column; gap:6px;
+  background:linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(248,250,252,1) 100%);
+  border:1px solid rgba(148,163,184,.14); border-radius:18px;
+  padding:18px 20px; display:flex; flex-direction:column; gap:7px;
+  box-shadow:0 14px 34px rgba(15,23,42,.05);
 }
-.intel-kpi-label { font-size:11px; color:var(--text2); font-weight:700; text-transform:uppercase; letter-spacing:.07em; }
-.intel-kpi-value { font-size:32px; font-weight:800; font-family:'DM Mono',monospace; color:var(--accent); }
-.intel-kpi-sub   { font-size:11px; color:var(--text3); }
-.intel-kpi.future { border-style:dashed; opacity:.55; }
-.intel-kpi.future .intel-kpi-value { font-size:13px; color:var(--text2); font-weight:600; }
+[data-theme=dark] .intel-kpi {
+  background:linear-gradient(180deg, rgba(17,24,39,.88) 0%, rgba(15,23,42,.96) 100%);
+  border-color:rgba(148,163,184,.12); box-shadow:none;
+}
+.intel-kpi-label { font-size:10px; color:var(--text3); font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.intel-kpi-value { font-size:30px; font-weight:800; font-family:'DM Mono',monospace; color:var(--accent); }
+.intel-kpi-sub { font-size:11px; color:var(--text3); }
+.intel-section {
+  background:linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(248,250,252,1) 100%);
+  border:1px solid rgba(148,163,184,.14); border-radius:20px;
+  padding:22px; margin-bottom:18px; box-shadow:0 18px 40px rgba(15,23,42,.05);
+}
+[data-theme=dark] .intel-section {
+  background:linear-gradient(180deg, rgba(17,24,39,.88) 0%, rgba(15,23,42,.97) 100%);
+  border-color:rgba(148,163,184,.12); box-shadow:none;
+}
+.intel-section.recommendations {
+  background:
+    radial-gradient(circle at top right, rgba(16,185,129,.12), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(247,250,252,1) 100%);
+}
+.intel-section.evidence {
+  background:
+    radial-gradient(circle at top left, rgba(59,130,246,.08), transparent 30%),
+    linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(248,250,252,1) 100%);
+}
+.intel-section-title { font-size:16px; font-weight:800; letter-spacing:-.02em; color:var(--text); margin-bottom:4px; }
+.intel-section-sub { font-size:12px; color:var(--text3); margin-bottom:16px; }
+.intel-rec-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.intel-rec-card {
+  padding:18px; border-radius:18px; border:1px solid rgba(148,163,184,.14);
+  background:rgba(255,255,255,.72); display:flex; flex-direction:column; gap:10px;
+}
+[data-theme=dark] .intel-rec-card { background:rgba(15,23,42,.52); border-color:rgba(148,163,184,.12); }
+.intel-rec-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.intel-rec-title { font-size:15px; font-weight:800; color:var(--text); line-height:1.25; }
+.intel-rec-body { font-size:12px; color:var(--text2); line-height:1.5; }
+.intel-rec-action {
+  font-size:11px; font-weight:700; color:var(--accent);
+  padding-top:4px; border-top:1px solid rgba(148,163,184,.12);
+}
+.intel-confidence {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:4px 8px; border-radius:999px; font-size:10px; font-weight:800;
+  letter-spacing:.08em; text-transform:uppercase; flex-shrink:0;
+}
+.intel-confidence.strong { color:#059669; background:rgba(16,185,129,.12); }
+.intel-confidence.moderate { color:#2563eb; background:rgba(59,130,246,.12); }
+.intel-confidence.early { color:#d97706; background:rgba(245,158,11,.14); }
+.intel-signal-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.intel-signal-card {
+  padding:18px; border-radius:18px; border:1px solid rgba(148,163,184,.14);
+  background:rgba(255,255,255,.72);
+}
+[data-theme=dark] .intel-signal-card { background:rgba(15,23,42,.52); border-color:rgba(148,163,184,.12); }
+.intel-signal-card.warning { background:linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(254,242,242,.86) 100%); }
+[data-theme=dark] .intel-signal-card.warning { background:linear-gradient(180deg, rgba(15,23,42,.52) 0%, rgba(69,10,10,.28) 100%); }
+.intel-signal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.intel-signal-title { font-size:14px; font-weight:800; color:var(--text); }
+.intel-signal-list { display:flex; flex-direction:column; gap:10px; }
+.intel-signal-row {
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:start;
+  padding:12px 14px; border-radius:14px; background:rgba(255,255,255,.58); border:1px solid rgba(148,163,184,.10);
+}
+[data-theme=dark] .intel-signal-row { background:rgba(15,23,42,.42); border-color:rgba(148,163,184,.08); }
+.intel-signal-main { min-width:0; }
+.intel-signal-name { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.intel-signal-meta { margin-top:2px; font-size:11px; color:var(--text3); line-height:1.45; }
+.intel-evidence-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .intel-table-wrap { overflow-x:auto; }
-.intel-table {
-  width:100%; border-collapse:collapse; font-size:12px;
-}
+.intel-table { width:100%; border-collapse:collapse; font-size:12px; }
 .intel-table th {
-  text-align:left; padding:9px 12px;
-  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
-  color:var(--text3); border-bottom:1px solid var(--border);
+  text-align:left; padding:10px 12px;
+  font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--text3); border-bottom:1px solid rgba(148,163,184,.14);
   white-space:nowrap; cursor:pointer; user-select:none;
 }
 .intel-table th:hover { color:var(--text); }
 .intel-table th.sorted { color:var(--accent); }
 .intel-table td {
-  padding:9px 12px; border-bottom:1px solid var(--border);
+  padding:10px 12px; border-bottom:1px solid rgba(148,163,184,.12);
   color:var(--text2); vertical-align:middle;
 }
-.intel-table td.lane-cell { color:var(--text); font-weight:600; font-family:'DM Mono',monospace; font-size:11px; }
+.intel-table td.lane-cell { color:var(--text); font-weight:700; font-size:12px; }
 .intel-table td.domain-cell { color:var(--blue); font-weight:700; font-family:'DM Mono',monospace; }
-.intel-table td.num { font-family:'DM Mono',monospace; color:var(--text); font-weight:600; text-align:right; }
-.intel-table tr:hover td { background:var(--surface2); }
-.intel-rate-bar {
-  display:flex; align-items:center; gap:8px; min-width:100px;
-}
-.intel-rate-track {
-  flex:1; height:6px; border-radius:3px; background:var(--surface3);
-  overflow:hidden; min-width:50px;
-}
-.intel-rate-fill { height:100%; border-radius:3px; transition:width .3s; }
-.intel-rate-pct { font-size:11px; font-family:'DM Mono',monospace; font-weight:700; min-width:32px; text-align:right; }
+.intel-table td.num { font-family:'DM Mono',monospace; color:var(--text); font-weight:700; text-align:right; }
+.intel-table tr:hover td { background:rgba(255,255,255,.4); }
+[data-theme=dark] .intel-table tr:hover td { background:rgba(255,255,255,.02); }
+.intel-rate-bar { display:flex; align-items:center; gap:8px; min-width:100px; }
+.intel-rate-track { flex:1; height:8px; border-radius:999px; background:var(--surface3); overflow:hidden; min-width:50px; }
+.intel-rate-fill { height:100%; border-radius:999px; transition:width .3s; }
+.intel-rate-pct { font-size:11px; font-family:'DM Mono',monospace; font-weight:700; min-width:36px; text-align:right; }
 .intel-empty { color:var(--text3); font-size:13px; padding:48px 0; text-align:center; }
+@media (max-width: 1180px) {
+  .intel-kpi-row, .intel-rec-grid, .intel-signal-grid, .intel-evidence-grid { grid-template-columns:1fr 1fr; }
+  .intel-rec-grid > *:last-child { grid-column:1 / -1; }
+}
+@media (max-width: 760px) {
+  .intel-context-bar, .intel-kpi-row, .intel-rec-grid, .intel-signal-grid, .intel-evidence-grid { grid-template-columns:1fr; display:grid; }
+  .intel-context-bar { display:flex; flex-direction:column; align-items:flex-start; }
+}
+/* ── TEMPLATES PAGE ──────────────────────────────────────────────────────── */
+.tmpl-layout { display:grid; grid-template-columns:340px minmax(0,1fr); gap:18px; align-items:start; }
+.tmpl-library-panel,
+.tmpl-editor-panel,
+.tmpl-followup-panel {
+  background:linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(248,250,252,1) 100%);
+  border:1px solid rgba(148,163,184,.14);
+  border-radius:20px;
+  box-shadow:0 18px 40px rgba(15,23,42,.05);
+}
+[data-theme=dark] .tmpl-library-panel,
+[data-theme=dark] .tmpl-editor-panel,
+[data-theme=dark] .tmpl-followup-panel {
+  background:linear-gradient(180deg, rgba(17,24,39,.88) 0%, rgba(15,23,42,.97) 100%);
+  border-color:rgba(148,163,184,.12);
+  box-shadow:none;
+}
+.tmpl-library-panel { padding:18px; position:sticky; top:14px; }
+.tmpl-editor-panel, .tmpl-followup-panel { padding:22px; }
+.tmpl-followup-panel { margin-top:18px; }
+.tmpl-panel-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.tmpl-panel-title { font-size:16px; font-weight:800; letter-spacing:-.02em; color:var(--text); }
+.tmpl-panel-sub { font-size:12px; color:var(--text3); margin-top:2px; }
+.tmpl-library-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.tmpl-library-list { display:flex; flex-direction:column; gap:10px; }
+.tmpl-lib-item {
+  padding:14px; border-radius:16px; border:1px solid rgba(148,163,184,.12);
+  background:rgba(255,255,255,.72); cursor:pointer; transition:.16s ease;
+}
+.tmpl-lib-item:hover { transform:translateY(-1px); border-color:rgba(16,185,129,.22); }
+.tmpl-lib-item.active { border-color:rgba(16,185,129,.28); box-shadow:0 0 0 1px rgba(16,185,129,.12) inset; background:rgba(16,185,129,.06); }
+[data-theme=dark] .tmpl-lib-item { background:rgba(15,23,42,.52); border-color:rgba(148,163,184,.1); }
+.tmpl-lib-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.tmpl-lib-name { font-size:13px; font-weight:800; color:var(--text); }
+.tmpl-lib-preview {
+  font-size:11px; color:var(--text2); line-height:1.45; min-height:32px;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.tmpl-lib-meta { margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:10px; color:var(--text3); }
+.tmpl-status {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:4px 8px; border-radius:999px; font-size:10px; font-weight:800;
+  text-transform:uppercase; letter-spacing:.08em;
+}
+.tmpl-status.active { color:#059669; background:rgba(16,185,129,.12); }
+.tmpl-status.test { color:#2563eb; background:rgba(59,130,246,.12); }
+.tmpl-status.draft { color:#d97706; background:rgba(245,158,11,.14); }
+.tmpl-perf-hint { font-family:'JetBrains Mono',monospace; }
+.tmpl-editor-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.tmpl-editor-name { font-size:18px; font-weight:800; color:var(--text); letter-spacing:-.02em; }
+.tmpl-editor-sub { font-size:12px; color:var(--text3); margin-top:2px; }
+.tmpl-editor-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.tmpl-field-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-bottom:6px; }
+.tmpl-token-bar {
+  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;
+  padding:12px 14px; border-radius:14px; background:rgba(255,255,255,.62); border:1px solid rgba(148,163,184,.12);
+}
+[data-theme=dark] .tmpl-token-bar { background:rgba(15,23,42,.44); border-color:rgba(148,163,184,.1); }
+.tmpl-token {
+  font-size:11px; font-weight:700; color:var(--text2); padding:4px 8px;
+  border-radius:999px; background:rgba(148,163,184,.10); font-family:'JetBrains Mono',monospace;
+}
+.tmpl-editor-grid { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr); gap:16px; }
+.tmpl-edit-card,
+.tmpl-preview-card,
+.tmpl-fu-card {
+  background:rgba(255,255,255,.72); border:1px solid rgba(148,163,184,.12); border-radius:18px; padding:16px;
+}
+[data-theme=dark] .tmpl-edit-card,
+[data-theme=dark] .tmpl-preview-card,
+[data-theme=dark] .tmpl-fu-card { background:rgba(15,23,42,.5); border-color:rgba(148,163,184,.1); }
+.tmpl-preview-shell {
+  background:linear-gradient(180deg, rgba(248,250,252,.96) 0%, rgba(255,255,255,.98) 100%);
+  border:1px solid rgba(148,163,184,.12); border-radius:16px; padding:16px; min-height:220px;
+}
+[data-theme=dark] .tmpl-preview-shell {
+  background:linear-gradient(180deg, rgba(15,23,42,.64) 0%, rgba(17,24,39,.88) 100%);
+  border-color:rgba(148,163,184,.1);
+}
+.tmpl-preview-title { font-size:11px; font-weight:800; color:var(--text3); text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; }
+.tmpl-preview-body { white-space:pre-wrap; font-size:13px; color:var(--text2); line-height:1.6; }
+.tmpl-fu-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px; }
+.tmpl-fu-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.tmpl-fu-name { font-size:12px; font-weight:800; color:var(--text); }
+.tmpl-fu-stage { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); }
+.tmpl-pool-list { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+@media (max-width: 1080px) {
+  .tmpl-layout, .tmpl-editor-grid, .tmpl-fu-grid { grid-template-columns:1fr; }
+  .tmpl-library-panel { position:static; }
+}
 /* ── REPLY ACTION BUTTONS (legacy compat) ───────────────────────────── */
 .rbtn { display:inline-flex; align-items:center; gap:4px; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; font-family:'Plus Jakarta Sans',sans-serif; border:1px solid; transition:all var(--transition); }
 .rbtn-yes  { background:var(--green-dim); color:var(--accent); border-color:rgba(52,211,153,.15); }
@@ -1354,32 +1889,109 @@ tr:last-child td { border-bottom: none; }
 }
 
 /* ── ANALYTICS REDESIGN ─────────────────────────────────── */
-.analytics-period-tabs { display:flex; gap:6px; margin-bottom:20px; }
-.an-tab { padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--text2); font-size:12px; font-weight:600; cursor:pointer; transition:.15s; }
-.an-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.analytics-period-tabs {
+  display:inline-flex;
+  gap:8px;
+  margin-bottom:22px;
+  padding:6px;
+  border-radius:16px;
+  background:rgba(255,255,255,.72);
+  border:1px solid rgba(148,163,184,.14);
+  box-shadow:0 8px 24px rgba(15,23,42,.04);
+}
+[data-theme=dark] .analytics-period-tabs {
+  background:rgba(15,23,42,.55);
+  border-color:rgba(148,163,184,.12);
+  box-shadow:none;
+}
+.an-tab {
+  padding:8px 15px;
+  border-radius:11px;
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--text2);
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+  transition:.16s ease;
+}
+.an-tab:hover { background:rgba(148,163,184,.08); color:var(--text); }
+.an-tab.active {
+  background:linear-gradient(135deg, var(--accent) 0%, #34d399 100%);
+  color:#fff;
+  border-color:transparent;
+  box-shadow:0 10px 22px rgba(16,185,129,.22);
+}
 
-.an-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 24px; margin-bottom:16px; }
-.an-section-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:2px; }
-.an-section-sub { font-size:11px; color:var(--text3); margin-bottom:16px; }
+.an-section {
+  background:linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(248,250,252,1) 100%);
+  border:1px solid rgba(148,163,184,.14);
+  border-radius:18px;
+  padding:22px 24px;
+  margin-bottom:18px;
+  box-shadow:0 18px 40px rgba(15,23,42,.05);
+}
+[data-theme=dark] .an-section {
+  background:linear-gradient(180deg, rgba(17,24,39,.9) 0%, rgba(15,23,42,.98) 100%);
+  border-color:rgba(148,163,184,.12);
+  box-shadow:0 20px 48px rgba(0,0,0,.28);
+}
+.an-summary-section {
+  background:
+    radial-gradient(circle at top right, rgba(16,185,129,.10), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,.97) 0%, rgba(247,250,252,1) 100%);
+}
+.an-works-section {
+  background:
+    radial-gradient(circle at top left, rgba(59,130,246,.09), transparent 32%),
+    linear-gradient(180deg, rgba(255,255,255,.97) 0%, rgba(248,250,252,1) 100%);
+}
+.an-timing-section {
+  background:
+    radial-gradient(circle at top right, rgba(251,191,36,.10), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,.97) 0%, rgba(248,250,252,1) 100%);
+}
+.an-health-section { border-color:rgba(239,68,68,.16); box-shadow:0 18px 40px rgba(239,68,68,.06); }
+.an-efficiency-section {
+  opacity:.98;
+  background:
+    radial-gradient(circle at top left, rgba(99,102,241,.09), transparent 32%),
+    linear-gradient(180deg, rgba(255,255,255,.95) 0%, rgba(248,250,252,.99) 100%);
+}
+.an-section-title { font-size:16px; font-weight:800; color:var(--text); margin-bottom:4px; letter-spacing:-.02em; }
+.an-section-sub { font-size:12px; color:var(--text3); margin-bottom:16px; }
 .an-section-header-row { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
 .an-section-header-row > div:first-child .an-section-title { margin-bottom:2px; }
 .an-section-header-row > div:first-child .an-section-sub { margin-bottom:0; }
 
 /* KPI Grid */
 .an-kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
-.an-kpi { text-align:center; padding:12px; border-radius:8px; background:var(--bg); }
+.an-kpi {
+  text-align:left;
+  padding:18px;
+  border-radius:14px;
+  background:rgba(255,255,255,.74);
+  border:1px solid rgba(148,163,184,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6);
+}
+[data-theme=dark] .an-kpi {
+  background:rgba(15,23,42,.56);
+  border-color:rgba(148,163,184,.12);
+  box-shadow:none;
+}
+.an-kpi-grid-compact .an-kpi { padding:18px; }
 .an-kpi-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-bottom:6px; }
-.an-kpi-value { font-size:32px; font-weight:800; color:var(--text); font-family:'DM Mono',monospace; line-height:1; }
+.an-kpi-value { font-size:30px; font-weight:800; color:var(--text); font-family:'DM Mono',monospace; line-height:1; }
 .an-kpi-value.accent { color:var(--accent); }
 .an-kpi-value.green { color:#10b981; }
-.an-kpi-sub { font-size:10px; color:var(--text3); margin-top:4px; }
+.an-kpi-sub { font-size:11px; color:var(--text3); margin-top:8px; }
 .an-kpi-errors .an-kpi-value { color:var(--text); }
 .an-kpi-errors.has-errors .an-kpi-value { color:var(--red); }
 
 /* Response Quality */
 .an-quality-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
 .an-quality-label { font-size:12px; font-weight:600; width:100px; flex-shrink:0; }
-.an-quality-bar-wrap { flex:1; height:8px; background:var(--bg); border-radius:99px; overflow:hidden; }
+.an-quality-bar-wrap { flex:1; height:10px; background:var(--bg); border-radius:99px; overflow:hidden; }
 .an-quality-bar { height:100%; border-radius:99px; transition:width .6s ease; }
 .green-bar { background:#10b981; }
 .blue-bar { background:#6366f1; }
@@ -1388,49 +2000,109 @@ tr:last-child td { border-bottom: none; }
 .muted-text { color:var(--text2); }
 .red-text { color:var(--red,#ef4444); }
 .an-quality-stat { font-size:12px; font-weight:700; color:var(--text); width:60px; text-align:right; flex-shrink:0; }
-.an-insight { margin-top:12px; font-size:12px; color:var(--text2); padding:8px 12px; background:var(--bg); border-radius:6px; border-left:3px solid var(--accent); }
+.an-insight {
+  margin-top:14px;
+  font-size:12px;
+  color:var(--text2);
+  padding:11px 14px;
+  background:rgba(255,255,255,.65);
+  border-radius:12px;
+  border:1px solid rgba(148,163,184,.14);
+  border-left:4px solid var(--accent);
+}
+[data-theme=dark] .an-insight {
+  background:rgba(15,23,42,.5);
+  border-color:rgba(148,163,184,.12);
+}
 
 /* What Works - 3 col */
 .an-three-col { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 .an-two-col { display:grid; grid-template-columns:3fr 2fr; gap:16px; }
-.an-col-block { background:var(--bg); border-radius:8px; padding:14px; }
-.an-col-head { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-bottom:10px; }
-.an-list { display:flex; flex-direction:column; gap:6px; }
-.an-list-row { display:flex; justify-content:space-between; align-items:center; font-size:12px; }
+.an-col-block {
+  background:rgba(255,255,255,.74);
+  border-radius:16px;
+  padding:16px;
+  border:1px solid rgba(148,163,184,.12);
+}
+[data-theme=dark] .an-col-block {
+  background:rgba(15,23,42,.55);
+  border-color:rgba(148,163,184,.10);
+}
+.an-col-head { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); margin-bottom:12px; }
+.an-list { display:flex; flex-direction:column; gap:10px; }
+.an-list-row { display:flex; justify-content:space-between; align-items:center; font-size:12px; gap:10px; }
 .an-list-name { color:var(--text); font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.an-list-badge { font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(5,150,105,.1); color:var(--accent); margin-left:6px; flex-shrink:0; }
+.an-list-badge { font-size:10px; font-weight:700; padding:4px 8px; border-radius:999px; background:rgba(5,150,105,.1); color:var(--accent); margin-left:6px; flex-shrink:0; }
 .an-list-muted { color:var(--text3); font-size:10px; }
 
 /* Volume Chart */
 .an-chart-outer { display:flex; flex-direction:column; gap:0; }
-.an-chart-grid { position:relative; height:140px; display:flex; align-items:flex-end; }
+.an-chart-grid {
+  position:relative;
+  height:160px;
+  display:flex;
+  align-items:flex-end;
+  padding:12px 10px 0;
+  border-radius:14px;
+  background:linear-gradient(180deg, rgba(255,255,255,.45) 0%, rgba(248,250,252,.78) 100%);
+}
+[data-theme=dark] .an-chart-grid {
+  background:linear-gradient(180deg, rgba(15,23,42,.42) 0%, rgba(15,23,42,.74) 100%);
+}
 .an-chart-gridlines { position:absolute; inset:0; pointer-events:none; display:flex; flex-direction:column; justify-content:space-between; }
 .an-chart-gridlines span { display:block; border-top:1px dashed rgba(0,0,0,.07); width:100%; }
 [data-theme=dark] .an-chart-gridlines span { border-top-color:rgba(255,255,255,.07); }
-.an-chart-wrap { display:flex; align-items:flex-end; gap:4px; height:140px; width:100%; position:relative; z-index:1; }
+.an-chart-wrap { display:flex; align-items:flex-end; gap:6px; height:148px; width:100%; position:relative; z-index:1; }
 .an-bar-col { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; flex:1; height:100%; gap:0; }
-.an-bar-count { font-size:9px; font-weight:700; color:var(--accent); margin-bottom:3px; min-height:12px; line-height:12px; font-family:'JetBrains Mono',monospace; }
+.an-bar-count { font-size:10px; font-weight:700; color:var(--accent); margin-bottom:6px; min-height:12px; line-height:12px; font-family:'JetBrains Mono',monospace; }
 .an-bar-count.zero { color:var(--text3); font-weight:400; }
 .an-bar-fill {
-  width:100%; border-radius:5px 5px 0 0;
+  width:100%; border-radius:10px 10px 2px 2px;
   background: linear-gradient(180deg, #34d399 0%, #059669 100%);
   transition: height .5s cubic-bezier(.4,0,.2,1);
   min-height:3px;
   position:relative;
+  box-shadow:0 12px 22px rgba(16,185,129,.16);
 }
 .an-bar-fill:hover { filter:brightness(1.1); cursor:default; }
-.an-bar-label { font-size:9px; color:var(--text3); margin-top:5px; white-space:nowrap; }
+.an-bar-label { font-size:10px; color:var(--text3); margin-top:8px; white-space:nowrap; font-weight:600; }
 
 /* Hour chart */
-.an-hour-list { display:flex; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto; }
-.an-hour-row { display:flex; align-items:center; gap:8px; font-size:11px; }
-.an-hour-label { width:36px; color:var(--text2); flex-shrink:0; }
-.an-hour-bar-wrap { flex:1; height:6px; background:var(--bg2,rgba(0,0,0,.05)); border-radius:99px; overflow:hidden; }
-.an-hour-bar { height:100%; border-radius:99px; background:var(--accent); transition:width .4s; }
-.an-hour-count { width:24px; text-align:right; color:var(--text3); flex-shrink:0; }
+.an-hour-list { display:flex; flex-direction:column; gap:8px; max-height:200px; overflow-y:auto; }
+.an-hour-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:11px;
+  padding:8px 10px;
+  border-radius:12px;
+  background:rgba(255,255,255,.5);
+  border:1px solid rgba(148,163,184,.10);
+}
+[data-theme=dark] .an-hour-row {
+  background:rgba(15,23,42,.42);
+  border-color:rgba(148,163,184,.08);
+}
+.an-hour-label { width:40px; color:var(--text2); flex-shrink:0; font-weight:700; }
+.an-hour-bar-wrap { flex:1; height:8px; background:var(--bg2,rgba(0,0,0,.05)); border-radius:99px; overflow:hidden; }
+.an-hour-bar { height:100%; border-radius:99px; background:linear-gradient(90deg, var(--accent) 0%, #34d399 100%); transition:width .4s; }
+.an-hour-count { width:24px; text-align:right; color:var(--text); flex-shrink:0; font-weight:700; }
 
 /* Automation Impact strip */
-.an-ai-strip { display:flex; align-items:center; gap:0; background:var(--bg); border-radius:8px; padding:16px 8px; flex-wrap:wrap; }
+.an-ai-strip {
+  display:flex;
+  align-items:center;
+  gap:0;
+  background:rgba(255,255,255,.68);
+  border:1px solid rgba(148,163,184,.12);
+  border-radius:16px;
+  padding:18px 10px;
+  flex-wrap:wrap;
+}
+[data-theme=dark] .an-ai-strip {
+  background:rgba(15,23,42,.56);
+  border-color:rgba(148,163,184,.10);
+}
 .an-ai-stat { flex:1; text-align:center; padding:4px 8px; min-width:80px; }
 .an-ai-val { font-size:20px; font-weight:800; color:var(--text); font-family:'DM Mono',monospace; }
 .an-ai-val.accent { color:var(--accent); }
@@ -1444,12 +2116,49 @@ tr:last-child td { border-bottom: none; }
 
 /* Problems */
 .an-problems-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-.an-problem-card { background:var(--bg); border-radius:8px; padding:14px; text-align:center; }
+.an-problem-card {
+  background:rgba(255,255,255,.7);
+  border-radius:16px;
+  padding:18px 16px;
+  text-align:center;
+  border:1px solid rgba(148,163,184,.12);
+}
+[data-theme=dark] .an-problem-card {
+  background:rgba(15,23,42,.56);
+  border-color:rgba(148,163,184,.10);
+}
 .an-problem-val { font-size:28px; font-weight:800; color:var(--text); font-family:'DM Mono',monospace; }
 .an-problem-lbl { font-size:10px; color:var(--text3); margin-top:4px; text-transform:uppercase; letter-spacing:.06em; }
 .an-problems-grid.has-errors .an-problem-card:first-child { background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.2); }
 .an-problems-grid.has-errors .an-problem-card:first-child .an-problem-val { color:#ef4444; }
 .an-last-error { margin-top:12px; padding:10px 14px; background:rgba(239,68,68,.06); border:1px solid rgba(239,68,68,.15); border-radius:8px; font-size:12px; color:var(--text2); }
+.an-advanced-toggle {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  font-size:13px;
+  font-weight:700;
+  color:var(--text);
+  cursor:pointer;
+  padding:2px 0;
+}
+#anAdvIcon { color:var(--text3); font-size:12px; }
+
+@media (max-width: 1100px) {
+  .an-kpi-grid,
+  .an-three-col,
+  .an-two-col,
+  .an-problems-grid { grid-template-columns:1fr 1fr; }
+}
+
+@media (max-width: 760px) {
+  .an-kpi-grid,
+  .an-three-col,
+  .an-two-col,
+  .an-problems-grid { grid-template-columns:1fr; }
+  .an-section-header-row { flex-direction:column; gap:12px; }
+}
 
 /* Advanced */
 .an-advanced-toggle { display:flex; justify-content:space-between; align-items:center; cursor:pointer; color:var(--text2); font-size:13px; font-weight:600; user-select:none; }
@@ -1509,13 +2218,8 @@ tr:last-child td { border-bottom: none; }
       <div class="nav-item" onclick="nav('intelligence',this)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Intelligence
       </div>
-      <!-- SECONDARY: pipeline + config -->
-      <div class="nav-section">Pipeline & Config</div>
-      <div class="nav-item" onclick="nav('pipeline',this)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="6" height="18" rx="1"/><rect x="9" y="8" width="6" height="13" rx="1"/><rect x="16" y="13" width="6" height="8" rx="1"/></svg>
-        Pipeline
-        <span id="pipelineBadge" class="nav-badge">0</span>
-      </div>
+      <!-- SECONDARY: config -->
+      <div class="nav-section">Config</div>
       <div class="nav-item" onclick="nav('templates',this)">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Templates
       </div>
@@ -1567,7 +2271,7 @@ tr:last-child td { border-bottom: none; }
       </div>
 
       <div class="send-layout">
-        <div>
+        <div class="send-main">
 
           <!-- DAT INPUT CARD -->
           <div class="dat-input-card">
@@ -1586,37 +2290,81 @@ tr:last-child td { border-bottom: none; }
               oninput="debounceParse(); updateDatMeta()"></textarea>
             <div class="dat-input-footer">
               <span class="dat-line-count" id="datLineMeta">0 lines</span>
-              <button class="btn btn-outline" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('datText').value='';updateDatMeta();document.getElementById('parseResults').style.display='none';document.getElementById('datParseDot').className='dat-parse-dot';document.getElementById('datParseHint').textContent='paste to auto-parse'">
-                <i class="ph-bold ph-x" style="font-size:12px;margin-right:3px;vertical-align:middle"></i>Clear
-              </button>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-outline" style="font-size:11px;padding:5px 12px" onclick="loadSendDemoDat()">
+                  <i class="ph-bold ph-flask" style="font-size:12px;margin-right:3px;vertical-align:middle"></i>Load Demo
+                </button>
+                <button class="btn btn-outline" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('datText').value='';updateDatMeta();document.getElementById('parseResults').style.display='none';document.getElementById('parseResults').removeAttribute('data-has-results');activeParseFilter='all';document.getElementById('datParseDot').className='dat-parse-dot';document.getElementById('datParseHint').textContent='paste to auto-parse'">
+                  <i class="ph-bold ph-x" style="font-size:12px;margin-right:3px;vertical-align:middle"></i>Clear
+                </button>
+              </div>
             </div>
           </div>
 
           <!-- PARSED LOADS CARD -->
           <div id="parseResults" style="display:none">
+            <div class="sb-card" id="sendProgressCard" style="display:none">
+              <div class="sb-card-head">
+                <span class="sb-card-label">
+                  <i class="ph-bold ph-paper-plane-tilt" style="font-size:13px;color:var(--accent)"></i>
+                  Sending
+                  <span class="bp-pulse-dot sending" style="margin-left:2px"></span>
+                </span>
+                <span id="progressText" style="font-size:11px;font-weight:700;color:var(--text2);font-family:'DM Mono',monospace">0 / 0</span>
+              </div>
+              <div class="sb-card-body">
+                <div class="sp-bar-wrap">
+                  <div class="sp-bar-fill" id="progressFill" style="width:0%"></div>
+                  <div class="sp-bar-label">
+                    <i class="ph-bold ph-paper-plane-tilt" style="font-size:14px"></i>
+                    <span class="sp-pct" id="progressPct">0%</span>
+                  </div>
+                </div>
+                <div class="sp-counters">
+                  <div class="sp-counter sent">
+                    <div class="sp-counter-icon"><i class="ph-bold ph-check-circle" style="font-size:18px;color:var(--accent)"></i></div>
+                    <div>
+                      <div class="sp-counter-val" id="pSent">0</div>
+                      <div class="sp-counter-lbl">Sent</div>
+                    </div>
+                  </div>
+                  <div class="sp-counter err">
+                    <div class="sp-counter-icon"><i class="ph-bold ph-x-circle" style="font-size:18px;color:var(--red)"></i></div>
+                    <div>
+                      <div class="sp-counter-val" id="pErr">0</div>
+                      <div class="sp-counter-lbl">Errors</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="live-log" id="liveLog" style="max-height:200px;overflow-y:auto;font-size:11px"></div>
+              </div>
+            </div>
+
             <div class="loads-card">
               <div class="loads-card-header">
                 <div class="loads-card-title">
                   <i class="ph-bold ph-list-checks" style="font-size:14px;color:var(--accent)"></i>
-                  Parsed Loads
+                  Review Queue
                 </div>
                 <span id="selectedCountTop" style="font-size:11px;color:var(--text2);font-weight:600"></span>
               </div>
 
-              <!-- Stats strip -->
+              <!-- Quick filters -->
               <div class="loads-stats-strip" id="parseStats"></div>
 
-              <!-- Top Send CTA (above table) -->
-              <div class="send-cta-bar send-cta-top" id="topSendBar" style="display:none">
-                <div style="display:flex;align-items:center;gap:12px">
-                  <button class="send-cta-btn" onclick="startSend()">
+              <div class="send-cta-bar" id="topSendBar" style="display:none">
+                <div class="send-cta-actions">
+                  <button class="send-select-btn" onclick="selectSendableRows()">Select all sendable</button>
+                  <span class="send-selected-count" id="selectedCountTop2"></span>
+                </div>
+                <div class="send-cta-meta">
+                  <div class="send-kbd">
+                    <kbd>⌘</kbd><kbd>↵</kbd> to send
+                  </div>
+                  <button class="send-cta-btn" id="sendBtn" onclick="startSend()">
                     <i class="ph-bold ph-paper-plane-tilt"></i>
                     Send Selected
                   </button>
-                  <span class="send-selected-count" id="selectedCountTop2"></span>
-                </div>
-                <div class="send-kbd">
-                  <kbd>⌘</kbd><kbd>↵</kbd> to send
                 </div>
               </div>
 
@@ -1634,27 +2382,13 @@ tr:last-child td { border-bottom: none; }
                   <tbody id="loadsBody"></tbody>
                 </table>
               </div>
-
-              <!-- Send CTA bar -->
-              <div class="send-cta-bar" id="topSendRow" style="display:none">
-                <div style="display:flex;align-items:center;gap:12px">
-                  <button class="send-cta-btn" id="sendBtn" onclick="startSend()">
-                    <i class="ph-bold ph-paper-plane-tilt"></i>
-                    Send Selected
-                  </button>
-                  <span class="send-selected-count" id="selectedCount"></span>
-                </div>
-                <div class="send-kbd">
-                  <kbd>⌘</kbd><kbd>↵</kbd> to send
-                </div>
-              </div>
             </div>
           </div>
 
         </div>
-        <div>
+        <div class="send-secondary-grid">
           <!-- ═══ BROADCAST PULSE ═══ -->
-          <div class="sb-card" style="position:sticky;top:24px">
+          <div class="sb-card">
             <div class="sb-card-head">
               <span class="sb-card-label"><i class="ph-bold ph-broadcast" style="font-size:13px;color:var(--accent)"></i>Broadcast Pulse<span class="bp-live-dot" id="bpLiveDot"></span></span>
               <span id="dsDate" style="font-size:10px;color:var(--text3)"></span>
@@ -1689,47 +2423,6 @@ tr:last-child td { border-bottom: none; }
                 <div class="sb-metric-val" style="color:var(--yellow)" id="dsConversion">—</div>
                 <div class="sb-metric-lbl">Conv %</div>
               </div>
-            </div>
-          </div>
-
-          <!-- ═══ SEND PROGRESS (active during send) ═══ -->
-          <div class="sb-card" id="sendProgressCard" style="display:none">
-            <div class="sb-card-head">
-              <span class="sb-card-label">
-                <i class="ph-bold ph-paper-plane-tilt" style="font-size:13px;color:var(--accent)"></i>
-                Sending
-                <span class="bp-pulse-dot sending" style="margin-left:2px"></span>
-              </span>
-              <span id="progressText" style="font-size:11px;font-weight:700;color:var(--text2);font-family:'DM Mono',monospace">0 / 0</span>
-            </div>
-            <div class="sb-card-body">
-              <!-- Big animated progress bar -->
-              <div class="sp-bar-wrap">
-                <div class="sp-bar-fill" id="progressFill" style="width:0%"></div>
-                <div class="sp-bar-label">
-                  <i class="ph-bold ph-paper-plane-tilt" style="font-size:14px"></i>
-                  <span class="sp-pct" id="progressPct">0%</span>
-                </div>
-              </div>
-              <!-- Sent / Error counters -->
-              <div class="sp-counters">
-                <div class="sp-counter sent">
-                  <div class="sp-counter-icon"><i class="ph-bold ph-check-circle" style="font-size:18px;color:var(--accent)"></i></div>
-                  <div>
-                    <div class="sp-counter-val" id="pSent">0</div>
-                    <div class="sp-counter-lbl">Sent</div>
-                  </div>
-                </div>
-                <div class="sp-counter err">
-                  <div class="sp-counter-icon"><i class="ph-bold ph-x-circle" style="font-size:18px;color:var(--red)"></i></div>
-                  <div>
-                    <div class="sp-counter-val" id="pErr">0</div>
-                    <div class="sp-counter-lbl">Errors</div>
-                  </div>
-                </div>
-              </div>
-              <!-- Live log -->
-              <div class="live-log" id="liveLog" style="max-height:200px;overflow-y:auto;font-size:11px"></div>
             </div>
           </div>
 
@@ -1792,25 +2485,26 @@ tr:last-child td { border-bottom: none; }
             </div>
           </div>
         </div>
-
       </div>
     </div>
 
     <!-- STATS -->
     <div id="page-stats" class="page">
-  <div class="page-title">Analytics</div>
-  <div class="page-sub">Outreach performance · Reply quality · Timing · Automation</div>
+  <div class="page-header">
+    <div class="page-title">Analytics</div>
+    <div class="page-sub">Review outreach health, performance, and optimization targets</div>
+  </div>
 
-  <!-- Period filter - affects ALL sections -->
   <div class="analytics-period-tabs">
     <button class="an-tab" onclick="setAnPeriod('today')">Today</button>
     <button class="an-tab" onclick="setAnPeriod('week')">7 Days</button>
     <button class="an-tab active" onclick="setAnPeriod('lifetime')">All Time</button>
   </div>
 
-  <!-- SECTION 1: TOP KPIs -->
-  <div class="an-section">
-    <div class="an-kpi-grid">
+  <div class="an-section an-summary-section">
+    <div class="an-section-title">Performance Summary</div>
+    <div class="an-section-sub">Topline outreach performance for the selected period</div>
+    <div class="an-kpi-grid an-kpi-grid-compact">
       <div class="an-kpi">
         <div class="an-kpi-label">Emails Sent</div>
         <div class="an-kpi-value" id="anSent">—</div>
@@ -1832,12 +2526,31 @@ tr:last-child td { border-bottom: none; }
         <div class="an-kpi-sub" id="anErrorsSub"></div>
       </div>
     </div>
+    <div class="an-insight" id="anSummaryInsight"></div>
   </div>
 
-  <!-- SECTION 2: RESPONSE QUALITY -->
+  <div class="an-section an-works-section">
+    <div class="an-section-title">What Works</div>
+    <div class="an-section-sub">The strongest routes, domains, and templates right now</div>
+    <div class="an-three-col">
+      <div class="an-col-block">
+        <div class="an-col-head">Top Routes</div>
+        <div id="anTopRoutes" class="an-list"></div>
+      </div>
+      <div class="an-col-block">
+        <div class="an-col-head">Top Domains</div>
+        <div id="anTopDomains" class="an-list"></div>
+      </div>
+      <div class="an-col-block">
+        <div class="an-col-head">Top Templates</div>
+        <div id="anTopTemplates" class="an-list"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="an-section">
     <div class="an-section-title">Response Quality</div>
-    <div class="an-section-sub">Is my targeting working?</div>
+    <div class="an-section-sub">Is targeting attracting the right kind of replies?</div>
     <div id="anQualityWrap">
       <div class="an-quality-row">
         <div class="an-quality-label green-text">Interested</div>
@@ -1858,31 +2571,14 @@ tr:last-child td { border-bottom: none; }
     </div>
   </div>
 
-  <!-- SECTION 3: WHAT WORKS -->
-  <div class="an-section">
-    <div class="an-section-title">What Works</div>
-    <div class="an-section-sub">Where should I focus more?</div>
-    <div class="an-three-col">
-      <div class="an-col-block">
-        <div class="an-col-head">Top Routes</div>
-        <div id="anTopRoutes" class="an-list"></div>
-      </div>
-      <div class="an-col-block">
-        <div class="an-col-head">Top Domains</div>
-        <div id="anTopDomains" class="an-list"></div>
-      </div>
-      <div class="an-col-block">
-        <div class="an-col-head">Templates</div>
-        <div id="anTopTemplates" class="an-list"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SECTION 4: TIMING -->
-  <div class="an-section">
+  <div class="an-section an-timing-section">
     <div class="an-section-title">Timing</div>
-    <div class="an-section-sub">When should I send?</div>
+    <div class="an-section-sub">Best send windows first, trend context second</div>
     <div class="an-two-col">
+      <div class="an-col-block">
+        <div class="an-col-head">Best Hours</div>
+        <div id="anHourChart" class="an-hour-list"></div>
+      </div>
       <div class="an-col-block">
         <div class="an-col-head">Volume — Last 14 Days</div>
         <div class="an-chart-outer">
@@ -1892,19 +2588,14 @@ tr:last-child td { border-bottom: none; }
           </div>
         </div>
       </div>
-      <div class="an-col-block">
-        <div class="an-col-head">Best Hours</div>
-        <div id="anHourChart" class="an-hour-list"></div>
-      </div>
     </div>
   </div>
 
-  <!-- SECTION 5: AUTOMATION IMPACT -->
-  <div class="an-section">
+  <div class="an-section an-efficiency-section">
     <div class="an-section-header-row">
       <div>
-        <div class="an-section-title">Automation Impact</div>
-        <div class="an-section-sub">DAT Mailer vs manual outreach</div>
+        <div class="an-section-title">Efficiency</div>
+        <div class="an-section-sub">How much automation is saving versus manual work</div>
       </div>
       <div class="an-period-tabs-sm">
         <button class="an-tab-sm active" onclick="setAnAiTab('today')">Today</button>
@@ -1929,10 +2620,9 @@ tr:last-child td { border-bottom: none; }
     </div>
   </div>
 
-  <!-- SECTION 6: PROBLEMS -->
-  <div class="an-section" id="anProblemsSection">
-    <div class="an-section-title">Problems</div>
-    <div class="an-section-sub">What is broken right now?</div>
+  <div class="an-section an-health-section" id="anProblemsSection">
+    <div class="an-section-title">Health</div>
+    <div class="an-section-sub">Delivery issues and system friction to review</div>
     <div class="an-problems-grid" id="anProblemsGrid">
       <div class="an-problem-card">
         <div class="an-problem-val" id="anProbFailed">—</div>
@@ -1940,7 +2630,7 @@ tr:last-child td { border-bottom: none; }
       </div>
       <div class="an-problem-card">
         <div class="an-problem-val" id="anProbBlocked">—</div>
-        <div class="an-problem-lbl">Blocked (Stop List)</div>
+        <div class="an-problem-lbl">Blocked</div>
       </div>
       <div class="an-problem-card">
         <div class="an-problem-val" id="anProbErrors">—</div>
@@ -2008,6 +2698,8 @@ tr:last-child td { border-bottom: none; }
           <span class="tq-progress-label" id="tqProgressLabel">Loading...</span>
           <div class="tq-progress-track"><div class="tq-progress-fill" id="tqProgressFill" style="width:0%"></div></div>
           <span class="tq-inbox-zero" id="tqInboxZero" style="display:none">✓ All clear</span>
+          <span class="tq-queue-chip">Need decision <strong id="tqNeedsDecision">0</strong></span>
+          <span class="tq-queue-chip">Processed <strong id="tqProcessedCount">0</strong></span>
         </div>
         <button class="btn btn-primary" id="fetchBtn" onclick="fetchReplies()">
           <i class="ph-bold ph-arrows-clockwise" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Check Gmail
@@ -2015,10 +2707,11 @@ tr:last-child td { border-bottom: none; }
       </div>
 
       <!-- Filters + search -->
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px">
-        <input id="repliesSearch" placeholder="Search company or email..." style="width:200px;font-size:12px" oninput="renderReplies()">
+      <div class="tq-toolbar">
+        <input id="repliesSearch" class="tq-search" placeholder="Search company or email..." oninput="queueRepliesRefresh()">
         <div class="tq-filters">
           <button class="tq-tab active" id="tqf-all"      onclick="setFilter('all')">All <span class="tq-tab-count" id="tqc-all">0</span></button>
+          <button class="tq-tab" id="tqf-needs_action"   onclick="setFilter('needs_action')">Needs Action <span class="tq-tab-count" id="tqc-needs_action">0</span></button>
           <button class="tq-tab" id="tqf-new"             onclick="setFilter('new')">● New <span class="tq-tab-count" id="tqc-new">0</span></button>
           <button class="tq-tab" id="tqf-follow_up"       onclick="setFilter('follow_up')">⏳ Follow-up <span class="tq-tab-count" id="tqc-follow_up">0</span></button>
           <button class="tq-tab" id="tqf-ignored"         onclick="setFilter('ignored')">🚫 Ignored <span class="tq-tab-count" id="tqc-ignored">0</span></button>
@@ -2026,92 +2719,109 @@ tr:last-child td { border-bottom: none; }
       </div>
 
       <div id="repliesList"></div>
+      <div id="repliesPager" style="display:flex;justify-content:center;align-items:center;gap:10px;margin-top:14px"></div>
     </div>
 
     <!-- FOLLOW-UP PAGE -->
     <div class="page" id="page-followup">
-
-      <!-- HEADER -->
       <div class="fu-page-header">
         <div>
-          <div class="page-title">Follow-up</div>
-          <div class="page-sub">Contact lifecycle &amp; follow-up sequences</div>
+          <div class="page-title">Follow-up Queue</div>
+          <div class="page-sub">Urgency-first queue for daily follow-up execution</div>
         </div>
-        <button class="btn btn-primary" style="font-size:12px;padding:7px 14px" onclick="openAddContactModal()">
-          <i class="ph-bold ph-plus" style="font-size:13px;margin-right:5px;vertical-align:middle"></i>Add Contact
-        </button>
+        <div class="fu-header-actions">
+          <div class="fu-tabs fu-tabs-compact">
+            <button class="fu-tab active" id="fuTabContacts" onclick="switchFuTab('contacts')">Queue</button>
+            <button class="fu-tab" id="fuTabAnalytics" onclick="switchFuTab('analytics')">Analytics</button>
+          </div>
+          <button class="btn btn-primary" style="font-size:12px;padding:8px 14px" onclick="openAddContactModal()">
+            <i class="ph-bold ph-plus" style="font-size:13px;margin-right:5px;vertical-align:middle"></i>Add Contact
+          </button>
+        </div>
       </div>
 
-      <!-- TABS -->
-      <div class="fu-tabs">
-        <button class="fu-tab active" id="fuTabContacts" onclick="switchFuTab('contacts')">Contacts</button>
-        <button class="fu-tab" id="fuTabAnalytics" onclick="switchFuTab('analytics')">Analytics</button>
-      </div>
-
-      <!-- CONTACTS TAB -->
       <div id="fuContactsTab">
-        <!-- FILTERS -->
-        <div class="fu-filters">
-          <div class="fu-filter-row">
-            <input class="fu-search" id="fuSearch" placeholder="Search email or company..." oninput="renderFuContacts()">
-            <div class="fu-filter-divider"></div>
-            <button class="fu-filter-btn active" id="fuf-stage-all" onclick="setFuStageFilter('')">All</button>
-            <button class="fu-filter-btn" id="fuf-stage-FU1" onclick="setFuStageFilter('FU1')"><span style="color:var(--blue)">●</span> FU1</button>
-            <button class="fu-filter-btn" id="fuf-stage-FU2" onclick="setFuStageFilter('FU2')"><span style="color:var(--yellow)">●</span> FU2</button>
-            <button class="fu-filter-btn" id="fuf-stage-FU3" onclick="setFuStageFilter('FU3')"><span style="color:var(--red)">●</span> FU3</button>
-            <button class="fu-filter-btn" id="fuf-stage-Done" onclick="setFuStageFilter('Done')"><span style="color:var(--purple)">●</span> Done</button>
+        <div class="fu-queue-shell">
+          <div class="fu-toolbar">
+            <div class="fu-toolbar-main">
+              <input class="fu-search fu-search-wide" id="fuSearch" placeholder="Search company, contact, or email..." oninput="renderFuContacts(); renderFuSelection()">
+              <div class="fu-segment" id="fuUrgencySegment">
+                <button class="fu-segment-btn active" id="fuf-special-all" onclick="setFuSpecialFilter('')">All</button>
+                <button class="fu-segment-btn" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')">Overdue <span id="fuOverdueCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-due_today" onclick="setFuSpecialFilter('due_today')">Today</button>
+                <button class="fu-segment-btn" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')">Needs Action <span id="fuNeedsActionCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-scheduled" onclick="setFuSpecialFilter('scheduled')">Scheduled <span id="fuScheduledCount"></span></button>
+              </div>
+            </div>
+            <div class="fu-toolbar-side">
+              <select class="fu-select" id="fuStateSelect" onchange="setFuStateFilter(this.value)">
+                <option value="">All states</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="warm">Warm</option>
+                <option value="loads">Loads</option>
+                <option value="blocked">Blocked</option>
+                <option value="closed">Closed</option>
+              </select>
+              <select class="fu-select" id="fuStageSelect" onchange="setFuStageFilter(this.value)">
+                <option value="">All stages</option>
+                <option value="FU1">FU1</option>
+                <option value="FU2">FU2</option>
+                <option value="FU3">FU3</option>
+                <option value="Done">Done</option>
+              </select>
+              <button class="btn btn-outline btn-sm" onclick="resetFuFilters()">Clear</button>
+            </div>
           </div>
-          <div class="fu-filter-row">
-            <button class="fu-filter-btn active" id="fuf-state-all" onclick="setFuStateFilter('')">Active+Paused</button>
-            <button class="fu-filter-btn" id="fuf-state-active" onclick="setFuStateFilter('active')">Active</button>
-            <button class="fu-filter-btn" id="fuf-state-paused" onclick="setFuStateFilter('paused')">Paused</button>
-            <button class="fu-filter-btn" id="fuf-state-warm" onclick="setFuStateFilter('warm')">Warm</button>
-            <button class="fu-filter-btn" id="fuf-state-loads" onclick="setFuStateFilter('loads')">Loads</button>
-            <button class="fu-filter-btn" id="fuf-state-blocked" onclick="setFuStateFilter('blocked')">Blocked</button>
-            <button class="fu-filter-btn" id="fuf-state-closed" onclick="setFuStateFilter('closed')">Closed</button>
-            <div class="fu-filter-divider"></div>
-            <button class="fu-filter-btn needs-action" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')">Needs Action <span id="fuNeedsActionCount" style="font-family:'JetBrains Mono',monospace"></span></button>
-            <button class="fu-filter-btn overdue" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')">Overdue <span id="fuOverdueCount" style="font-family:'JetBrains Mono',monospace"></span></button>
-            <button class="fu-filter-btn" id="fuf-special-scheduled" onclick="setFuSpecialFilter('scheduled')" style="color:var(--accent)">📅 Scheduled <span id="fuScheduledCount" style="font-family:'JetBrains Mono',monospace"></span></button>
+
+          <div class="fu-summary-strip" id="fuStatsBar"></div>
+
+          <div class="fu-bulk-bar" id="fuBulkBar" style="display:none">
+            <div class="fu-bulk-group">
+              <button class="fu-bulk-clear" onclick="clearFuSelection()" title="Clear selection">✕</button>
+              <span class="fu-bulk-count" id="fuBulkCount">0 selected</span>
+              <button class="fu-select-all-filtered" id="fuSelectAllFiltered" onclick="selectAllFilteredFu()" style="display:none"></button>
+            </div>
+            <div class="fu-bulk-group fu-bulk-actions">
+              <button class="btn btn-sm btn-primary" onclick="bulkFuAction('send-now')">Send Now</button>
+              <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal()">Schedule</button>
+              <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal(null, 'recurring')">Set Recurring</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('pause')">Pause</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('resume')">Resume</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('loads')">Mark Loads</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('warm')">Mark Warm</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('cancel-schedule')">Cancel Schedule</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('block')">Block</button>
+            </div>
           </div>
-        </div>
 
-        <!-- STATS BAR -->
-        <div class="fu-stats-bar" id="fuStatsBar"></div>
-
-        <!-- BULK ACTION BAR (shown when contacts selected) -->
-        <div class="fu-bulk-bar" id="fuBulkBar" style="display:none">
-          <button class="fu-bulk-clear" onclick="clearFuSelection()" title="Clear selection">✕</button>
-          <span class="fu-bulk-count" id="fuBulkCount">0 selected</span>
-          <button class="fu-select-all-filtered" id="fuSelectAllFiltered" onclick="selectAllFilteredFu()" style="display:none"></button>
-          <div class="fu-bulk-sep"></div>
-          <button class="btn btn-sm btn-primary" onclick="bulkFuAction('send-now')">▶ Send Now</button>
-          <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('free-send')">📤 Free Send</button>
-          <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal()">📅 Schedule</button>
-          <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('cancel-schedule')">❌ Cancel Schedule</button>
-          <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('pause')">⏸ Pause</button>
-          <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('block')">🚫 Block</button>
-        </div>
-
-        <!-- LIST HEADER with master checkbox -->
-        <div id="fuListHeader" style="display:flex;align-items:center;padding:6px 14px 4px;border-bottom:1px solid var(--border)">
-          <div class="fu-checkbox-wrap" style="margin-right:0">
-            <input type="checkbox" id="fuMasterCheckbox"
-              onclick="fuMasterCheckboxChange(this)"
-              style="accent-color:var(--accent);cursor:pointer;width:14px;height:14px">
+          <div class="fu-table-wrap" id="fuTableWrap">
+            <table class="fu-table">
+              <thead>
+                <tr>
+                  <th class="fu-col-select">
+                    <input type="checkbox" id="fuMasterCheckbox" onclick="fuMasterCheckboxChange(this)">
+                  </th>
+                  <th>Contact</th>
+                  <th>State</th>
+                  <th>Stage</th>
+                  <th>Next Follow-up</th>
+                  <th>Last Activity</th>
+                  <th>Route</th>
+                  <th>Action</th>
+                  <th class="fu-col-menu">More</th>
+                </tr>
+              </thead>
+              <tbody id="fuContactsList"></tbody>
+            </table>
           </div>
-          <span id="fuMasterLabel" style="font-size:11px;color:var(--muted);margin-left:8px;user-select:none;cursor:pointer" onclick="document.getElementById('fuMasterCheckbox').click()">Select all</span>
+          <div id="fuTableEmpty" class="fu-empty" style="display:none"></div>
         </div>
-
-        <!-- LIST -->
-        <div id="fuContactsList"></div>
       </div>
 
-      <!-- ANALYTICS TAB -->
       <div id="fuAnalyticsTab" style="display:none">
         <div id="fuAnalyticsContent" class="fu-analytics"></div>
       </div>
-
     </div>
 
     <!-- ADD CONTACT MODAL -->
@@ -2222,40 +2932,76 @@ tr:last-child td { border-bottom: none; }
 <!-- INTELLIGENCE -->
 <div class="page" id="page-intelligence">
   <div class="page-header">
-    <div class="page-title">Outreach Intelligence</div>
-    <div class="page-subtitle">Efficiency metrics for your freight outreach</div>
+    <div class="page-title">Intelligence</div>
+    <div class="page-sub">Use recent outreach signals to decide what to improve next</div>
   </div>
 
-  <!-- KPI Cards -->
-  <!-- KPI funnel order: Sent → Replies → Rate Requests → Emails/RR -->
+  <div class="intel-context-bar">
+    <div class="intel-context-text">Recommendations are based on sent volume, reply behavior, and detected rate-request signals.</div>
+    <div class="intel-context-pill">Recommendation Layer</div>
+  </div>
+
   <div class="intel-kpi-row">
     <div class="intel-kpi">
-      <div class="intel-kpi-label">Total Emails Sent</div>
+      <div class="intel-kpi-label">Sent Volume</div>
       <div class="intel-kpi-value" id="intel-total-sent">—</div>
-      <div class="intel-kpi-sub">across all lanes</div>
+      <div class="intel-kpi-sub">recent outbound coverage</div>
     </div>
     <div class="intel-kpi">
-      <div class="intel-kpi-label">Replies</div>
+      <div class="intel-kpi-label">Replying Contacts</div>
       <div class="intel-kpi-value" id="intel-replies-total">—</div>
-      <div class="intel-kpi-sub">unique senders</div>
+      <div class="intel-kpi-sub">unique engaged senders</div>
     </div>
     <div class="intel-kpi">
       <div class="intel-kpi-label">Rate Requests</div>
       <div class="intel-kpi-value" id="intel-rr-total">—</div>
-      <div class="intel-kpi-sub">keyword-detected</div>
+      <div class="intel-kpi-sub">strongest intent signal</div>
     </div>
     <div class="intel-kpi">
       <div class="intel-kpi-label">Emails per Rate Request</div>
       <div class="intel-kpi-value" id="intel-eprr">—</div>
-      <div class="intel-kpi-sub" id="intel-eprr-sub">outreach efficiency</div>
+      <div class="intel-kpi-sub" id="intel-eprr-sub">efficiency signal</div>
     </div>
   </div>
 
-  <!-- Lane Performance -->
-  <div style="margin-bottom:28px">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px">
-      Lane Performance
+  <div class="intel-section recommendations">
+    <div class="intel-section-title">Top Recommendations</div>
+    <div class="intel-section-sub">The highest-value actions suggested by your recent outreach patterns</div>
+    <div class="intel-rec-grid" id="intel-rec-grid">
+      <div class="intel-empty">Loading recommendations…</div>
     </div>
+  </div>
+
+  <div class="intel-signal-grid">
+    <div class="intel-signal-card">
+      <div class="intel-signal-head">
+        <div class="intel-signal-title">Opportunities</div>
+        <div class="intel-confidence moderate">Scale</div>
+      </div>
+      <div class="intel-signal-list" id="intel-opportunities">
+        <div class="intel-empty" style="padding:20px 0">Loading…</div>
+      </div>
+    </div>
+
+    <div class="intel-signal-card warning">
+      <div class="intel-signal-head">
+        <div class="intel-signal-title">Warnings</div>
+        <div class="intel-confidence early">Watch</div>
+      </div>
+      <div class="intel-signal-list" id="intel-warnings">
+        <div class="intel-empty" style="padding:20px 0">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="intel-section evidence">
+    <div class="intel-section-title">Evidence</div>
+    <div class="intel-section-sub">Supporting route and domain signals behind the recommendations</div>
+    <div class="intel-evidence-grid">
+      <div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px">
+          Route Signals
+        </div>
     <div class="intel-table-wrap">
       <table class="intel-table">
         <thead>
@@ -2273,13 +3019,12 @@ tr:last-child td { border-bottom: none; }
         </tbody>
       </table>
     </div>
-  </div>
+      </div>
 
-  <!-- Broker Response Profile -->
-  <div>
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px">
-      Broker Response Profile
-    </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px">
+          Domain Signals
+        </div>
     <div class="intel-table-wrap">
       <table class="intel-table">
         <thead>
@@ -2296,6 +3041,8 @@ tr:last-child td { border-bottom: none; }
           <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
         </tbody>
       </table>
+    </div>
+      </div>
     </div>
   </div>
 </div>
@@ -2326,79 +3073,132 @@ tr:last-child td { border-bottom: none; }
     <!-- TEMPLATES -->
     <div class="page" id="page-templates">
       <div class="page-header">
-        <div class="page-title">Email Templates</div>
-        <div class="page-sub">Use {origin}, {destination}, {name}, {company}, {phone}, {route}</div>
+        <div class="page-title">Templates</div>
+        <div class="page-sub">Manage active outreach copy and keep follow-up messaging aligned</div>
       </div>
 
-      <!-- OUTREACH TEMPLATES -->
-      <div style="margin-bottom:32px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--text)">📤 Outreach Templates</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">One is picked randomly per send</div>
-          </div>
-          <button class="btn btn-outline" style="font-size:12px" onclick="addTemplate()">+ Add Template</button>
-        </div>
-        <div id="templatesWrap"></div>
-        <button class="btn btn-primary" onclick="saveTemplates()" style="margin-top:8px">💾 Save Outreach Templates</button>
-      </div>
-
-      <!-- FOLLOW-UP TEMPLATES -->
-      <div>
-        <div style="margin-bottom:14px">
-          <div style="font-size:14px;font-weight:600;color:var(--text)">🔁 Follow-up Templates</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Sent to contacts who replied Interested</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:14px">
-          <div class="tmpl-card">
-            <div class="tmpl-header">
-              <span class="tmpl-num" style="background:rgba(59,130,246,.15);color:#60a5fa">FU1 — First Follow-up</span>
-            </div>
-            <textarea id="fu-tmpl-1" style="min-height:130px"></textarea>
-          </div>
-          <div class="tmpl-card">
-            <div class="tmpl-header">
-              <span class="tmpl-num" style="background:rgba(234,179,8,.15);color:#fbbf24">FU2 — Second Follow-up</span>
-            </div>
-            <textarea id="fu-tmpl-2" style="min-height:130px"></textarea>
-          </div>
-          <div class="tmpl-card">
-            <div class="tmpl-header">
-              <span class="tmpl-num" style="background:rgba(239,68,68,.12);color:#f87171">FU3 — Final Follow-up</span>
-            </div>
-            <textarea id="fu-tmpl-3" style="min-height:130px"></textarea>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="saveFuTemplates()" style="margin-top:12px">💾 Save Follow-up Templates</button>
-
-        <!-- EXTRA TEMPLATE POOL -->
-        <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="tmpl-layout">
+        <div class="tmpl-library-panel">
+          <div class="tmpl-panel-head">
             <div>
-              <div style="font-size:13px;font-weight:700;color:var(--text)">Template Pool</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">All active templates are used for random selection when sending</div>
-            </div>
-            <button class="btn btn-secondary" style="font-size:12px" onclick="toggleAddFuTmplForm()">+ Add Template</button>
-          </div>
-
-          <!-- ADD FORM (hidden by default) -->
-          <div id="addFuTmplForm" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;display:none">
-            <div style="margin-bottom:8px">
-              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Name (optional)</label>
-              <input id="newFuTmplName" placeholder="e.g. FU4, General, Friendly…" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;color:var(--text);font-family:inherit">
-            </div>
-            <div style="margin-bottom:10px">
-              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Body</label>
-              <textarea id="newFuTmplBody" rows="4" placeholder="Hi,&#10;&#10;Just following up…&#10;&#10;{name}&#10;{company} | {phone}" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;color:var(--text);font-family:inherit;resize:vertical"></textarea>
-            </div>
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-primary" style="font-size:12px" onclick="saveNewFuTmpl()">Save Template</button>
-              <button class="btn btn-secondary" style="font-size:12px" onclick="toggleAddFuTmplForm()">Cancel</button>
+              <div class="tmpl-panel-title">Template Library</div>
+              <div class="tmpl-panel-sub">Choose your live outreach variant and keep alternates ready</div>
             </div>
           </div>
+          <div class="tmpl-library-actions">
+            <button class="btn btn-primary btn-sm" onclick="addTemplate()">New Template</button>
+            <button class="btn btn-secondary btn-sm" onclick="duplicateActiveTemplate()">Duplicate</button>
+          </div>
+          <div id="templatesWrap" class="tmpl-library-list"></div>
+        </div>
 
-          <!-- LIST -->
-          <div id="extraFuTmplList"></div>
+        <div>
+          <div class="tmpl-editor-panel">
+            <div class="tmpl-editor-top">
+              <div>
+                <div class="tmpl-editor-name" id="tmplEditorName">Template 1</div>
+                <div class="tmpl-editor-sub" id="tmplEditorMeta">All outreach templates in this library are active in send rotation</div>
+              </div>
+              <div class="tmpl-editor-actions">
+                <button class="btn btn-secondary btn-sm" onclick="removeActiveTemplate()">Delete</button>
+                <button class="btn btn-primary btn-sm" onclick="saveTemplates()">Save</button>
+              </div>
+            </div>
+
+            <div class="tmpl-token-bar">
+              <span class="tmpl-token">{origin}</span>
+              <span class="tmpl-token">{destination}</span>
+              <span class="tmpl-token">{route}</span>
+              <span class="tmpl-token">{name}</span>
+              <span class="tmpl-token">{company}</span>
+              <span class="tmpl-token">{phone}</span>
+            </div>
+
+            <div class="tmpl-editor-grid">
+              <div class="tmpl-edit-card">
+                <div class="tmpl-field-label">Template Body</div>
+                <textarea id="tmpl-active-editor" style="min-height:320px" oninput="updateActiveTemplateDraft(this.value)"></textarea>
+              </div>
+              <div class="tmpl-preview-card">
+                <div class="tmpl-preview-title">Preview</div>
+                <div class="tmpl-preview-shell">
+                  <div class="tmpl-preview-body" id="tmplPreviewBody"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tmpl-followup-panel">
+            <div class="tmpl-panel-head">
+              <div>
+                <div class="tmpl-panel-title">Follow-up Templates</div>
+                <div class="tmpl-panel-sub">Keep the core FU1/FU2/FU3 sequence clean and manage the extra active pool</div>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="toggleAddFuTmplForm()">Add Pool Template</button>
+            </div>
+
+            <div class="tmpl-fu-grid">
+              <div class="tmpl-fu-card">
+                <div class="tmpl-fu-head">
+                  <div>
+                    <div class="tmpl-fu-name">First Follow-up</div>
+                    <div class="tmpl-fu-stage">FU1</div>
+                  </div>
+                </div>
+                <textarea id="fu-tmpl-1" style="min-height:170px"></textarea>
+              </div>
+              <div class="tmpl-fu-card">
+                <div class="tmpl-fu-head">
+                  <div>
+                    <div class="tmpl-fu-name">Second Follow-up</div>
+                    <div class="tmpl-fu-stage">FU2</div>
+                  </div>
+                </div>
+                <textarea id="fu-tmpl-2" style="min-height:170px"></textarea>
+              </div>
+              <div class="tmpl-fu-card">
+                <div class="tmpl-fu-head">
+                  <div>
+                    <div class="tmpl-fu-name">Final Follow-up</div>
+                    <div class="tmpl-fu-stage">FU3</div>
+                  </div>
+                </div>
+                <textarea id="fu-tmpl-3" style="min-height:170px"></textarea>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="saveFuTemplates()">Save Follow-up Templates</button>
+
+            <div id="addFuTmplForm" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:16px">
+              <div style="margin-bottom:8px">
+                <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Stage</label>
+                <select id="newFuTmplLevel" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--text);font-family:inherit">
+                  <option value="General">General rotation</option>
+                  <option value="FU1">FU1</option>
+                  <option value="FU2">FU2</option>
+                  <option value="FU3">FU3</option>
+                </select>
+              </div>
+              <div style="margin-bottom:8px">
+                <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Name</label>
+                <input id="newFuTmplName" placeholder="Friendly, General, Last-touch…" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--text);font-family:inherit">
+              </div>
+              <div style="margin-bottom:10px">
+                <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Body</label>
+                <textarea id="newFuTmplBody" rows="4" placeholder="Hi,&#10;&#10;Just following up…&#10;&#10;{name}&#10;{company} | {phone}" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--text);font-family:inherit;resize:vertical"></textarea>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-primary btn-sm" onclick="saveNewFuTmpl()">Add Template</button>
+                <button class="btn btn-secondary btn-sm" onclick="toggleAddFuTmplForm()">Cancel</button>
+              </div>
+            </div>
+
+            <div style="margin-top:22px">
+              <div class="tmpl-panel-title" style="font-size:14px">Template Pool</div>
+              <div class="tmpl-panel-sub">Active pool templates can be used in rotation during follow-up sends</div>
+              <div id="extraFuTmplList" class="tmpl-pool-list"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2478,55 +3278,143 @@ tr:last-child td { border-bottom: none; }
     <div class="page" id="page-settings">
       <div class="page-header">
         <div class="page-title">Settings</div>
-        <div class="page-sub">Gmail and sender configuration</div>
+        <div class="page-sub">Manage connection, sender identity, and default sending behavior</div>
       </div>
-      <div style="max-width:520px">
-        <div class="card">
-          <div class="card-label">Gmail Account</div>
-          <!-- Connected state -->
-          <div id="gmailConnected" style="display:none">
-            <div style="display:flex;align-items:center;gap:10px;padding:10px 0 14px">
-              <span style="color:#10b981;font-size:18px">●</span>
-              <div>
-                <div style="font-weight:600;font-size:14px" id="gmailConnectedEmail"></div>
-                <div style="font-size:12px;color:var(--muted)">Connected via Google OAuth</div>
+      <div class="settings-shell">
+        <section class="settings-card">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-title">Workspace Readiness</div>
+              <div class="settings-sub">Make sure Gmail is connected before sending. This is the account the workspace will use for outbound email.</div>
+            </div>
+            <div class="settings-status-badge" id="gmailStatusBadge">Needs connection</div>
+          </div>
+          <div class="settings-ready-row">
+            <div>
+              <div id="gmailConnected" style="display:none">
+                <div class="settings-ready-panel">
+                  <div class="settings-ready-email" id="gmailConnectedEmail"></div>
+                  <div class="settings-ready-copy">Connected via Google OAuth and ready for sending on Railway.</div>
+                </div>
+              </div>
+              <div id="gmailNotConnected">
+                <div class="settings-ready-panel">
+                  <div class="settings-ready-email">No Gmail account connected</div>
+                  <div class="settings-ready-copy">Connect your Gmail account to unlock sending, reply handling, and follow-up automation.</div>
+                </div>
+              </div>
+              <div id="gmailMigrateNotice" class="settings-warning" style="display:none">
+                You still have a legacy App Password saved. Connect via OAuth so sending works correctly on Railway.
               </div>
             </div>
-            <button class="btn" style="background:var(--surface);border:1px solid var(--border);color:var(--text)" onclick="disconnectGmail()">Disconnect</button>
-          </div>
-          <!-- Not connected state -->
-          <div id="gmailNotConnected">
-            <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Connect your Gmail account to send emails via Gmail API.</div>
-            <button class="btn btn-primary" onclick="connectGmail()">Connect Gmail Account</button>
-            <div id="gmailMigrateNotice" style="display:none;margin-top:10px;padding:10px 12px;background:#fef3c7;border-radius:8px;font-size:12px;color:#92400e">
-              ⚠ You have a legacy App Password saved. Connect via OAuth to enable sending on Railway.
+            <div class="settings-actions">
+              <button class="btn btn-primary" id="gmailConnectBtn" onclick="connectGmail()">Connect Gmail</button>
+              <button class="btn btn-secondary" id="gmailDisconnectBtn" onclick="disconnectGmail()" style="display:none">Disconnect</button>
             </div>
           </div>
+        </section>
+
+        <div class="settings-grid">
+          <section class="settings-card">
+            <div class="settings-card-head">
+              <div>
+                <div class="settings-title">Sender Identity</div>
+                <div class="settings-sub">This signoff appears in your outreach and follow-up messages.</div>
+              </div>
+            </div>
+            <div class="field"><label>Your Name</label><input id="cfgName" placeholder="Bohdan"></div>
+            <div class="field"><label>Company</label><input id="cfgCompany" placeholder="DAT Mailer"></div>
+            <div class="field"><label>Phone</label><input id="cfgPhone" placeholder="(555) 010-2488"></div>
+            <div class="settings-signoff-preview">
+              <div class="settings-preview-label">Live Signoff Preview</div>
+              <div class="settings-preview-text" id="settingsSignoffPreview">Thanks,<br>Bohdan · DAT Mailer · (555) 010-2488</div>
+            </div>
+          </section>
+
+          <section class="settings-card">
+            <div class="settings-card-head">
+              <div>
+                <div class="settings-title">Sending Defaults</div>
+                <div class="settings-sub">Set your default cadence and daily throughput target for the Send queue.</div>
+              </div>
+            </div>
+            <div class="settings-stack-sm">
+              <div class="grid2">
+                <div class="field">
+                  <label>Minimum Delay (seconds)</label>
+                  <input id="cfgDelayMin" type="number" value="20" min="1" max="300">
+                </div>
+                <div class="field">
+                  <label>Maximum Delay (seconds)</label>
+                  <input id="cfgDelayMax" type="number" value="45" min="1" max="300">
+                </div>
+              </div>
+              <div class="field" style="margin-bottom:0">
+                <label>Daily Email Target</label>
+                <input id="cfgDailyTarget" type="number" min="1" max="500" placeholder="100">
+                <div class="settings-note">Used for Send-page progress. This target is currently saved in this browser only.</div>
+              </div>
+            </div>
+          </section>
         </div>
-        <div class="card">
-          <div class="card-label">Sender Info</div>
-          <div class="field"><label>Your Name</label><input id="cfgName"></div>
-          <div class="field"><label>Company</label><input id="cfgCompany"></div>
-          <div class="field"><label>Phone</label><input id="cfgPhone"></div>
-        </div>
-        <div class="card">
-          <div class="card-label">Delay Between Emails (seconds)</div>
-          <div class="grid2">
-            <div class="field"><label>Minimum</label><input id="cfgDelayMin" type="number" value="20"></div>
-            <div class="field"><label>Maximum</label><input id="cfgDelayMax" type="number" value="45"></div>
+
+        <section class="settings-card">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-title">Follow-up Defaults</div>
+              <div class="settings-sub">Control default timing and reply behavior for the Follow-up system across this workspace.</div>
+            </div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-label">Daily Goals</div>
-          <div class="field">
-            <label>Daily Email Target</label>
-            <input id="cfgDailyTarget" type="number" min="1" max="500" placeholder="100">
-            <div style="font-size:11px;color:var(--text3);margin-top:4px">Shown as progress bar on Send page</div>
+          <div class="settings-followup-grid">
+            <div class="settings-mini">
+              <div class="settings-mini-label">FU1 Delay</div>
+              <div class="field" style="margin-bottom:0">
+                <label>Days after first reply</label>
+                <input id="fuDelay1" type="number" min="1" max="60">
+              </div>
+            </div>
+            <div class="settings-mini">
+              <div class="settings-mini-label">FU2 Delay</div>
+              <div class="field" style="margin-bottom:0">
+                <label>Days after FU1</label>
+                <input id="fuDelay2" type="number" min="1" max="60">
+              </div>
+            </div>
+            <div class="settings-mini">
+              <div class="settings-mini-label">FU3 Delay</div>
+              <div class="field" style="margin-bottom:0">
+                <label>Days after FU2</label>
+                <input id="fuDelay3" type="number" min="1" max="60">
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
-        </div>
+          <div class="settings-stack-sm">
+            <div class="settings-toggle-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">Auto-stop when a reply arrives</div>
+                <div class="settings-toggle-sub">Recommended for clean follow-up automation when a contact answers.</div>
+              </div>
+              <input id="fuAutoStop" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+            </div>
+            <div class="settings-toggle-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">Enable follow-up by default</div>
+                <div class="settings-toggle-sub">New follow-up contacts start in the scheduled flow automatically.</div>
+              </div>
+              <input id="fuDefaultEnabled" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-savebar">
+          <div class="settings-savecopy">
+            <div class="settings-title">Save Workspace Settings</div>
+            <div class="settings-sub">Connection, sender identity, cadence defaults, and follow-up timing will all be updated together.</div>
+          </div>
+          <div class="settings-actions">
+            <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -2536,6 +3424,26 @@ tr:last-child td { border-bottom: none; }
 <div class="toast" id="toast"></div>
 
 <script>
+const CSRF_TOKEN = '{{ csrf_token|default("", true) }}';
+(function() {
+  const _nativeFetch = window.fetch.bind(window);
+  window.fetch = function(resource, init = {}) {
+    const request = new Request(resource, init);
+    const method = (request.method || 'GET').toUpperCase();
+    const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    const url = new URL(request.url, window.location.origin);
+    const isSameOrigin = url.origin === window.location.origin;
+    if (!isMutation || !isSameOrigin || !CSRF_TOKEN) {
+      return _nativeFetch(resource, init);
+    }
+    const nextInit = { ...init };
+    const headers = new Headers(init.headers || request.headers || {});
+    if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', CSRF_TOKEN);
+    nextInit.headers = headers;
+    return _nativeFetch(resource, nextInit);
+  };
+})();
+
 // ── THEME ────────────────────────────────────────────────────────────────────
 function toggleTheme() {
   const html = document.documentElement;
@@ -2884,11 +3792,9 @@ async function deleteContact() {
 
 
 // ── DAILY STATS ──────────────────────────────────────────────────────────────
-let dailyTarget = parseInt(localStorage.getItem('daily_target') || '100');
+let dailyTarget = 100;
 
 async function loadDailyStats() {
-  // Always read fresh from localStorage
-  dailyTarget = parseInt(localStorage.getItem('daily_target') || '100');
   try {
     const statsRes = await fetch('/api/stats');
     const stats = await statsRes.json();
@@ -3191,6 +4097,60 @@ function classifyLoads(loads) {
 // ── PARSE ────────────────────────────────────────────────────────────────────
 let parsedLoads = [];
 let _parseTimer = null;
+let activeParseFilter = 'all';
+function resetSendProgressUI() {
+  const card = document.getElementById('sendProgressCard');
+  if (card) card.style.display = 'none';
+  const fill = document.getElementById('progressFill');
+  const text = document.getElementById('progressText');
+  const pct = document.getElementById('progressPct');
+  const sent = document.getElementById('pSent');
+  const err = document.getElementById('pErr');
+  const log = document.getElementById('liveLog');
+  if (fill) fill.style.width = '0%';
+  if (text) text.textContent = '0 / 0';
+  if (pct) pct.textContent = '0%';
+  if (sent) sent.textContent = '0';
+  if (err) err.textContent = '0';
+  if (log) log.innerHTML = '';
+}
+function loadSendDemoDat() {
+  const demo = [
+    'ABC Freight Solutions',
+    'Chicago, IL',
+    'Dallas, TX',
+    '4/12',
+    '53V',
+    'broker@abcfreight.com',
+    '',
+    'Lakeshore Carrier Group',
+    'Chicago, IL',
+    'Dallas, TX',
+    '4/12',
+    '53V',
+    'broker@abcfreight.com',
+    '',
+    'Blue River Logistics',
+    'Atlanta, GA',
+    'Miami, FL',
+    '4/13',
+    'VAN',
+    'dispatch@blueriverlogistics.com',
+    '',
+    'North Peak Transport',
+    'Phoenix, AZ',
+    'Reno, NV',
+    '4/14',
+    'REEFER',
+    'blocked@blockedfleet.com',
+  ].join('\n');
+  const input = document.getElementById('datText');
+  if (!input) return;
+  input.value = demo;
+  resetSendProgressUI();
+  updateDatMeta();
+  loadParseContext().finally(() => parseDat());
+}
 function debounceParse() {
   const text = document.getElementById('datText').value.trim();
   if (!text || text.length < 20) return; // ignore tiny input
@@ -3201,66 +4161,74 @@ function debounceParse() {
 function parseDat() {
   const text = document.getElementById('datText').value.trim();
   if (!text) { toast('Paste DAT text first', true); return; }
+  resetSendProgressUI();
   const loads = parseDatText(text);
   const data = classifyLoads(loads);
   parsedLoads = data.loads;
+  activeParseFilter = 'all';
   sessionStorage.removeItem('dat_loads');
   sessionStorage.removeItem('dat_checked');
   renderParseResults(data);
-  document.getElementById('parseResults').style.display = 'block';
+  const results = document.getElementById('parseResults');
+  results.style.display = 'block';
+  results.setAttribute('data-has-results', 'true');
 }
 
 function renderParseResults(data) {
   const {loads, stats} = data;
 
-  // Rich parse stats block
   const total = loads.length;
   const withEmail = loads.filter(l => l.email && l.email.includes('@')).length;
-  const emailPct = total > 0 ? Math.round(withEmail / total * 100) : 0;
   const newCount = stats.new || 0;
   const dupCount = (stats.skip_dup || 0) + (stats.skip_today || 0) + (stats.skip_sent || 0);
   const blockedCount = stats.skip_stop || 0;
+  const errorCount = Math.max(0, total - withEmail);
 
-  // Stats strip — 4-column borderless grid
   document.getElementById('parseStats').innerHTML = [
-    { val: newCount,      label: 'Ready',     sub: 'to send',    color: 'var(--accent)', icon: 'ph-check-circle',  bg: 'rgba(5,150,105,.06)' },
-    { val: dupCount,      label: 'Duplicate', sub: 'skipped',    color: 'var(--yellow)', icon: 'ph-copy',           bg: 'rgba(250,204,21,.05)' },
-    { val: blockedCount,  label: 'Blocked',   sub: 'stop list',  color: 'var(--red)',    icon: 'ph-prohibit',       bg: 'rgba(239,68,68,.05)' },
-    { val: emailPct+'%',  label: 'With Email',sub: withEmail+'/'+total, color: 'var(--blue)',  icon: 'ph-envelope', bg: 'rgba(96,165,250,.05)' },
-  ].map(s => `<div class="loads-stat" style="background:${s.bg}">
-    <i class="ph-bold ${s.icon}" style="font-size:18px;color:${s.color};margin-bottom:2px"></i>
-    <div class="loads-stat-val" style="color:${s.color}">${s.val}</div>
-    <div class="loads-stat-label">${s.label}</div>
-    <div class="loads-stat-sub">${s.sub}</div>
-  </div>`).join('');
+    { key:'all',       val: total,         label: 'All',        color: 'var(--text)' },
+    { key:'ready',     val: newCount,      label: 'Ready',      color: 'var(--accent)' },
+    { key:'duplicate', val: dupCount,      label: 'Duplicates', color: 'var(--yellow)' },
+    { key:'blocked',   val: blockedCount,  label: 'Blocked',    color: 'var(--red)' },
+    { key:'error',     val: errorCount,    label: 'Errors',     color: 'var(--blue)' },
+  ].map(s => `<button class="loads-stat ${activeParseFilter===s.key ? 'active' : ''}" onclick="setParseFilter('${s.key}')">
+    <span class="loads-stat-label">${s.label}</span>
+    <span class="loads-stat-val" style="color:${s.color}">${s.val}</span>
+  </button>`).join('');
 
-  // Update parse dot state
   const dot = document.getElementById('datParseDot');
   const hint = document.getElementById('datParseHint');
   if (dot) { dot.className = 'dat-parse-dot ready'; }
   if (hint) hint.textContent = newCount + ' ready to send';
 
-  document.getElementById('loadsBody').innerHTML = loads.map((l, i) => {
+  const visibleLoads = loads
+    .map((l, i) => ({ load:l, idx:i }))
+    .filter(({load}) => matchesParseFilter(load));
+
+  document.getElementById('loadsBody').innerHTML = visibleLoads.map(({load:l, idx:i}) => {
     const isStop = l.skip === 'stop_list';
     const isSkip = l.skip && !isStop;
-    const rowCls = isStop ? 'row-stop' : isSkip ? 'row-skip' : '';
+    const hasError = !l.email || !l.email.includes('@');
+    const rowCls = [isStop ? 'row-stop' : '', isSkip ? 'row-skip' : '', hasError ? 'row-issue' : ''].filter(Boolean).join(' ');
     const chipCls = isStop ? 'chip-stop'
       : l.skip === 'today'    ? 'chip-today'
       : l.skip === 'in_batch' ? 'chip-dup'
       : l.skip === 'sent'     ? 'chip-history'
+      : hasError              ? 'chip-error'
       : 'chip-sent';
     const chipIcon = isStop ? 'ph-prohibit'
       : l.skip === 'today'    ? 'ph-clock'
       : l.skip === 'in_batch' ? 'ph-copy'
       : l.skip === 'sent'     ? 'ph-clock-counter-clockwise'
+      : hasError              ? 'ph-warning-circle'
       : 'ph-check';
     const chipLabel = isStop ? 'Blocked'
       : l.skip === 'today'    ? 'Sent today'
       : l.skip === 'in_batch' ? 'Duplicate'
       : l.skip === 'sent'     ? 'Sent before'
+      : hasError              ? 'Missing email'
       : 'New';
     return `<tr class="${rowCls}">
-      <td style="padding-left:14px"><input type="checkbox" class="row-check" data-idx="${i}" ${l.skip ? '' : 'checked'} ${l.skip ? 'disabled' : ''} style="accent-color:var(--accent);cursor:pointer;width:13px;height:13px"></td>
+      <td style="padding-left:14px"><input type="checkbox" class="row-check" data-idx="${i}" ${l.skip || hasError ? '' : 'checked'} ${l.skip || hasError ? 'disabled' : ''} style="accent-color:var(--accent);cursor:pointer;width:13px;height:13px"></td>
       <td class="email-cell">${l.company ? `<div style="font-weight:600;font-size:12px;color:var(--text);line-height:1.3">${l.company}</div>` : ''}<div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">${l.email}</div></td>
       <td class="route-cell" style="font-size:12px;white-space:nowrap">${l.origin} <span style="color:var(--text3)">→</span> ${l.destination}</td>
       <td style="color:var(--text2);font-size:11px;white-space:nowrap">${l.date}</td>
@@ -3280,17 +4248,45 @@ function toggleAll(cb) {
   document.querySelectorAll('.row-check:not(:disabled)').forEach(c => c.checked = cb.checked);
   updateSelectedCount();
 }
+function selectSendableRows() {
+  document.querySelectorAll('.row-check:not(:disabled)').forEach(c => c.checked = true);
+  const all = document.getElementById('checkAll');
+  if (all) all.checked = true;
+  updateSelectedCount();
+}
+function matchesParseFilter(load) {
+  const hasError = !load.email || !load.email.includes('@');
+  if (activeParseFilter === 'ready') return !load.skip && !hasError;
+  if (activeParseFilter === 'duplicate') return ['today','in_batch','sent'].includes(load.skip);
+  if (activeParseFilter === 'blocked') return load.skip === 'stop_list';
+  if (activeParseFilter === 'error') return hasError;
+  return true;
+}
+function setParseFilter(filter) {
+  activeParseFilter = filter;
+  const stats = {new:0, skip_dup:0, skip_today:0, skip_sent:0, skip_stop:0};
+  parsedLoads.forEach(l => {
+    if (!l.skip) stats.new++;
+    else if (l.skip === 'in_batch') stats.skip_dup++;
+    else if (l.skip === 'today') stats.skip_today++;
+    else if (l.skip === 'sent') stats.skip_sent++;
+    else if (l.skip === 'stop_list') stats.skip_stop++;
+  });
+  renderParseResults({loads: parsedLoads, stats});
+}
 function updateSelectedCount() {
   const checked = document.querySelectorAll('.row-check:checked').length;
   const total   = document.querySelectorAll('.row-check:not(:disabled)').length;
   const txt = checked + ' of ' + total + ' selected';
-  ['selectedCount','selectedCountTop','selectedCountTop2'].forEach(id => {
+  ['selectedCountTop','selectedCountTop2'].forEach(id => {
     const el = document.getElementById(id); if (el) el.textContent = txt;
   });
   const show = total > 0 ? 'flex' : 'none';
-  ['topSendRow','topSendBar'].forEach(id => {
+  ['topSendBar'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = show;
   });
+  const btn = document.getElementById('sendBtn');
+  if (btn) btn.disabled = checked === 0;
 }
 
 function swapDuplicate(idx) {
@@ -3356,6 +4352,10 @@ async function startSend() {
 }
 async function pollStatus() {
   const s = await (await fetch('/api/send-status')).json();
+  if (!s || !s.total) {
+    resetSendProgressUI();
+    return;
+  }
   const pct = s.total ? Math.round(100 * s.current / s.total) : 0;
   document.getElementById('progressFill').style.width = pct + '%';
   document.getElementById('progressText').textContent = `${s.current} / ${s.total}`;
@@ -3372,6 +4372,7 @@ async function pollStatus() {
   ).join('');
   if (s.done) {
     clearInterval(pollInterval);
+    pollInterval = null;
     document.getElementById('sendBtn').disabled = false;
     toast(`Done! Sent: ${s.sent}, Errors: ${s.errors}`);
     loadDailyStats();
@@ -3391,6 +4392,135 @@ function _rateBar(pct, color) {
     <div class="intel-rate-track"><div class="intel-rate-fill" style="width:${w}%;background:${color}"></div></div>
     <span class="intel-rate-pct" style="color:${color}">${pct}%</span>
   </div>`;
+}
+
+function _intelConfidenceLabel(level) {
+  return `<span class="intel-confidence ${level.toLowerCase()}">${level}</span>`;
+}
+
+function _intelConfidence(sent, replies, rate) {
+  if (sent >= 5 && (replies >= 3 || rate >= 40)) return 'Strong';
+  if (sent >= 3 && (replies >= 1 || rate >= 20)) return 'Moderate';
+  return 'Early';
+}
+
+function _intelSignalRow(name, meta, confidence) {
+  return `<div class="intel-signal-row">
+    <div class="intel-signal-main">
+      <div class="intel-signal-name" title="${name}">${name}</div>
+      <div class="intel-signal-meta">${meta}</div>
+    </div>
+    ${_intelConfidenceLabel(confidence)}
+  </div>`;
+}
+
+function _intelRecommendationCard(rec) {
+  return `<div class="intel-rec-card">
+    <div class="intel-rec-head">
+      <div class="intel-rec-title">${rec.title}</div>
+      ${_intelConfidenceLabel(rec.confidence)}
+    </div>
+    <div class="intel-rec-body">${rec.body}</div>
+    <div class="intel-rec-action">${rec.action}</div>
+  </div>`;
+}
+
+function _renderIntelRecommendations(d) {
+  const mount = document.getElementById('intel-rec-grid');
+  const lanes = [...(d.lanes || [])].sort((a, b) => (b.reply_rate - a.reply_rate) || (b.replies - a.replies));
+  const brokers = [...(d.brokers || [])].sort((a, b) => (b.interested - a.interested) || (b.reply_rate - a.reply_rate));
+  const bestLane = lanes.find(l => l.replies > 0);
+  const weakLane = [...(d.lanes || [])].filter(l => l.emails_sent >= 3).sort((a, b) => a.reply_rate - b.reply_rate)[0];
+  const bestDomain = brokers.find(b => b.interested > 0 || b.replies > 0);
+  const eprr = d.emails_per_rate_request;
+
+  const recs = [];
+  if (bestLane) {
+    recs.push({
+      title: `Scale ${bestLane.lane}`,
+      body: `${bestLane.replies} replies from ${bestLane.emails_sent} sent with a ${bestLane.reply_rate}% reply rate${bestLane.rate_requests ? ` and ${bestLane.rate_requests} detected rate requests` : ''}.`,
+      confidence: _intelConfidence(bestLane.emails_sent, bestLane.replies, bestLane.reply_rate),
+      action: 'Next move: Increase send volume on this lane while keeping the current targeting.'
+    });
+  }
+  if (bestDomain) {
+    recs.push({
+      title: `Prioritize ${bestDomain.domain}`,
+      body: `${bestDomain.replies} replies and ${bestDomain.interested} interested signals from ${bestDomain.emails_sent} sent make this domain one of the best current response sources.`,
+      confidence: _intelConfidence(bestDomain.emails_sent, bestDomain.replies, bestDomain.reply_rate),
+      action: 'Next move: Reuse the best-performing template for similar brokers on this domain.'
+    });
+  }
+  if (weakLane) {
+    recs.push({
+      title: `Reduce effort on ${weakLane.lane}`,
+      body: `${weakLane.emails_sent} emails produced only ${weakLane.replies} replies${weakLane.reply_rate ? ` (${weakLane.reply_rate}% reply rate)` : ''}, which makes this one of the weakest current lanes.`,
+      confidence: _intelConfidence(weakLane.emails_sent, weakLane.replies, weakLane.reply_rate),
+      action: 'Next move: Lower volume here or test a different template before scaling.'
+    });
+  }
+  if (recs.length < 3) {
+    recs.push({
+      title: 'Watch efficiency',
+      body: eprr !== null
+        ? `You currently need ${eprr} emails for each detected rate request. This is a useful benchmark for whether your targeting is getting sharper or weaker over time.`
+        : 'No rate requests are detected yet, so the system does not have a strong intent benchmark. Keep sending and review this once more replies arrive.',
+      confidence: eprr !== null ? 'Moderate' : 'Early',
+      action: 'Next move: Compare future rate-request efficiency after your next send batch.'
+    });
+  }
+
+  mount.innerHTML = recs.slice(0, 3).map(_intelRecommendationCard).join('');
+}
+
+function _renderIntelSignals(d) {
+  const opp = document.getElementById('intel-opportunities');
+  const warn = document.getElementById('intel-warnings');
+  const lanes = [...(d.lanes || [])];
+  const brokers = [...(d.brokers || [])];
+
+  const opportunities = [];
+  lanes
+    .filter(l => l.replies > 0)
+    .sort((a, b) => (b.reply_rate - a.reply_rate) || (b.replies - a.replies))
+    .slice(0, 3)
+    .forEach(l => opportunities.push(_intelSignalRow(
+      l.lane,
+      `${l.replies} replies from ${l.emails_sent} sent · ${l.reply_rate}% reply rate`,
+      _intelConfidence(l.emails_sent, l.replies, l.reply_rate)
+    )));
+  brokers
+    .filter(b => b.interested > 0)
+    .sort((a, b) => (b.interested - a.interested) || (b.reply_rate - a.reply_rate))
+    .slice(0, 2)
+    .forEach(b => opportunities.push(_intelSignalRow(
+      b.domain,
+      `${b.interested} interested replies · ${b.replies} total replies · ${b.reply_rate}% reply rate`,
+      _intelConfidence(b.emails_sent, b.replies, b.reply_rate)
+    )));
+
+  const warnings = [];
+  lanes
+    .filter(l => l.emails_sent >= 3)
+    .sort((a, b) => a.reply_rate - b.reply_rate)
+    .slice(0, 3)
+    .forEach(l => warnings.push(_intelSignalRow(
+      l.lane,
+      `${l.emails_sent} sent produced ${l.replies} replies${l.rate_requests ? ` and ${l.rate_requests} rate requests` : ''}.`,
+      _intelConfidence(l.emails_sent, l.replies, l.reply_rate)
+    )));
+  brokers
+    .filter(b => b.emails_sent >= 2 && b.interested === 0)
+    .sort((a, b) => a.reply_rate - b.reply_rate)
+    .slice(0, 2)
+    .forEach(b => warnings.push(_intelSignalRow(
+      b.domain,
+      `${b.emails_sent} sent with ${b.replies} replies but no interested signals yet.`,
+      _intelConfidence(b.emails_sent, b.replies, b.reply_rate)
+    )));
+
+  opp.innerHTML = opportunities.length ? opportunities.slice(0, 5).join('') : '<div class="intel-empty" style="padding:20px 0">No strong opportunities yet</div>';
+  warn.innerHTML = warnings.length ? warnings.slice(0, 5).join('') : '<div class="intel-empty" style="padding:20px 0">No clear weak spots yet</div>';
 }
 
 function _renderIntelLanes(lanes) {
@@ -3463,9 +4593,17 @@ async function loadIntelligence() {
       ? `${d.total_sent} sent / ${d.rate_requests_total} rate req.`
       : 'No rate requests detected yet';
 
+    _renderIntelRecommendations(d);
+    _renderIntelSignals(d);
     _renderIntelLanes(d.lanes);
     _renderIntelBrokers(d.brokers);
   } catch(e) {
+    const rec = document.getElementById('intel-rec-grid');
+    const opp = document.getElementById('intel-opportunities');
+    const warn = document.getElementById('intel-warnings');
+    if (rec) rec.innerHTML = '<div class="intel-empty">Failed to load recommendations</div>';
+    if (opp) opp.innerHTML = '<div class="intel-empty" style="padding:20px 0">Failed to load opportunities</div>';
+    if (warn) warn.innerHTML = '<div class="intel-empty" style="padding:20px 0">Failed to load warnings</div>';
     document.getElementById('intel-lanes-body').innerHTML =
       '<tr><td colspan="6" class="intel-empty">Failed to load intelligence data</td></tr>';
     document.getElementById('intel-brokers-body').innerHTML =
@@ -3478,40 +4616,49 @@ async function loadIntelligence() {
 async function loadStats() { loadAnalytics(); }
 
 // ── LOG ──────────────────────────────────────────────────────────────────────
-let allLogRows = [], filteredLogRows = [], logPage = 1;
+let allLogRows = [], filteredLogRows = [], logPage = 1, logTotal = 0, logPages = 0;
 const LOG_PER_PAGE = 100;
 
 async function loadLog() {
-  allLogRows = await (await fetch('/api/log')).json();
-  logPage = 1; filterLog();
+  logPage = 1;
+  await fetchLogPage();
 }
 function clearLogFilters() {
   ['logSearch','logDateFrom','logDateTo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('logStatus').value = '';
-  filterLog();
+  logPage = 1;
+  fetchLogPage();
 }
-function filterLog() {
+async function filterLog() {
+  logPage = 1;
+  await fetchLogPage();
+}
+async function fetchLogPage() {
   const search   = document.getElementById('logSearch').value.toLowerCase();
   const status   = document.getElementById('logStatus').value;
   const dateFrom = document.getElementById('logDateFrom').value;
   const dateTo   = document.getElementById('logDateTo').value;
-  filteredLogRows = allLogRows.filter(r => {
-    if (search && !(r.email||'').toLowerCase().includes(search) && !(r.origin||'').toLowerCase().includes(search) && !(r.destination||'').toLowerCase().includes(search)) return false;
-    if (status && r.status !== status) return false;
-    const day = (r.timestamp||'').slice(0,10);
-    if (dateFrom && day < dateFrom) return false;
-    if (dateTo && day > dateTo) return false;
-    return true;
+  const params = new URLSearchParams({
+    page: String(logPage),
+    per_page: String(LOG_PER_PAGE),
   });
-  logPage = 1; renderLog();
+  if (search) params.set('search', search);
+  if (status) params.set('status', status);
+  if (dateFrom) params.set('date_from', dateFrom);
+  if (dateTo) params.set('date_to', dateTo);
+  const data = await (await fetch('/api/log?' + params.toString())).json();
+  allLogRows = data.items || [];
+  filteredLogRows = allLogRows;
+  logTotal = data.total || 0;
+  logPages = data.pages || 0;
+  logPage = data.page || 1;
+  renderLog();
 }
 function renderLog() {
-  const total = filteredLogRows.length, pages = Math.ceil(total / LOG_PER_PAGE);
-  const start = (logPage - 1) * LOG_PER_PAGE;
-  const slice = filteredLogRows.slice(start, start + LOG_PER_PAGE);
-  document.getElementById('logCount').textContent = total + ' records' + (total !== allLogRows.length ? ` (filtered from ${allLogRows.length})` : '');
-  document.getElementById('logSubtitle').textContent = `All ${allLogRows.length} records`;
-  document.getElementById('logBody').innerHTML = slice.map(r =>
+  const total = logTotal;
+  document.getElementById('logCount').textContent = total + ' records';
+  document.getElementById('logSubtitle').textContent = `Page ${logPage}${logPages ? ' of ' + logPages : ''}`;
+  document.getElementById('logBody').innerHTML = filteredLogRows.map(r =>
     `<tr>
       <td style="color:var(--text2);white-space:nowrap">${r.timestamp||''}</td>
       <td class="email-cell">${r.email||''}</td>
@@ -3521,11 +4668,11 @@ function renderLog() {
       <td><span class="chip ${r.status==='sent'?'chip-sent':'chip-error'}">${r.status||''}</span></td>
       <td style="color:var(--text2)">${r.variant||''}</td>
     </tr>`).join('') || '<tr><td colspan="7" style="color:var(--text3);text-align:center;padding:28px">No records</td></tr>';
-  if (pages <= 1) { document.getElementById('logPager').innerHTML = ''; return; }
+  if (logPages <= 1) { document.getElementById('logPager').innerHTML = ''; return; }
   let p = '';
-  if (logPage > 1) p += `<button class="btn btn-outline btn-sm" onclick="logPage--;renderLog()">← Prev</button>`;
-  p += `<span style="font-size:11px;color:var(--text2);padding:0 12px">Page ${logPage} / ${pages}</span>`;
-  if (logPage < pages) p += `<button class="btn btn-outline btn-sm" onclick="logPage++;renderLog()">Next →</button>`;
+  if (logPage > 1) p += `<button class="btn btn-outline btn-sm" onclick="logPage--;fetchLogPage()">← Prev</button>`;
+  p += `<span style="font-size:11px;color:var(--text2);padding:0 12px">Page ${logPage} / ${logPages}</span>`;
+  if (logPage < logPages) p += `<button class="btn btn-outline btn-sm" onclick="logPage++;fetchLogPage()">Next →</button>`;
   document.getElementById('logPager').innerHTML = p;
 }
 
@@ -3562,6 +4709,7 @@ async function removeStop(i) {
 
 // ── TEMPLATES ────────────────────────────────────────────────────────────────
 let templates = [];
+let activeTemplateIndex = 0;
 async function loadTemplates() {
   templates = await (await fetch('/api/templates')).json();
   renderTemplates();
@@ -3575,27 +4723,96 @@ async function loadTemplates() {
   await loadExtraFuTmpls();
 }
 function renderTemplates() {
-  document.getElementById('templatesWrap').innerHTML = templates.map((t,i) =>
-    `<div class="tmpl-card">
-      <div class="tmpl-header">
-        <span class="tmpl-num">Template ${i+1}</span>
-        <span class="stop-del" onclick="removeTemplate(${i})">✕</span>
-      </div>
-      <textarea id="tmpl-${i}" style="min-height:140px">${t}</textarea>
-    </div>`).join('');
+  if (!templates.length) templates = ["Hello,\n\nAre you still working on this load?\n\nThanks,\n{name}\n{company} | {phone}"];
+  activeTemplateIndex = Math.max(0, Math.min(activeTemplateIndex, templates.length - 1));
+  const wrap = document.getElementById('templatesWrap');
+  if (wrap) {
+    wrap.innerHTML = templates.map((t, i) => {
+      const preview = esc((t || '').replace(/\n+/g, ' ').trim().slice(0, 110)) || 'Empty template';
+      const status = 'active';
+      const statusLabel = 'Active';
+      const perf = 'In rotation';
+      return `<div class="tmpl-lib-item ${i === activeTemplateIndex ? 'active' : ''}" onclick="selectTemplate(${i})">
+        <div class="tmpl-lib-top">
+          <div class="tmpl-lib-name">Template ${i + 1}</div>
+          <span class="tmpl-status ${status}">${statusLabel}</span>
+        </div>
+        <div class="tmpl-lib-preview">${preview}</div>
+        <div class="tmpl-lib-meta">
+          <span class="tmpl-perf-hint">${perf}</span>
+          <span>${(t || '').length} chars</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  syncActiveTemplateEditor();
 }
 function addTemplate() {
   templates.push("Hello,\n\nAre you still working on this load?\n\nThanks,\n{name}\n{company} | {phone}");
+  activeTemplateIndex = templates.length - 1;
   renderTemplates();
+}
+function selectTemplate(i) {
+  activeTemplateIndex = i;
+  renderTemplates();
+}
+function duplicateActiveTemplate() {
+  const src = templates[activeTemplateIndex] || '';
+  templates.splice(activeTemplateIndex + 1, 0, src);
+  activeTemplateIndex += 1;
+  renderTemplates();
+}
+function setActiveTemplate() {
+  toast('All listed outreach templates are already active in rotation');
+}
+function removeActiveTemplate() {
+  removeTemplate(activeTemplateIndex);
 }
 function removeTemplate(i) {
   if (templates.length <= 1) { toast('Keep at least 1 template', true); return; }
   templates.splice(i, 1); renderTemplates();
 }
+function syncActiveTemplateEditor() {
+  const editor = document.getElementById('tmpl-active-editor');
+  const preview = document.getElementById('tmplPreviewBody');
+  const name = document.getElementById('tmplEditorName');
+  const meta = document.getElementById('tmplEditorMeta');
+  const current = templates[activeTemplateIndex] || '';
+  if (editor && editor.value !== current) editor.value = current;
+  if (name) name.textContent = `Template ${activeTemplateIndex + 1}`;
+  if (meta) {
+    meta.textContent = `Template ${activeTemplateIndex + 1} · active in send rotation with the other saved outreach templates`;
+  }
+  if (preview) renderTemplatePreview();
+}
+function updateActiveTemplateDraft(value) {
+  templates[activeTemplateIndex] = value;
+  renderTemplatePreview();
+  const wrap = document.getElementById('templatesWrap');
+  if (!wrap) return;
+  const previewEl = wrap.querySelectorAll('.tmpl-lib-preview')[activeTemplateIndex];
+  const charsEl = wrap.querySelectorAll('.tmpl-lib-meta span:last-child')[activeTemplateIndex];
+  if (previewEl) previewEl.textContent = (value || '').replace(/\n+/g, ' ').trim().slice(0, 110) || 'Empty template';
+  if (charsEl) charsEl.textContent = `${(value || '').length} chars`;
+}
+function renderTemplatePreview() {
+  const preview = document.getElementById('tmplPreviewBody');
+  const editor = document.getElementById('tmpl-active-editor');
+  if (!preview || !editor) return;
+  preview.textContent = (editor.value || '')
+    .replaceAll('{origin}', 'Chicago, IL')
+    .replaceAll('{destination}', 'Dallas, TX')
+    .replaceAll('{route}', 'Chicago, IL → Dallas, TX')
+    .replaceAll('{name}', 'Bohdan')
+    .replaceAll('{company}', 'DAT Mailer')
+    .replaceAll('{phone}', '(555) 010-2488');
+}
 async function saveTemplates() {
-  templates = templates.map((_,i) => document.getElementById('tmpl-'+i).value);
+  const editor = document.getElementById('tmpl-active-editor');
+  if (editor) templates[activeTemplateIndex] = editor.value;
   await fetch('/api/templates', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({templates})});
   toast('✅ Outreach templates saved!');
+  renderTemplates();
 }
 
 async function saveFuTemplates() {
@@ -3615,6 +4832,7 @@ function toggleAddFuTmplForm() {
   const visible = f.style.display !== 'none';
   f.style.display = visible ? 'none' : 'block';
   if (!visible) {
+    document.getElementById('newFuTmplLevel').value = 'General';
     document.getElementById('newFuTmplName').value = '';
     document.getElementById('newFuTmplBody').value = '';
   }
@@ -3631,9 +4849,10 @@ async function loadExtraFuTmpls() {
       return;
     }
     el.innerHTML = templates.map(t => `
-      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;background:var(--bg)">
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.6)">
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px">${esc(t.name||t.level||'General')}</div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.08em">${esc(t.level||'General')}</div>
           <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((t.body||'').slice(0,80))}${t.body&&t.body.length>80?'…':''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -3648,10 +4867,11 @@ async function loadExtraFuTmpls() {
 }
 
 async function saveNewFuTmpl() {
+  const level = (document.getElementById('newFuTmplLevel').value || 'General').trim();
   const name = (document.getElementById('newFuTmplName').value||'').trim();
   const body = (document.getElementById('newFuTmplBody').value||'').trim();
   if (!body) { toast('Template body is required', true); return; }
-  const res = await fetch('/api/fu-templates/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, body})});
+  const res = await fetch('/api/fu-templates/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, level, body})});
   if (!res.ok) { const d=await res.json(); toast(d.error||'Error', true); return; }
   toast('Template added');
   toggleAddFuTmplForm();
@@ -3672,11 +4892,19 @@ async function deleteFuTmpl(id) {
 
 // ── SETTINGS ─────────────────────────────────────────────────────────────────
 async function loadSettings() {
-  const cfg = await (await fetch('/api/config')).json();
+  const [cfg, fu] = await Promise.all([
+    (await fetch('/api/config')).json(),
+    (await fetch('/api/settings/followup')).json(),
+  ]);
   // Gmail OAuth status
   const connected = cfg.gmail_connected;
   document.getElementById('gmailConnected').style.display    = connected ? '' : 'none';
   document.getElementById('gmailNotConnected').style.display = connected ? 'none' : '';
+  document.getElementById('gmailConnectBtn').style.display = connected ? 'none' : '';
+  document.getElementById('gmailDisconnectBtn').style.display = connected ? '' : 'none';
+  const badge = document.getElementById('gmailStatusBadge');
+  badge.textContent = connected ? 'Ready to send' : 'Needs connection';
+  badge.className = 'settings-status-badge ' + (connected ? 'ok' : 'warn');
   if (connected) {
     document.getElementById('gmailConnectedEmail').textContent = cfg.gmail_address || '';
   }
@@ -3689,7 +4917,14 @@ async function loadSettings() {
   document.getElementById('cfgPhone').value    = cfg.your_phone || '';
   document.getElementById('cfgDelayMin').value = cfg.delay_min || 20;
   document.getElementById('cfgDelayMax').value = cfg.delay_max || 45;
-  document.getElementById('cfgDailyTarget').value = localStorage.getItem('daily_target') || 100;
+  document.getElementById('cfgDailyTarget').value = cfg.daily_target || 100;
+  dailyTarget = parseInt(cfg.daily_target || 100);
+  document.getElementById('fuDelay1').value = fu.fu1_delay_days || 3;
+  document.getElementById('fuDelay2').value = fu.fu2_delay_days || 5;
+  document.getElementById('fuDelay3').value = fu.fu3_delay_days || 7;
+  document.getElementById('fuAutoStop').checked = fu.auto_stop_on_reply !== false;
+  document.getElementById('fuDefaultEnabled').checked = fu.default_followup_enabled !== false;
+  renderSettingsPreview();
 
   // Handle ?gmail_connected=1 redirect from OAuth callback
   const params = new URLSearchParams(window.location.search);
@@ -3703,8 +4938,16 @@ async function loadSettings() {
   }
 }
 
+function renderSettingsPreview() {
+  const name = (document.getElementById('cfgName').value || 'Your Name').trim();
+  const company = (document.getElementById('cfgCompany').value || 'Company').trim();
+  const phone = (document.getElementById('cfgPhone').value || 'Phone').trim();
+  document.getElementById('settingsSignoffPreview').innerHTML =
+    `Thanks,<br>${name} · ${company} · ${phone}`;
+}
+
 async function connectGmail() {
-  const btn = document.querySelector('#gmailNotConnected button');
+  const btn = document.getElementById('gmailConnectBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
   try {
     const res = await fetch('/api/gmail/auth-url');
@@ -3735,44 +4978,73 @@ async function saveSettings() {
     your_phone:   document.getElementById('cfgPhone').value,
     delay_min:    parseInt(document.getElementById('cfgDelayMin').value),
     delay_max:    parseInt(document.getElementById('cfgDelayMax').value),
+    daily_target: parseInt(document.getElementById('cfgDailyTarget').value),
   };
-  await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
-  // Save daily target to localStorage
+  const fuData = {
+    fu1_delay_days: parseInt(document.getElementById('fuDelay1').value),
+    fu2_delay_days: parseInt(document.getElementById('fuDelay2').value),
+    fu3_delay_days: parseInt(document.getElementById('fuDelay3').value),
+    auto_stop_on_reply: document.getElementById('fuAutoStop').checked,
+    default_followup_enabled: document.getElementById('fuDefaultEnabled').checked,
+  };
+  await Promise.all([
+    fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)}),
+    fetch('/api/settings/followup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fuData)}),
+  ]);
   const targetVal = parseInt(document.getElementById('cfgDailyTarget').value);
   if (targetVal > 0) {
     dailyTarget = targetVal;
-    localStorage.setItem('daily_target', targetVal);
   }
   toast('✅ Settings saved!');
   loadDailyStats();
+  renderSettingsPreview();
 }
 
 // ── REPLIES ──────────────────────────────────────────────────────────────────
 // ── REPLIES ────────────────────────────────────────────────────────────────
-let allReplies = [], repliesFilter = 'all', repliesTimer = null;
+let allReplies = [], replyGroups = [], replyCounts = {}, repliesFilter = 'all', repliesTimer = null, repliesPage = 1, repliesPages = 0, repliesSearchTimer = null;
+const REPLIES_PER_PAGE = 25;
 
 async function initReplies() {
   await loadReplies();
   if (!repliesTimer) repliesTimer = setInterval(() => fetchReplies(true), 120000);
 }
 async function loadReplies() {
-  allReplies = await (await fetch('/api/replies')).json();
-  renderReplies(); updateBadge();
+  const search = (document.getElementById('repliesSearch')?.value || '').trim();
+  const params = new URLSearchParams({
+    page: String(repliesPage),
+    per_page: String(REPLIES_PER_PAGE),
+    view: repliesFilter,
+  });
+  if (search) params.set('search', search);
+  const data = await (await fetch('/api/replies?' + params.toString())).json();
+  replyGroups = data.items || [];
+  replyCounts = data.counts || {};
+  repliesPage = data.page || 1;
+  repliesPages = data.pages || 0;
+  allReplies = replyGroups.flat();
+  renderReplies();
+  updateBadge();
 }
 function updateBadge() {
-  // Count unique contacts (not individual emails) with new status
-  const groups = buildContactGroups(allReplies);
-  const n = groups.filter(g => normalizeState(contactState(g)) === 'new').length;
+  const n = replyCounts.needs_action || 0;
   const b = document.getElementById('repliesBadge');
   if (b) { b.textContent = n; b.style.display = n > 0 ? 'inline' : 'none'; }
 }
 function setFilter(f) {
   repliesFilter = f;
+  repliesPage = 1;
   document.querySelectorAll('.tq-tab').forEach(el => el.classList.remove('active'));
   const tab = document.getElementById('tqf-' + f);
   if (tab) tab.classList.add('active');
-  const btn = document.getElementById('fb-' + f);
-  renderReplies();
+  loadReplies();
+}
+function queueRepliesRefresh() {
+  clearTimeout(repliesSearchTimer);
+  repliesSearchTimer = setTimeout(() => {
+    repliesPage = 1;
+    loadReplies();
+  }, 180);
 }
 async function fetchReplies(silent) {
   const btn = document.getElementById('fetchBtn');
@@ -3870,7 +5142,7 @@ function initials(company, email) {
 
 // State pill
 function tqStatePill(state) {
-  const labels = { new:'NEW', viewed:'VIEWED', follow_up:'FOLLOW-UP', interested:'INTERESTED', ignored:'IGNORED' };
+  const labels = { new:'NEW', viewed:'NEEDS ACTION', follow_up:'FOLLOW-UP', interested:'FOLLOW-UP', ignored:'IGNORED' };
   return '<span class="tq-state-pill ' + state + '">' + (labels[state] || state.toUpperCase()) + '</span>';
 }
 
@@ -3967,28 +5239,17 @@ function tqToggleExpand(id) {
 }
 
 function renderReplies() {
-  const search = (document.getElementById('repliesSearch')?.value || '').toLowerCase();
   const el = document.getElementById('repliesList');
   if (!el) return;
-
-  // Build all groups from allReplies
-  let source = allReplies;
-  if (search) source = source.filter(r =>
-    (r.email||'').toLowerCase().includes(search) ||
-    (parseCompany(r)||'').toLowerCase().includes(search) ||
-    (r.subject||'').toLowerCase().includes(search)
-  );
-
-  const allGroups = buildContactGroups(source);
-
-  // Count per state for tabs
-  const counts = { new:0, viewed:0, follow_up:0, ignored:0, all:0 };
-  allGroups.forEach(g => {
-    const s = normalizeState(contactState(g));
-    counts[s] = (counts[s]||0) + 1;
-    counts.all++;
-  });
-  ['all','new','follow_up','ignored'].forEach(k => {
+  const counts = {
+    all: replyCounts.all || 0,
+    new: replyCounts.new || 0,
+    viewed: replyCounts.viewed || 0,
+    needs_action: replyCounts.needs_action || 0,
+    follow_up: replyCounts.follow_up || 0,
+    ignored: replyCounts.ignored || 0,
+  };
+  ['all','needs_action','new','follow_up','ignored'].forEach(k => {
     const el = document.getElementById('tqc-' + k);
     if (el) el.textContent = counts[k] || 0;
   });
@@ -4001,31 +5262,24 @@ function renderReplies() {
   const fill = document.getElementById('tqProgressFill');
   const label = document.getElementById('tqProgressLabel');
   const zero = document.getElementById('tqInboxZero');
+  const needEl = document.getElementById('tqNeedsDecision');
+  const processedEl = document.getElementById('tqProcessedCount');
   if (fill) fill.style.width = pct + '%';
   if (label) label.textContent = unprocessed > 0 ? unprocessed + ' need' + (unprocessed>1?'s':'') + ' a decision · ' + done + ' processed' : done + ' processed';
   if (zero) zero.style.display = unprocessed === 0 && total > 0 ? 'inline' : 'none';
+  if (needEl) needEl.textContent = unprocessed;
+  if (processedEl) processedEl.textContent = done;
 
   // Filter by active tab
-  let filtered = allGroups;
-  if (repliesFilter !== 'all') {
-    filtered = allGroups.filter(g => normalizeState(contactState(g)) === repliesFilter);
-  }
+  let filtered = replyGroups;
 
   if (!filtered.length) {
     el.innerHTML = '<div class="tq-empty"><div class="tq-empty-icon">📭</div>' +
-      (repliesFilter === 'all' && !search ? 'No replies yet — click <b>Check Gmail</b>' : 'Nothing here') +
+      (repliesFilter === 'all' && !(document.getElementById('repliesSearch')?.value || '').trim() ? 'No replies yet — click <b>Check Gmail</b> to refresh your queue.' : 'No contacts match this view.') +
       '</div>';
+    renderRepliesPager();
     return;
   }
-
-  // Sort: new first, then viewed, then follow_up, then ignored
-  const stateSort = { new:0, viewed:1, follow_up:2, ignored:3 };
-  filtered.sort((a,b) => {
-    const sa = stateSort[normalizeState(contactState(a))] || 5;
-    const sb = stateSort[normalizeState(contactState(b))] || 5;
-    if (sa !== sb) return sa - sb;
-    return parseReplyDate(b[0]) - parseReplyDate(a[0]);
-  });
 
   // Split into sections
   const sections = [
@@ -4047,6 +5301,21 @@ function renderReplies() {
     html += '</div>';
   });
 
+  el.innerHTML = html;
+  renderRepliesPager();
+}
+
+function renderRepliesPager() {
+  const el = document.getElementById('repliesPager');
+  if (!el) return;
+  if (repliesPages <= 1) {
+    el.innerHTML = '';
+    return;
+  }
+  let html = '';
+  if (repliesPage > 1) html += `<button class="btn btn-outline btn-sm" onclick="repliesPage--;loadReplies()">← Prev</button>`;
+  html += `<span style="font-size:11px;color:var(--text2);padding:0 10px">Page ${repliesPage} / ${repliesPages}</span>`;
+  if (repliesPage < repliesPages) html += `<button class="btn btn-outline btn-sm" onclick="repliesPage++;loadReplies()">Next →</button>`;
   el.innerHTML = html;
 }
 
@@ -4073,9 +5342,9 @@ async function markContact(email, status, addToStop) {
   }));
   // Animate card out, then await API + reload followups
   tqAnimateOut(email, async () => {
-    renderReplies(); updateBadge();
+    await Promise.all(fetchPromises);
+    await loadReplies();
     if (status === 'follow_up') {
-      await Promise.all(fetchPromises);
       await loadFollowups();
       toast('✅ Added to pipeline!');
     }
@@ -4119,9 +5388,8 @@ function buildFuFilterParams() {
 function toggleFuSelect(id, e) {
   if (e) e.stopPropagation();
   selectedFuIds.has(id) ? selectedFuIds.delete(id) : selectedFuIds.add(id);
-  // update card border
-  const card = document.getElementById('fu-card-' + id);
-  if (card) card.classList.toggle('fu-selected', selectedFuIds.has(id));
+  const row = document.getElementById('fu-row-' + id);
+  if (row) row.classList.toggle('selected', selectedFuIds.has(id));
   const cb = document.getElementById('fu-cb-' + id);
   if (cb) cb.checked = selectedFuIds.has(id);
   renderFuSelection();
@@ -4169,19 +5437,27 @@ function renderFuSelection() {
   const countEl = document.getElementById('fuBulkCount');
   const allBtn = document.getElementById('fuSelectAllFiltered');
   const master = document.getElementById('fuMasterCheckbox');
-  const masterLabel = document.getElementById('fuMasterLabel');
   if (!bar) return;
   const n = selectedFuIds.size;
   bar.style.display = n > 0 ? '' : 'none';
   if (countEl) countEl.textContent = n + ' selected';
 
   // sync master checkbox state
-  const total = fuContacts.length;
+  const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
+  const visibleRows = search
+    ? fuContacts.filter(c =>
+        (c.contact_email||'').toLowerCase().includes(search) ||
+        (c.contact_name||'').toLowerCase().includes(search) ||
+        (c.company_name||'').toLowerCase().includes(search)
+      )
+    : fuContacts;
+  const total = visibleRows.length;
+  const visibleSelected = visibleRows.filter(c => selectedFuIds.has(c.id)).length;
   if (master) {
-    if (n === 0) {
+    if (visibleSelected === 0) {
       master.checked = false;
       master.indeterminate = false;
-    } else if (n >= total && total > 0) {
+    } else if (visibleSelected >= total && total > 0) {
       master.checked = true;
       master.indeterminate = false;
     } else {
@@ -4189,26 +5465,12 @@ function renderFuSelection() {
       master.indeterminate = true;
     }
   }
-  if (masterLabel) {
-    masterLabel.textContent = n > 0 ? `${n} selected` : 'Select all';
-  }
 
-  // show "Select all filtered" if visible count < server-side total
+  // show "Select all filtered" if there are matching contacts not yet selected
   if (allBtn) {
-    const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
-    const visibleCount = search
-      ? fuContacts.filter(c =>
-          (c.contact_email||'').toLowerCase().includes(search) ||
-          (c.contact_name||'').toLowerCase().includes(search) ||
-          (c.company_name||'').toLowerCase().includes(search)
-        ).length
-      : fuContacts.length;
     const totalFiltered = fuContacts.length;
-    if (!search && totalFiltered > visibleCount) {
-      allBtn.textContent = 'Select all filtered (' + totalFiltered + ')';
-      allBtn.style.display = '';
-    } else if (n < totalFiltered) {
-      allBtn.textContent = 'Select all (' + totalFiltered + ')';
+    if (n > 0 && n < totalFiltered) {
+      allBtn.textContent = 'Select all matching (' + totalFiltered + ')';
       allBtn.style.display = '';
     } else {
       allBtn.style.display = 'none';
@@ -4219,11 +5481,7 @@ function renderFuSelection() {
 // ── Core load/render ──────────────────────────────────────────────────────────
 async function loadFollowups() {
   try {
-    const params = new URLSearchParams();
-    if (fuStageFilter) params.set('stage', fuStageFilter);
-    if (fuStateFilter) params.set('state', fuStateFilter);
-    if (fuSpecialFilter) params.set('filter', fuSpecialFilter);
-    const res = await fetch('/api/followups?' + params.toString());
+    const res = await fetch('/api/followups?' + buildFuFilterParams().toString());
     const data = await res.json();
     fuContacts = data.contacts || [];
     fuCounts = data.counts || {};
@@ -4240,27 +5498,29 @@ function updateFuBadge() {
   const na = document.getElementById('fuNeedsActionCount');
   const ov = document.getElementById('fuOverdueCount');
   const sc = document.getElementById('fuScheduledCount');
-  if (na && fuCounts.needs_action) na.textContent = '(' + fuCounts.needs_action + ')';
-  if (ov && fuCounts.overdue)      ov.textContent = '(' + fuCounts.overdue + ')';
-  if (sc) sc.textContent = fuCounts.scheduled ? '(' + fuCounts.scheduled + ')' : '';
+  if (na) na.textContent = fuCounts.needs_action ? ` ${fuCounts.needs_action}` : '';
+  if (ov) ov.textContent = fuCounts.overdue ? ` ${fuCounts.overdue}` : '';
+  if (sc) sc.textContent = fuCounts.scheduled ? ` ${fuCounts.scheduled}` : '';
 }
 
 function renderFuStatsBar() {
   const el = document.getElementById('fuStatsBar');
   if (!el) return;
   const c = fuCounts;
-  const pills = [
-    { label:'Total', n:c.total||0, cls:'' },
-    { label:'Active', n:c.active||0, cls:'pill-active' },
-    { label:'Paused', n:c.paused||0, cls:'' },
-    { label:'Warm', n:c.warm||0, cls:'' },
-    { label:'Loads', n:c.loads||0, cls:'pill-active' },
-    { label:'Overdue', n:c.overdue||0, cls:'pill-overdue' },
-    { label:'Needs Action', n:c.needs_action||0, cls:'pill-needs-action' },
+  const cards = [
+    { key:'overdue', label:'Overdue', n:c.overdue||0, cls:'overdue', meta:'Needs action now' },
+    { key:'due_today', label:'Today', n:(c.due_today||0), cls:'today', meta:'Ready to send today' },
+    { key:'needs_action', label:'Needs Action', n:c.needs_action||0, cls:'needs-action', meta:'Completed sequence' },
+    { key:'scheduled', label:'Scheduled', n:c.scheduled||0, cls:'scheduled', meta:'One-time future sends' },
   ];
-  el.innerHTML = pills.filter(p=>p.n>0).map(p =>
-    `<div class="fu-stat-pill ${p.cls}"><span class="fu-stat-num">${p.n}</span>${p.label}</div>`
+  el.innerHTML = cards.map(card =>
+    `<button class="fu-summary-card ${card.cls} ${fuSpecialFilter===card.key ? 'active' : ''}" onclick="setFuSpecialFilter('${card.key}')">
+      <span class="fu-summary-label">${card.label}</span>
+      <span class="fu-summary-value">${card.n}</span>
+      <span class="fu-summary-meta">${card.meta}</span>
+    </button>`
   ).join('');
+  syncFuFilterControls();
 }
 
 function switchFuTab(tab) {
@@ -4275,32 +5535,71 @@ function switchFuTab(tab) {
 // ── Filters ───────────────────────────────────────────────────────────────────
 function setFuStageFilter(v) {
   fuStageFilter = v; fuSpecialFilter = '';
-  document.querySelectorAll('[id^="fuf-stage-"]').forEach(el=>el.classList.remove('active'));
-  document.getElementById('fuf-stage-'+(v||'all'))?.classList.add('active');
-  document.querySelectorAll('[id^="fuf-special-"]').forEach(el=>el.classList.remove('active'));
   loadFollowups();
 }
 function setFuStateFilter(v) {
   fuStateFilter = v; fuSpecialFilter = '';
-  document.querySelectorAll('[id^="fuf-state-"]').forEach(el=>el.classList.remove('active'));
-  document.getElementById('fuf-state-'+(v||'all'))?.classList.add('active');
-  document.querySelectorAll('[id^="fuf-special-"]').forEach(el=>el.classList.remove('active'));
   loadFollowups();
 }
 function setFuSpecialFilter(v) {
   fuSpecialFilter = fuSpecialFilter===v ? '' : v;
   fuStageFilter = ''; fuStateFilter = '';
-  document.querySelectorAll('[id^="fuf-stage-"],[id^="fuf-state-"]').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('[id^="fuf-special-"]').forEach(el=>el.classList.remove('active'));
-  if (fuSpecialFilter) document.getElementById('fuf-special-'+v)?.classList.add('active');
-  else {
-    document.getElementById('fuf-stage-all')?.classList.add('active');
-    document.getElementById('fuf-state-all')?.classList.add('active');
-  }
   loadFollowups();
 }
 
-// ── Contact card rendering ─────────────────────────────────────────────────────
+function syncFuFilterControls() {
+  document.getElementById('fuStateSelect').value = fuStateFilter || '';
+  document.getElementById('fuStageSelect').value = fuStageFilter || '';
+  document.querySelectorAll('.fu-segment-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('fuf-special-' + (fuSpecialFilter || 'all'))?.classList.add('active');
+}
+
+function resetFuFilters() {
+  fuStageFilter = '';
+  fuStateFilter = '';
+  fuSpecialFilter = '';
+  const search = document.getElementById('fuSearch');
+  if (search) search.value = '';
+  loadFollowups();
+}
+
+function getFuUrgencyMeta(c) {
+  const now = new Date();
+  const next = c.next_followup_at ? new Date(c.next_followup_at) : null;
+  const isNeedsAction = c.stage === 'completed_fu3' && c.state === 'active';
+  const isOverdue = next && next < now && c.state === 'active' && c.is_followup_enabled;
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+  const isToday = next && next >= now && next <= endOfDay && c.state === 'active' && c.is_followup_enabled;
+  const isScheduled = !!(c.scheduled_once && next && next > now);
+  let rank = 4;
+  if (isOverdue) rank = 0;
+  else if (isToday) rank = 1;
+  else if (isNeedsAction) rank = 2;
+  else if (isScheduled) rank = 3;
+  else if (c.state === 'paused') rank = 6;
+  else if (['warm','loads','blocked','closed'].includes(c.state)) rank = 7;
+  return { isNeedsAction, isOverdue, isToday, isScheduled, rank, next };
+}
+
+function getFuPrimaryActionLabel(c) {
+  const terminal = ['warm','loads','blocked','closed'];
+  if (terminal.includes(c.state)) return '';
+  if (c.state === 'paused') return 'Resume';
+  if (c.stage === 'completed_fu3') return 'Mark Loads';
+  if (['fu1_scheduled','fu2_scheduled','fu3_scheduled'].includes(c.stage)) return 'Send Now';
+  return '';
+}
+
+function getFuPrimaryActionButton(c) {
+  const label = getFuPrimaryActionLabel(c);
+  if (!label) return `<span class="fu-time-sub">No action</span>`;
+  if (label === 'Resume') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','resume')">Resume</button>`;
+  if (label === 'Mark Loads') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Mark Loads</button>`;
+  return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send Now</button>`;
+}
+
+// ── Contact queue rendering ────────────────────────────────────────────────────
 function getFuStageInfo(stage) {
   const map = {
     fu1_scheduled:{label:'FU1',cls:'fu-stage-fu1'}, fu1_sent:{label:'FU1✓',cls:'fu-stage-fu1'},
@@ -4359,61 +5658,108 @@ function renderFuContacts() {
   );
 
   const container = document.getElementById('fuContactsList');
-  if (!container) return;
+  const empty = document.getElementById('fuTableEmpty');
+  const wrap = document.getElementById('fuTableWrap');
+  if (!container || !empty || !wrap) return;
+
+  list = [...list].sort((a, b) => {
+    const ma = getFuUrgencyMeta(a);
+    const mb = getFuUrgencyMeta(b);
+    if (ma.rank !== mb.rank) return ma.rank - mb.rank;
+    if (ma.next && mb.next) return ma.next - mb.next;
+    if (ma.next) return -1;
+    if (mb.next) return 1;
+    return (new Date(b.last_activity_at || 0)) - (new Date(a.last_activity_at || 0));
+  });
 
   if (!list.length) {
-    container.innerHTML = `<div class="fu-empty"><i class="ph-bold ph-users-three"></i>${
-      fuContacts.length===0 ? 'No follow-up contacts yet — mark replies as Follow-up or click Add Contact' : 'No contacts match the current filters'
-    }</div>`;
+    container.innerHTML = '';
+    wrap.style.display = 'none';
+    empty.style.display = '';
+    empty.innerHTML = fuContacts.length===0
+      ? `<i class="ph-bold ph-users-three"></i>
+         <div class="fu-empty-title">No follow-up contacts yet</div>
+         <div class="fu-empty-copy">Start with a reply or add a contact to build your queue.</div>
+         <div class="fu-empty-actions">
+           <button class="fu-btn-primary" onclick="openFuAddModal()">Add Contact</button>
+         </div>`
+      : `<i class="ph-bold ph-funnel"></i>
+         <div class="fu-empty-title">No contacts match this view</div>
+         <div class="fu-empty-copy">Try clearing filters or switching to a different urgency view.</div>
+         <div class="fu-empty-actions">
+           <button class="fu-btn-secondary" onclick="resetFuFilters()">Clear Filters</button>
+         </div>`;
+    renderFuSelection();
     return;
   }
+
+  wrap.style.display = '';
+  empty.style.display = 'none';
 
   const terminal = ['warm','loads','blocked','closed'];
   container.innerHTML = list.map(c => {
     const si = getFuStageInfo(c.stage);
     const sti = getFuStateInfo(c.state);
-    const isOverdue = c.next_followup_at && new Date(c.next_followup_at) < new Date() && c.state==='active' && c.is_followup_enabled;
-    const isNeedsAction = c.stage==='completed_fu3' && c.state==='active';
+    const meta = getFuUrgencyMeta(c);
     const isTerminal = terminal.includes(c.state);
-    const isMuted = c.state==='paused';
-    let cardCls = 'fu-card';
-    if (isOverdue) cardCls += ' fu-overdue';
-    else if (isNeedsAction) cardCls += ' fu-needs-action';
-    if (isMuted) cardCls += ' fu-muted';
-    if (isTerminal) cardCls += ' fu-terminal';
-
+    const isMuted = c.state === 'paused';
     const nextFu = formatFuDate(c.next_followup_at);
     const lastAct = formatFuRelative(c.last_activity_at);
     const company = esc(c.company_name || c.contact_name || c.contact_email.split('@')[0]);
     const email = esc(c.contact_email);
-    const primaryBtn = getFuPrimaryBtn(c);
+    const route = esc(c.current_route || '—');
+    const rowCls = [
+      'fu-table-row',
+      meta.isOverdue ? 'overdue' : '',
+      meta.isNeedsAction ? 'needs-action' : '',
+      isMuted ? 'muted' : '',
+      isTerminal ? 'terminal' : '',
+      selectedFuIds.has(c.id) ? 'selected' : ''
+    ].filter(Boolean).join(' ');
+    const nextText = meta.isNeedsAction ? 'Needs review' : (nextFu ? nextFu.text : 'No schedule');
+    const nextCls = meta.isOverdue ? 'overdue' : (meta.isToday ? 'today' : '');
+    const actionBtn = getFuPrimaryActionButton(c);
 
-    if (selectedFuIds.has(c.id)) cardCls += ' fu-selected';
-    return `<div class="${cardCls}" id="fu-card-${c.id}">
-      <div class="fu-checkbox-wrap">
+    return `<tr class="${rowCls}" id="fu-row-${c.id}">
+      <td class="fu-col-select">
         <input type="checkbox" class="fu-checkbox" id="fu-cb-${c.id}" ${selectedFuIds.has(c.id)?'checked':''} onclick="toggleFuSelect('${c.id}',event)">
-      </div>
-      <div class="fu-card-left">
-        <div class="fu-company">${company}</div>
-        <div class="fu-email-text">${email}</div>
-      </div>
-      <div class="fu-card-badges">
-        <span class="fu-stage-badge ${si.cls}">${si.label}</span>
-        <span class="fu-state-badge ${sti.cls}">${sti.label}</span>
-        ${c.recurring_enabled ? `<span class="fu-state-badge" title="Recurring" style="background:rgba(99,102,241,.12);color:#6366f1;font-size:9px">🔁 Recurring</span>` : ''}
-        ${c.scheduled_once ? `<span class="fu-state-badge" title="One-time scheduled: ${c.next_followup_at||''}" style="background:rgba(5,150,105,.10);color:var(--accent);font-size:9px">📅 ${formatFuDate(c.next_followup_at)?.text||'Scheduled'}</span>` : ''}
-      </div>
-      <div class="fu-card-dates">
-        ${nextFu ? `<div class="fu-date-label">Next FU</div><div class="fu-date-val${nextFu.overdue?' overdue':''}">${nextFu.text}</div>` : '<div class="fu-date-val" style="color:var(--text3)">—</div>'}
-        <div class="fu-date-label" style="margin-top:4px">Last activity</div>
-        <div class="fu-date-val">${lastAct}</div>
-      </div>
-      <div class="fu-card-actions">
-        ${primaryBtn}
-        <button class="fu-btn-secondary" onclick="toggleFuDropdown(event,'${c.id}')" title="More actions">···</button>
-      </div>
-    </div>`;
+      </td>
+      <td class="fu-contact-cell">
+        <div class="fu-contact-primary">${company}</div>
+        <div class="fu-contact-secondary">${email}</div>
+      </td>
+      <td>
+        <div class="fu-meta-stack">
+          <span class="fu-state-badge ${sti.cls}">${sti.label}</span>
+          ${c.recurring_enabled ? `<span class="fu-state-badge" style="background:rgba(59,130,246,.12);color:#60a5fa">Recurring</span>` : ''}
+        </div>
+      </td>
+      <td>
+        <div class="fu-meta-stack">
+          <span class="fu-stage-badge ${si.cls}">${si.label}</span>
+          ${c.scheduled_once ? `<span class="fu-state-badge" style="background:rgba(5,150,105,.10);color:var(--accent)">Scheduled</span>` : ''}
+        </div>
+      </td>
+      <td>
+        <div class="fu-time-cell">
+          <span class="fu-time-main ${nextCls}">${nextText}</span>
+          <span class="fu-time-sub">${meta.isNeedsAction ? 'Sequence complete' : (c.next_followup_at ? 'UTC' : '—')}</span>
+        </div>
+      </td>
+      <td>
+        <div class="fu-time-cell">
+          <span class="fu-time-main">${lastAct}</span>
+          <span class="fu-time-sub">${c.reply_subject ? esc(c.reply_subject) : 'No subject'}</span>
+        </div>
+      </td>
+      <td class="fu-route-cell" title="${route}"><span class="fu-route-text">${route}</span></td>
+      <td><div class="fu-row-action">${actionBtn}</div></td>
+      <td class="fu-col-menu">
+        <button class="fu-row-menu-btn" onclick="toggleFuDropdown(event,'${c.id}')" title="More actions">•••</button>
+      </td>
+    </tr>`;
   }).join('');
+  renderFuSelection();
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────
@@ -4424,8 +5770,27 @@ async function fuAction(id, action, reason, extraPayload) {
     const res = await fetch('/api/followups/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     const data = await res.json();
     if (!res.ok) { toast('Error: ' + (data.error||'unknown'), true); return; }
-    const toastMsgs = {'send-now':'Follow-up sent','free-send':'Sent (free)','cancel-schedule':'Schedule cancelled','stop-recurring':'Recurring stopped'};
-    toast(toastMsgs[action] || (action.charAt(0).toUpperCase()+action.slice(1).replace(/-/g,' ')+' done'));
+    const contextualMsgs = {
+      'send-now':'Follow-up sent',
+      'cancel-schedule':'Schedule cancelled',
+      'stop-recurring':'Recurring stopped',
+      'restart-fu1':'Moved back to FU1',
+    };
+    let msg = contextualMsgs[action] || (action.charAt(0).toUpperCase()+action.slice(1).replace(/-/g,' ')+' done');
+    if (action === 'warm') {
+      msg = fuSpecialFilter || (fuStateFilter && fuStateFilter !== 'warm')
+        ? 'Moved to Warm — current view may hide it'
+        : 'Moved to Warm — it may appear lower in the queue';
+    } else if (action === 'loads') {
+      msg = fuSpecialFilter || (fuStateFilter && fuStateFilter !== 'loads')
+        ? 'Moved to Loads — current view may hide it'
+        : 'Moved to Loads — it may appear lower in the queue';
+    } else if (action === 'block') {
+      msg = 'Blocked — removed from active follow-up';
+    } else if (action === 'close') {
+      msg = 'Closed — removed from active follow-up';
+    }
+    toast(msg);
     await loadFollowups();
   } catch(e) { toast('Error: '+e.message, true); }
 }
@@ -4578,24 +5943,28 @@ function toggleFuDropdown(event, contactId) {
   const isTerminal = terminal.includes(c.state);
   const isActive = c.state==='active';
   const isPaused = c.state==='paused';
+  const isNeedsAction = c.stage === 'completed_fu3' && c.state === 'active';
+  const canSchedule = !isTerminal && !isNeedsAction && ['active','paused'].includes(c.state);
 
-  const notBlocked = !['blocked','closed'].includes(c.state);
   let items = '';
-  if (isActive)  items += `<button class="fu-dd-item" onclick="fuDropdownAction('pause')"><i class="ph-bold ph-pause"></i> Pause</button>`;
-  if (isPaused)  items += `<button class="fu-dd-item" onclick="fuDropdownAction('resume')"><i class="ph-bold ph-play"></i> Resume</button>`;
-  if (!isTerminal) {
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('warm')"><i class="ph-bold ph-fire"></i> Mark as Warm</button>`;
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('loads')"><i class="ph-bold ph-truck"></i> Mark as Loads</button>`;
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('block')"><i class="ph-bold ph-prohibit"></i> Block</button>`;
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('close')"><i class="ph-bold ph-check-circle"></i> Close</button>`;
+  if (isNeedsAction || isTerminal) {
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('restart-fu1')"><i class="ph-bold ph-arrow-counter-clockwise"></i> Restart at FU1</button>`;
     items += `<div class="fu-dd-sep"></div>`;
   }
-  if (notBlocked) {
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('free-send')"><i class="ph-bold ph-paper-plane-tilt"></i> Free Send</button>`;
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('schedule-once')"><i class="ph-bold ph-calendar"></i> Schedule once</button>`;
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('set-recurring')"><i class="ph-bold ph-arrows-clockwise"></i> Set recurring</button>`;
+  if (isActive && !isNeedsAction)  items += `<button class="fu-dd-item" onclick="fuDropdownAction('pause')"><i class="ph-bold ph-pause"></i> Pause</button>`;
+  if (isPaused && !isNeedsAction)  items += `<button class="fu-dd-item" onclick="fuDropdownAction('resume')"><i class="ph-bold ph-play"></i> Resume</button>`;
+  if (canSchedule) {
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('schedule-once')"><i class="ph-bold ph-calendar"></i> ${c.scheduled_once ? 'Reschedule once' : 'Schedule once'}</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('set-recurring')"><i class="ph-bold ph-arrows-clockwise"></i> ${c.recurring_enabled ? 'Edit recurring' : 'Set recurring'}</button>`;
     if (c.recurring_enabled) items += `<button class="fu-dd-item" onclick="fuDropdownAction('stop-recurring')"><i class="ph-bold ph-stop-circle"></i> Stop recurring</button>`;
-    if (c.scheduled_once) items += `<button class="fu-dd-item danger" onclick="fuDropdownAction('cancel-schedule')"><i class="ph-bold ph-calendar-x"></i> Cancel schedule</button>`;
+    if (c.scheduled_once) items += `<button class="fu-dd-item" onclick="fuDropdownAction('cancel-schedule')"><i class="ph-bold ph-calendar-x"></i> Cancel one-time schedule</button>`;
+    items += `<div class="fu-dd-sep"></div>`;
+  }
+  if (!isTerminal) {
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('warm')"><i class="ph-bold ph-fire"></i> Move to Warm</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('loads')"><i class="ph-bold ph-truck"></i> Move to Loads</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('block')"><i class="ph-bold ph-prohibit"></i> Block contact</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('close')"><i class="ph-bold ph-check-circle"></i> Mark as Closed</button>`;
     items += `<div class="fu-dd-sep"></div>`;
   }
   items += `<button class="fu-dd-item" onclick="fuDropdownAction('note')"><i class="ph-bold ph-note-pencil"></i> Add Note</button>`;
@@ -4909,6 +6278,15 @@ function renderAnKpis() {
   setEl2('anReplyRateSub', pct > 0 ? (rr.total_replies || 0) + ' replies' : 'no replies yet');
   setEl2('anInterestedSub', intPct > 0 ? intPct.toFixed(0) + '% of replies' : '');
   setEl2('anErrorsSub', errors > 0 ? 'review below' : 'all good');
+  let summaryInsight = 'No outreach data yet for this period.';
+  if (errors > 0) {
+    summaryInsight = 'Reply rate is ' + (pct > 0 ? pct.toFixed(1) + '%' : '\u2014') + ', but there ' + (errors === 1 ? 'is 1 error' : 'are ' + errors + ' errors') + ' to review.';
+  } else if (pct > 0 && interested > 0) {
+    summaryInsight = 'Reply rate is ' + pct.toFixed(1) + '% with ' + interested + ' interested repl' + (interested === 1 ? 'y' : 'ies') + ' in this period.';
+  } else if (sent > 0) {
+    summaryInsight = 'Outreach is live. Review what works and the best send windows below.';
+  }
+  setEl2('anSummaryInsight', summaryInsight);
   const errKpi = document.querySelector('.an-kpi-errors');
   if (errKpi) errKpi.classList.toggle('has-errors', errors > 0);
 }
@@ -5040,6 +6418,10 @@ function setEl2(id, v) { const el = document.getElementById(id); if (el) el.text
 document.addEventListener('DOMContentLoaded', () => {
   loadCurrentUser();
   loadSettings();
+  ['cfgName','cfgCompany','cfgPhone'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', renderSettingsPreview);
+  });
   loadFollowups();
   loadQuota();
   loadAutomationImpact();

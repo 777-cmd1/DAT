@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 import re, csv, os, json, smtplib, random, threading, time, imaplib, secrets, base64
 import urllib.parse, urllib.request
 import email as email_lib
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, UTC
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import decode_header as decode_email_header
@@ -152,6 +152,8 @@ def csrf_protected(fn):
     from functools import wraps
     @wraps(fn)
     def wrapper(*args, **kwargs):
+        if app.config.get('TESTING'):
+            return fn(*args, **kwargs)
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             if not _validate_csrf():
                 return jsonify({'error': 'Invalid CSRF token'}), 403
@@ -168,6 +170,7 @@ _limiter_storage = (
     os.environ.get('RATELIMIT_STORAGE_URI') or
     'memory://'
 )
+_limiter_shared = _limiter_storage != 'memory://'
 limiter = Limiter(
     key_func=get_remote_address,
     app=app,
@@ -189,7 +192,7 @@ _fernet_instance = None
 def _get_fernet():
     global _fernet_instance
     if _fernet_instance is None:
-        raw = os.environ.get('ENCRYPTION_KEY', '')
+        raw = os.environ.get('ENCRYPTION_KEY') or os.environ.get('FERNET_KEY', '')
         if raw:
             try:
                 _fernet_instance = Fernet(raw.encode() if isinstance(raw, str) else raw)
@@ -312,6 +315,272 @@ def _get_stage_delay(stage, settings):
     return timedelta(days=days)
 
 
+LEGACY_STATE_MAP = {
+    'pending': 'active',
+    'sent': 'active',
+    'failed': 'active',
+    'done': 'closed',
+}
+
+LEGACY_STAGE_MAP = {
+    'fu1': 'fu1_scheduled',
+    'fu2': 'fu2_scheduled',
+    'fu3': 'fu3_scheduled',
+    'done': 'completed_fu3',
+    'closed': 'completed_fu3',
+    'completed': 'completed_fu3',
+}
+
+
+def _normalize_fu_state(value, stage=None):
+    raw = (value or '').strip().lower()
+    if raw in VALID_STATES:
+        return raw
+    if raw in LEGACY_STATE_MAP:
+        return LEGACY_STATE_MAP[raw]
+    if stage == 'completed_fu3':
+        return 'active'
+    return 'active'
+
+
+def _normalize_fu_stage(value):
+    raw = (value or '').strip()
+    lowered = raw.lower()
+    if lowered in VALID_STAGES:
+        return lowered
+    if raw in ('FU1', 'FU2', 'FU3'):
+        return raw.lower() + '_scheduled'
+    if lowered in LEGACY_STAGE_MAP:
+        return LEGACY_STAGE_MAP[lowered]
+    return 'fu1_scheduled'
+
+
+def _get_fu_template_for_stage(uid, stage, allow_random_fallback=False):
+    template_key = STAGE_TO_TEMPLATE.get(stage, 'FU1')
+    body = _get_random_fu_template(uid, stage=stage, include_general=allow_random_fallback)
+    if body:
+        return body
+    return DEFAULT_FU_TEMPLATES.get(template_key, '')
+
+
+def _restore_contact_schedule(contact, now=None):
+    """Restore the next follow-up time from the contact's active scheduling mode."""
+    now = now or _utcnow()
+    if contact.state != 'active':
+        contact.next_followup_at = None
+        return
+    if contact.scheduled_once:
+        return
+    if contact.recurring_enabled:
+        if contact.recurring_days and contact.recurring_time:
+            contact.next_followup_at = _next_recurring_datetime(contact.recurring_days, contact.recurring_time)
+        else:
+            contact.recurring_enabled = False
+            contact.recurring_days = None
+            contact.recurring_time = None
+            contact.next_followup_at = None
+        return
+    if contact.is_followup_enabled and contact.stage in STAGE_TO_TEMPLATE:
+        settings = _get_fu_settings(contact.workspace_id)
+        contact.next_followup_at = now + _get_stage_delay(contact.stage, settings)
+    else:
+        contact.next_followup_at = None
+
+
+def _normalize_followup_contact(contact):
+    """Repair incompatible legacy/null values without deleting user data."""
+    changed = False
+
+    normalized_stage = _normalize_fu_stage(contact.stage)
+    normalized_state = _normalize_fu_state(contact.state, stage=normalized_stage)
+    if contact.stage != normalized_stage:
+        contact.stage = normalized_stage
+        changed = True
+    if contact.state != normalized_state:
+        contact.state = normalized_state
+        changed = True
+
+    if contact.is_followup_enabled is None:
+        contact.is_followup_enabled = normalized_state == 'active' and normalized_stage in STAGE_TO_TEMPLATE
+        changed = True
+    if contact.recurring_enabled is None:
+        contact.recurring_enabled = False
+        changed = True
+    if contact.scheduled_once is None:
+        contact.scheduled_once = False
+        changed = True
+
+    if contact.contact_email:
+        normalized_email = contact.contact_email.strip().lower()
+        if contact.contact_email != normalized_email:
+            contact.contact_email = normalized_email
+            changed = True
+
+    if normalized_state in TERMINAL_STATES:
+        if contact.is_followup_enabled:
+            contact.is_followup_enabled = False
+            changed = True
+        if contact.next_followup_at is not None:
+            contact.next_followup_at = None
+            changed = True
+        if contact.scheduled_once:
+            contact.scheduled_once = False
+            changed = True
+        if contact.recurring_enabled:
+            contact.recurring_enabled = False
+            changed = True
+    elif normalized_state == 'paused':
+        if contact.is_followup_enabled:
+            contact.is_followup_enabled = False
+            changed = True
+        if contact.next_followup_at is not None:
+            contact.next_followup_at = None
+            changed = True
+    elif normalized_stage == 'completed_fu3' and contact.is_followup_enabled:
+        contact.is_followup_enabled = False
+        contact.next_followup_at = None
+        changed = True
+    elif contact.recurring_enabled and (not contact.recurring_days or not contact.recurring_time):
+        contact.recurring_enabled = False
+        contact.recurring_days = None
+        contact.recurring_time = None
+        changed = True
+
+    if changed:
+        contact.updated_at = _utcnow()
+    return changed
+
+
+def _upsert_legacy_followup_record(fu):
+    """Safely migrate one legacy follow_ups record into followup_contacts."""
+    from app.models import FollowupContact, Workspace
+
+    email = (fu.contact_email or '').strip().lower()
+    if not email:
+        return False, 'skip:no_email'
+
+    ws_id = fu.workspace_id
+    if not ws_id:
+        ws = Workspace.query.filter_by(owner_id=fu.user_id).first()
+        if not ws:
+            return False, 'skip:no_workspace'
+        ws_id = ws.id
+
+    existing = FollowupContact.query.filter_by(workspace_id=ws_id, contact_email=email).first()
+    if existing:
+        merged = False
+        if not existing.contact_name and fu.contact_name:
+            existing.contact_name = fu.contact_name
+            merged = True
+        if not existing.current_route and fu.route:
+            existing.current_route = fu.route
+            merged = True
+        if not existing.reply_subject and fu.reply_subject:
+            existing.reply_subject = fu.reply_subject
+            merged = True
+        if not existing.reply_msg_id and fu.reply_msg_id:
+            existing.reply_msg_id = fu.reply_msg_id
+            merged = True
+        if not existing.last_followup_sent_at and fu.last_fu_sent:
+            existing.last_followup_sent_at = fu.last_fu_sent
+            merged = True
+        if not existing.last_activity_at and fu.last_contact:
+            existing.last_activity_at = fu.last_contact
+            merged = True
+        if not existing.created_at and fu.added_at:
+            existing.created_at = fu.added_at
+            merged = True
+        if not existing.next_followup_at and fu.scheduled_at:
+            existing.next_followup_at = fu.scheduled_at
+            merged = True
+        notes = (fu.notes or '').strip()
+        if notes and notes not in (existing.notes or ''):
+            existing.notes = ((existing.notes or '').strip() + '\n' + notes).strip()
+            merged = True
+        normalized = _normalize_followup_contact(existing)
+        return merged or normalized, 'merged'
+
+    if fu.status == 'paused':
+        state = 'paused'
+        enabled = False
+    elif fu.status == 'closed' or (fu.level or '').lower() == 'closed':
+        state = 'closed'
+        enabled = False
+    else:
+        state = _normalize_fu_state(fu.status)
+        enabled = bool(fu.auto_enabled)
+
+    stage = _normalize_fu_stage(fu.level)
+    if fu.status == 'sent' and stage in ('fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled'):
+        stage = stage.replace('_scheduled', '_sent')
+    if stage == 'completed_fu3':
+        enabled = False
+
+    fc = FollowupContact(
+        user_id=fu.user_id,
+        workspace_id=ws_id,
+        contact_email=email,
+        contact_name=fu.contact_name or '',
+        state=state,
+        stage=stage,
+        is_followup_enabled=enabled,
+        next_followup_at=fu.scheduled_at,
+        last_followup_sent_at=fu.last_fu_sent,
+        last_activity_at=fu.last_contact,
+        reply_subject=fu.reply_subject or '',
+        reply_msg_id=fu.reply_msg_id or '',
+        current_route=fu.route or '',
+        notes=fu.notes or '',
+        created_at=fu.added_at or _utcnow(),
+        updated_at=_utcnow(),
+    )
+    db.session.add(fc)
+    db.session.flush()
+    _normalize_followup_contact(fc)
+    _record_event(fc, 'created', actor_type='system', notes='Recovered from legacy follow_ups table')
+    return True, 'created'
+
+
+def _recover_followup_data():
+    """Recover legacy Follow-up data and normalize v2 records on startup."""
+    from app.models import FollowUp, FollowupContact, FollowupSettings, Workspace
+
+    stats = {
+        'legacy_created': 0,
+        'legacy_merged': 0,
+        'settings_created': 0,
+        'normalized': 0,
+    }
+
+    for ws in Workspace.query.all():
+        if not FollowupSettings.query.filter_by(workspace_id=ws.id).first():
+            db.session.add(FollowupSettings(
+                workspace_id=ws.id,
+                default_followup_enabled=ws.fu_auto_enabled,
+            ))
+            stats['settings_created'] += 1
+
+    for fu in FollowUp.query.all():
+        changed, outcome = _upsert_legacy_followup_record(fu)
+        if not changed:
+            continue
+        if outcome == 'created':
+            stats['legacy_created'] += 1
+        elif outcome == 'merged':
+            stats['legacy_merged'] += 1
+
+    for fc in FollowupContact.query.all():
+        if _normalize_followup_contact(fc):
+            stats['normalized'] += 1
+
+    if any(stats.values()):
+        db.session.commit()
+        app.logger.info('FU recovery applied: %s', stats)
+    else:
+        db.session.rollback()
+    return stats
+
+
 def _record_event(contact, event_type, actor_type='user', actor_user_id=None,
                   from_state=None, to_state=None, from_stage=None, to_stage=None,
                   metadata_json=None, notes=None):
@@ -340,7 +609,7 @@ def _transition_state(contact, new_state, reason=None, actor_user_id=None):
     if new_state not in ALLOWED_TRANSITIONS.get(old_state, set()):
         return False, f'Invalid transition: {old_state} -> {new_state}'
 
-    now = datetime.utcnow()
+    now = _utcnow()
     contact.state = new_state
     contact.updated_at = now
 
@@ -381,9 +650,34 @@ def _transition_state(contact, new_state, reason=None, actor_user_id=None):
                   from_state=old_state, to_state=new_state)
     return True, None
 
+
+def _restart_contact_from_fu1(contact, actor_user_id=None):
+    """Re-open a contact into the FU1 scheduled sequence."""
+    now = _utcnow()
+    old_state = contact.state
+    old_stage = contact.stage
+    settings = _get_fu_settings(contact.workspace_id)
+
+    contact.state = 'active'
+    contact.stage = 'fu1_scheduled'
+    contact.is_followup_enabled = True
+    contact.scheduled_once = False
+    contact.recurring_enabled = False
+    contact.recurring_days = None
+    contact.recurring_time = None
+    contact.next_followup_at = now + _get_stage_delay('fu1_scheduled', settings)
+    contact.updated_at = now
+
+    _record_event(contact, 'restarted_fu1', actor_type='user', actor_user_id=actor_user_id,
+                  from_state=old_state, to_state='active',
+                  from_stage=old_stage, to_stage='fu1_scheduled')
+    return True, None
+
 # ── Per-user send state ───────────────────────────────────────────────────────
 # Keyed by user_id so concurrent users cannot see or overwrite each other's progress.
 _send_states: dict = {}
+_scheduler = None
+_scheduler_enabled = os.environ.get('DISABLE_SCHEDULER', '').strip() != '1'
 
 def _user_send_state(uid: str) -> dict:
     """Get (or initialise) the send-progress dict for a specific user."""
@@ -394,7 +688,43 @@ def _user_send_state(uid: str) -> dict:
             "sent": 0, "errors": 0, "skipped": 0, "log": [],
         }
     return _send_states[uid]
-DEFAULT_CONFIG = {"gmail_address":"","gmail_app_password":"","your_name":"","your_company":"","your_phone":"","delay_min":20,"delay_max":45}
+
+def _scheduler_owner_id():
+    return f'{os.uname().nodename}:{os.getpid()}:{_threading.current_thread().name}'
+
+def _acquire_system_lease(name, lease_seconds=840):
+    """Acquire or renew a short-lived DB lease for singleton-style background work."""
+    from app.models import SystemLease
+    now = _utcnow()
+    lease_until = now + timedelta(seconds=lease_seconds)
+    owner = _scheduler_owner_id()
+
+    try:
+        lease = SystemLease.query.filter_by(name=name).first()
+        if lease and lease.lease_until and lease.lease_until > now and lease.owner != owner:
+            return False
+        if not lease:
+            lease = SystemLease(name=name, owner=owner, lease_until=lease_until)
+            db.session.add(lease)
+        else:
+            lease.owner = owner
+            lease.lease_until = lease_until
+            lease.updated_at = now
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        return False
+
+def _scheduler_is_healthy():
+    if not _scheduler_enabled:
+        return True
+    return bool(_scheduler and _scheduler.is_alive())
+DEFAULT_CONFIG = {"gmail_address":"","gmail_app_password":"","your_name":"","your_company":"","your_phone":"","delay_min":20,"delay_max":45,"daily_target":100}
+
+def _utcnow():
+    """Return a naive UTC datetime for DB compatibility, sourced from aware UTC."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 # ─── AUTH HELPERS ──────────────────────────────────────────────────────────────
 
@@ -528,6 +858,7 @@ def api_login():
     return jsonify({'ok': True, 'name': user.get('name', email)})
 
 @app.route('/api/auth/logout', methods=['POST'])
+@csrf_protected
 def api_logout():
     session.clear()
     return jsonify({'ok': True})
@@ -542,7 +873,7 @@ def reset_password_page():
         from app.models import PasswordResetToken
         from datetime import timedelta
         pr = PasswordResetToken.query.filter_by(token=token, used_at=None).first()
-        expired = pr and (datetime.utcnow() - pr.created_at > timedelta(hours=1))
+        expired = pr and (_utcnow() - pr.created_at > timedelta(hours=1))
         if not pr or expired:
             return render_template('reset_password.html', mode='invalid')
         return render_template('reset_password.html', mode='new_password', token=token,
@@ -580,7 +911,7 @@ def api_reset_request():
     admin_acct = EmailAccount.query.filter_by(user_id=admin_user.id).first() if admin_user else None
 
     # Always log reset URL so admin can retrieve from Railway logs if email fails
-    app.logger.warning(f'PASSWORD_RESET_LINK for={email} url={reset_url}')
+    app.logger.info(f'PASSWORD_RESET requested for={email}')
 
     if admin_acct and admin_acct.gmail_address:
         body = (
@@ -618,7 +949,7 @@ def api_reset_confirm():
     pr = PasswordResetToken.query.filter_by(token=token, used_at=None).first()
     if not pr:
         return jsonify({'error': 'Invalid or already used reset link'}), 400
-    if datetime.utcnow() - pr.created_at > timedelta(hours=1):
+    if _utcnow() - pr.created_at > timedelta(hours=1):
         return jsonify({'error': 'Reset link has expired. Please request a new one.'}), 400
 
     user = User.query.filter_by(email=pr.email).first()
@@ -626,7 +957,7 @@ def api_reset_confirm():
         return jsonify({'error': 'Account not found'}), 400
 
     user.password = hash_password(password)
-    pr.used_at = datetime.utcnow()
+    pr.used_at = _utcnow()
     db.session.commit()
 
     return jsonify({'ok': True})
@@ -645,7 +976,7 @@ def register_page(token):
     if not invite:
         # If invite is gone but user already exists → just redirect to login
         return redirect(url_for('login_page'))
-    if invite.expires_at and invite.expires_at < datetime.utcnow():
+    if invite.expires_at and invite.expires_at < _utcnow():
         invite.status = 'expired'
         db.session.commit()
         # If user already registered via this invite → redirect to login
@@ -676,7 +1007,7 @@ def api_register():
     invite = Invitation.query.filter_by(token=token, status='pending').first()
     if not invite:
         return jsonify({'error': 'Invalid or expired invite'}), 400
-    if invite.expires_at and invite.expires_at < datetime.utcnow():
+    if invite.expires_at and invite.expires_at < _utcnow():
         invite.status = 'expired'
         db.session.commit()
         return jsonify({'error': 'This invite link has expired. Please request a new one.'}), 400
@@ -692,7 +1023,7 @@ def api_register():
     )
     db.session.add(user)
     invite.status = 'accepted'
-    invite.used_at = datetime.now()
+    invite.used_at = _utcnow()
     db.session.flush()   # populate user.id
     get_or_create_workspace(user.id, name=f"{name or email}'s Workspace")
     db.session.commit()
@@ -708,7 +1039,7 @@ def api_register():
 @login_required
 @admin_required
 def admin_page():
-    return render_template('admin.html')
+    return render_template('admin.html', csrf_token=_get_csrf_token())
 
 @app.route('/api/admin/users', methods=['GET'])
 @login_required
@@ -722,6 +1053,7 @@ def api_admin_users():
 @login_required
 @admin_required
 @limiter.limit("20 per hour")    # prevent invite spam
+@csrf_protected
 def api_admin_invite():
     data = request.json
     email = (data.get('email') or '').strip().lower()
@@ -747,7 +1079,7 @@ def api_admin_invite():
     Invitation.query.filter_by(email=email, status='pending').delete()
     db.session.add(Invitation(
         token=token, email=email, invited_by=current_user_id(),
-        expires_at=datetime.utcnow() + timedelta(days=7),
+        expires_at=_utcnow() + timedelta(days=7),
     ))
     db.session.commit()
 
@@ -767,6 +1099,7 @@ def api_admin_invites():
 @app.route('/api/admin/users/delete', methods=['POST'])
 @login_required
 @admin_required
+@csrf_protected
 def api_admin_delete_user():
     email = (request.json.get('email') or '').lower()
     if email == ADMIN_EMAIL.lower():
@@ -804,6 +1137,7 @@ def api_admin_delete_user():
 @app.route('/api/admin/users/plan', methods=['POST'])
 @login_required
 @admin_required
+@csrf_protected
 def api_admin_change_plan():
     data = request.json or {}
     email = (data.get('email') or '').lower()
@@ -822,7 +1156,7 @@ def api_admin_change_plan():
 
 def _admin_date_range(period: str):
     """Return (start_dt, end_dt) for admin period filter. All times UTC."""
-    now = datetime.utcnow()
+    now = _utcnow()
     today = now.date()
     if period == 'today':
         return datetime.combine(today, datetime.min.time()), now
@@ -839,6 +1173,7 @@ def _admin_date_range(period: str):
 @app.route('/api/admin/users/reset-link', methods=['POST'])
 @login_required
 @admin_required
+@csrf_protected
 def api_admin_reset_link():
     """Generate a password reset link for a user and return it to the admin."""
     data = request.json or {}
@@ -863,7 +1198,7 @@ def api_admin_reset_link():
 @admin_required
 def api_admin_stats_overview():
     """System-wide aggregate stats for admin overview panel."""
-    from app.models import User as UserModel, Workspace, Send, Reply, FollowUp
+    from app.models import User as UserModel, Workspace, Send, Reply, FollowupEvent
     from sqlalchemy import func
 
     period = request.args.get('period', 'today')
@@ -889,10 +1224,12 @@ def api_admin_stats_overview():
         replies_q = replies_q.filter(Reply.received_at >= start_dt, Reply.received_at <= end_dt)
     replies = replies_q.scalar() or 0
 
-    # --- followups ---
-    fu_q = db.session.query(func.count(FollowUp.id)).filter(FollowUp.status == 'sent')
+    # --- followups sent ---
+    fu_q = db.session.query(func.count(FollowupEvent.id)).filter(
+        FollowupEvent.event_type.in_(['auto_send', 'manual_send', 'scheduled_once_sent', 'recurring_sent'])
+    )
     if start_dt is not None:
-        fu_q = fu_q.filter(FollowUp.last_fu_sent >= start_dt, FollowUp.last_fu_sent <= end_dt)
+        fu_q = fu_q.filter(FollowupEvent.event_at >= start_dt, FollowupEvent.event_at <= end_dt)
     followups = fu_q.scalar() or 0
 
     reply_rate = round(replies / sends * 100, 1) if sends else 0.0
@@ -912,7 +1249,7 @@ def api_admin_stats_overview():
 
     top_users = []
     for user_id, send_cnt in top_rows:
-        user = UserModel.query.get(user_id)
+        user = db.session.get(UserModel, user_id)
         r_q = db.session.query(func.count(Reply.id)).filter(Reply.user_id == user_id)
         if start_dt is not None:
             r_q = r_q.filter(Reply.received_at >= start_dt, Reply.received_at <= end_dt)
@@ -942,12 +1279,12 @@ def api_admin_stats_overview():
 @admin_required
 def api_admin_stats_accounts():
     """Per-account summary table for admin Accounts section."""
-    from app.models import User as UserModel, Workspace, Send, Reply, FollowUp, EmailAccount
+    from app.models import User as UserModel, Workspace, Send, Reply, FollowupContact, FollowupEvent, EmailAccount
     from sqlalchemy import func
 
     period = request.args.get('period', 'today')
     start_dt, end_dt = _admin_date_range(period)
-    now = datetime.utcnow()
+    now = _utcnow()
 
     # 1. Load all users
     users = UserModel.query.order_by(UserModel.created_at.desc()).all()
@@ -978,12 +1315,16 @@ def api_admin_stats_accounts():
         replies_q = replies_q.filter(Reply.received_at >= start_dt, Reply.received_at <= end_dt)
     replies_map = dict(replies_q.group_by(Reply.user_id).all())
 
-    # 6. Batch follow-ups per user
-    fu_q = db.session.query(FollowUp.user_id, func.count(FollowUp.id)).filter(
-        FollowUp.user_id.in_(user_ids), FollowUp.status == 'sent')
+    # 6. Batch follow-up send events per user
+    fu_q = db.session.query(FollowupContact.user_id, func.count(FollowupEvent.id))\
+        .join(FollowupContact, FollowupContact.id == FollowupEvent.followup_contact_id)\
+        .filter(
+            FollowupContact.user_id.in_(user_ids),
+            FollowupEvent.event_type.in_(['auto_send', 'manual_send', 'scheduled_once_sent', 'recurring_sent'])
+        )
     if start_dt is not None:
-        fu_q = fu_q.filter(FollowUp.last_fu_sent >= start_dt, FollowUp.last_fu_sent <= end_dt)
-    fu_map = dict(fu_q.group_by(FollowUp.user_id).all())
+        fu_q = fu_q.filter(FollowupEvent.event_at >= start_dt, FollowupEvent.event_at <= end_dt)
+    fu_map = dict(fu_q.group_by(FollowupContact.user_id).all())
 
     # 7. Batch last activity (always lifetime, NOT filtered)
     la_rows = db.session.query(Send.user_id, func.max(Send.sent_at)).filter(
@@ -1029,12 +1370,12 @@ def api_admin_stats_accounts():
 def api_admin_stats_account(user_id):
     """Full drill-down for a single account. Never returns gmail_password."""
     from app.models import (User as UserModel, Workspace, Send, Reply,
-                            FollowUp, EmailAccount, PipelineContact,
+                            FollowupContact, FollowupEvent, EmailAccount, PipelineContact,
                             AuditLog, UsageEvent)
     today    = date.today()
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = _utcnow() - timedelta(days=7)
 
-    u = UserModel.query.get(user_id)
+    u = db.session.get(UserModel, user_id)
     if not u:
         return jsonify({'error': 'User not found'}), 404
 
@@ -1060,11 +1401,27 @@ def api_admin_stats_account(user_id):
         'not_interested': Reply.query.filter_by(user_id=u.id, status='not_interested').count(),
         'new':            Reply.query.filter_by(user_id=u.id, status='new').count(),
     }
+    fu_total = FollowupContact.query.filter_by(user_id=u.id).count()
+    fu_pending = FollowupContact.query.filter(
+        FollowupContact.user_id == u.id,
+        FollowupContact.state.in_(['active', 'paused'])
+    ).count()
+    fu_sent = FollowupEvent.query.join(
+        FollowupContact, FollowupContact.id == FollowupEvent.followup_contact_id
+    ).filter(
+        FollowupContact.user_id == u.id,
+        FollowupEvent.event_type.in_(['auto_send', 'manual_send', 'scheduled_once_sent', 'recurring_sent'])
+    ).count()
+    fu_outcomes = FollowupContact.query.filter(
+        FollowupContact.user_id == u.id,
+        FollowupContact.state.in_(['warm', 'loads', 'blocked', 'closed'])
+    ).count()
     followups = {
-        'total':   FollowUp.query.filter_by(user_id=u.id).count(),
-        'pending': FollowUp.query.filter_by(user_id=u.id, status='pending').count(),
-        'sent':    FollowUp.query.filter_by(user_id=u.id, status='sent').count(),
-        'closed':  FollowUp.query.filter_by(user_id=u.id, status='closed').count(),
+        'total': fu_total,
+        'pending': fu_pending,
+        'sent': fu_sent,
+        'skipped': fu_outcomes,
+        'closed': FollowupContact.query.filter_by(user_id=u.id, state='closed').count(),
     }
     pipeline_size = PipelineContact.query.filter_by(user_id=u.id).count()
 
@@ -1257,6 +1614,7 @@ def save_config(cfg):
         acct.your_phone     = cfg.get('your_phone', acct.your_phone)
         acct.delay_min      = int(cfg.get('delay_min', acct.delay_min))
         acct.delay_max      = int(cfg.get('delay_max', acct.delay_max))
+        acct.daily_target   = int(cfg.get('daily_target', acct.daily_target or 100))
     else:
         db.session.add(EmailAccount(
             user_id=uid,
@@ -1267,6 +1625,7 @@ def save_config(cfg):
             your_phone     = cfg.get('your_phone', ''),
             delay_min      = int(cfg.get('delay_min', 20)),
             delay_max      = int(cfg.get('delay_max', 45)),
+            daily_target   = int(cfg.get('daily_target', 100)),
         ))
     db.session.commit()
 
@@ -1389,15 +1748,222 @@ def get_log_rows():
     uid = current_user_id()
     if not uid: return []
     from app.models import Send
-    rows = Send.query.filter_by(user_id=uid).order_by(Send.sent_at.desc()).all()
-    return [r.to_dict() for r in rows]
+    rows = db.session.query(
+        Send.id, Send.recipient_email, Send.origin, Send.destination,
+        Send.load_date, Send.equipment, Send.weight, Send.company,
+        Send.template_variant, Send.status, Send.error_msg, Send.sent_at
+    ).filter_by(user_id=uid).order_by(Send.sent_at.desc()).all()
+    result = []
+    for row in rows:
+        result.append({
+            'id': row.id,
+            'email': row.recipient_email,
+            'origin': row.origin,
+            'destination': row.destination,
+            'date': row.load_date,
+            'equip': row.equipment,
+            'weight': row.weight,
+            'company': row.company,
+            'variant': row.template_variant,
+            'status': row.status,
+            'error': row.error_msg or '',
+            'timestamp': row.sent_at.strftime('%Y-%m-%d %H:%M:%S') if row.sent_at else '',
+        })
+    return result
+
+def get_log_page(page=1, per_page=100, search='', status='', date_from='', date_to=''):
+    uid = current_user_id()
+    if not uid:
+        return {'items': [], 'total': 0, 'page': 1, 'pages': 0, 'per_page': per_page}
+    from app.models import Send
+    from sqlalchemy import or_, func
+
+    page = max(1, int(page or 1))
+    per_page = max(1, min(200, int(per_page or 100)))
+
+    q = db.session.query(
+        Send.id, Send.recipient_email, Send.origin, Send.destination,
+        Send.load_date, Send.equipment, Send.weight, Send.company,
+        Send.template_variant, Send.status, Send.error_msg, Send.sent_at
+    ).filter(Send.user_id == uid)
+
+    if search:
+        like = f'%{search.lower()}%'
+        q = q.filter(or_(
+            func.lower(Send.recipient_email).like(like),
+            func.lower(Send.origin).like(like),
+            func.lower(Send.destination).like(like),
+        ))
+    if status:
+        q = q.filter(Send.status == status)
+    if date_from:
+        try:
+            start = datetime.fromisoformat(date_from)
+            q = q.filter(Send.sent_at >= start)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            end = datetime.fromisoformat(date_to) + timedelta(days=1)
+            q = q.filter(Send.sent_at < end)
+        except ValueError:
+            pass
+
+    total = q.count()
+    rows = q.order_by(Send.sent_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    items = []
+    for row in rows:
+        items.append({
+            'id': row.id,
+            'email': row.recipient_email,
+            'origin': row.origin,
+            'destination': row.destination,
+            'date': row.load_date,
+            'equip': row.equipment,
+            'weight': row.weight,
+            'company': row.company,
+            'variant': row.template_variant,
+            'status': row.status,
+            'error': row.error_msg or '',
+            'timestamp': row.sent_at.strftime('%Y-%m-%d %H:%M:%S') if row.sent_at else '',
+        })
+    pages = (total + per_page - 1) // per_page if total else 0
+    return {
+        'items': items,
+        'total': total,
+        'page': page,
+        'pages': pages,
+        'per_page': per_page,
+    }
 
 def load_replies():
     uid = current_user_id()
     if not uid: return []
     from app.models import Reply
-    return [r.to_dict() for r in Reply.query.filter_by(user_id=uid)
-                                             .order_by(Reply.received_at.desc()).all()]
+    rows = db.session.query(
+        Reply.id, Reply.msg_id, Reply.from_email, Reply.from_name,
+        Reply.subject, Reply.body, Reply.route, Reply.status, Reply.received_at
+    ).filter_by(user_id=uid).order_by(Reply.received_at.desc()).all()
+    result = []
+    for row in rows:
+        result.append({
+            'id': row.id,
+            'msg_id': row.msg_id,
+            'email': row.from_email,
+            'from': row.from_name,
+            'subject': row.subject,
+            'body': row.body,
+            'route': row.route,
+            'status': row.status,
+            'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
+        })
+    return result
+
+def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
+    uid = current_user_id()
+    if not uid:
+        return {'items': [], 'counts': {'all': 0, 'new': 0, 'viewed': 0, 'needs_action': 0, 'follow_up': 0, 'ignored': 0}, 'total': 0, 'page': 1, 'pages': 0}
+    from app.models import Reply
+    from sqlalchemy import case, func, or_
+
+    page = max(1, int(page or 1))
+    per_page = max(1, min(100, int(per_page or 25)))
+
+    priority_case = case(
+        (Reply.status == 'new', 0),
+        (Reply.status == 'viewed', 1),
+        (Reply.status.in_(['follow_up', 'interested']), 2),
+        (Reply.status.in_(['ignored', 'not_interested']), 3),
+        else_=4,
+    )
+
+    base = db.session.query(
+        func.lower(Reply.from_email).label('email_key'),
+        func.max(Reply.received_at).label('latest_at'),
+        func.min(priority_case).label('priority'),
+    ).filter(
+        Reply.user_id == uid,
+        Reply.from_email.isnot(None),
+        Reply.from_email != '',
+    )
+
+    if search:
+        like = f'%{search.lower()}%'
+        base = base.filter(or_(
+            func.lower(Reply.from_email).like(like),
+            func.lower(Reply.from_name).like(like),
+            func.lower(Reply.subject).like(like),
+        ))
+
+    grouped_rows = base.group_by(func.lower(Reply.from_email)).all()
+
+    def priority_to_state(priority):
+        if priority == 0:
+            return 'new'
+        if priority == 1:
+            return 'viewed'
+        if priority == 2:
+            return 'follow_up'
+        return 'ignored'
+
+    counts = {'all': 0, 'new': 0, 'viewed': 0, 'needs_action': 0, 'follow_up': 0, 'ignored': 0}
+    normalized_rows = []
+    for row in grouped_rows:
+        state = priority_to_state(row.priority)
+        counts['all'] += 1
+        counts[state] = counts.get(state, 0) + 1
+        if state in ('new', 'viewed'):
+            counts['needs_action'] += 1
+        normalized_rows.append({
+            'email': row.email_key,
+            'latest_at': row.latest_at,
+            'state': state,
+        })
+
+    def include_row(row):
+        if view == 'all':
+            return True
+        if view == 'needs_action':
+            return row['state'] in ('new', 'viewed')
+        return row['state'] == view
+
+    filtered_rows = [row for row in normalized_rows if include_row(row)]
+    filtered_rows.sort(key=lambda row: (
+        {'new': 0, 'viewed': 1, 'follow_up': 2, 'ignored': 3}.get(row['state'], 5),
+        -(row['latest_at'].timestamp() if row['latest_at'] else 0),
+    ))
+
+    total = len(filtered_rows)
+    pages = (total + per_page - 1) // per_page if total else 0
+    email_keys = [row['email'] for row in filtered_rows[(page - 1) * per_page: page * per_page]]
+    if not email_keys:
+        return {'items': [], 'counts': counts, 'total': total, 'page': page, 'pages': pages}
+
+    msg_rows = db.session.query(
+        Reply.id, Reply.msg_id, Reply.from_email, Reply.from_name,
+        Reply.subject, Reply.body, Reply.route, Reply.status, Reply.received_at
+    ).filter(
+        Reply.user_id == uid,
+        func.lower(Reply.from_email).in_(email_keys)
+    ).order_by(func.lower(Reply.from_email), Reply.received_at.desc()).all()
+
+    grouped = {}
+    for row in msg_rows:
+        key = (row.from_email or '').lower()
+        grouped.setdefault(key, []).append({
+            'id': row.id,
+            'msg_id': row.msg_id,
+            'email': row.from_email,
+            'from': row.from_name,
+            'subject': row.subject,
+            'body': row.body,
+            'route': row.route,
+            'status': row.status,
+            'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
+        })
+
+    items = [grouped[email] for email in email_keys if email in grouped]
+    return {'items': items, 'counts': counts, 'total': total, 'page': page, 'pages': pages}
 
 def save_replies(replies):
     """Upsert reply list — used by legacy code paths."""
@@ -1507,7 +2073,7 @@ def fetch_replies_from_gmail():
         return {'error': str(e)}
 
     try:
-        since_epoch = int((datetime.now() - timedelta(days=30)).timestamp())
+        since_epoch = int((_utcnow() - timedelta(days=30)).timestamp())
         results = service.users().messages().list(
             userId='me', q=f'after:{since_epoch} in:inbox', maxResults=100
         ).execute()
@@ -1547,7 +2113,7 @@ def fetch_replies_from_gmail():
                     'body':        body,
                     'route':       '',  # filled in bulk below
                     'status':      'new',
-                    'received_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                    'received_at': _utcnow().strftime('%Y-%m-%d %H:%M'),
                 })
             except Exception:
                 continue
@@ -2141,17 +2707,21 @@ def _build_subject(load):
     parts = [p for p in [route, date, equip, length] if p]
     return ', '.join(parts)
 
-def run_send_job(loads, cfg, templates, uid=None):
-    """Run in a background thread. uid must be passed explicitly — no session in threads."""
+def run_send_job(job_id, loads, cfg, templates, uid=None):
+    """Run a send job in a background thread with DB-backed job state."""
     state = _user_send_state(uid)
-    state.update({"running":True,"done":False,"total":len(loads),"current":0,"sent":0,"errors":0,"skipped":0,"log":[]})
+    state.update({"running":True,"done":False,"total":len(loads),"current":0,"sent":0,"errors":0,"skipped":0,"log":[],"job_id":job_id})
     with app.app_context():
         from app.models import SendJob
-        # Create DB record at job start
-        job = SendJob(user_id=uid, status='running', total=len(loads))
-        db.session.add(job)
+        job = db.session.get(SendJob, job_id)
+        if not job:
+            state.update({"running": False, "done": True, "errors": 1})
+            return
+        job.status = 'running'
+        job.started_at = _utcnow()
+        job.finished_at = None
+        job.error_msg = None
         db.session.commit()
-        state['job_id'] = job.id
 
         _, sent_today_set = load_sent_log(uid=uid)
         be, bd = load_stop_list(uid=uid)
@@ -2161,17 +2731,17 @@ def run_send_job(loads, cfg, templates, uid=None):
             em = load['email'].lower().strip()
             if is_blocked(load['email'], be, bd):
                 state["skipped"] += 1
-                state["log"].append({"time":datetime.now().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"stop list"})
+                state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"stop list"})
                 continue
             if em in sent_today_set or em in session_sent:
                 state["skipped"] += 1
-                state["log"].append({"time":datetime.now().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
+                state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
                 continue
             tmpl = random.choice(templates); vi = templates.index(tmpl) + 1
             body = render_template_text(tmpl, load, cfg)
             subject = _build_subject(load)
             ok, err = send_one_email(load['email'], subject, body, cfg, uid=uid)
-            ts = datetime.now().strftime('%H:%M:%S'); st = 'sent' if ok else 'error'
+            ts = _utcnow().strftime('%H:%M:%S'); st = 'sent' if ok else 'error'
             append_log(load, st, vi, uid=uid)
             if ok:
                 session_sent.add(em)
@@ -2199,7 +2769,7 @@ def run_send_job(loads, cfg, templates, uid=None):
             job.sent        = state["sent"]
             job.errors      = state["errors"]
             job.skipped     = state["skipped"]
-            job.finished_at = datetime.utcnow()
+            job.finished_at = _utcnow()
             db.session.commit()
         except Exception as _fe:
             app.logger.warning(f'run_send_job: DB final update failed: {_fe}')
@@ -2307,7 +2877,7 @@ def api_gmail_callback():
     acct.gmail_address       = gmail_address
     acct.google_refresh_token = encrypt_field(refresh_token)
     acct.google_access_token  = encrypt_field(access_token)
-    acct.token_expiry         = datetime.utcnow() + timedelta(seconds=expires_in)
+    acct.token_expiry         = _utcnow() + timedelta(seconds=expires_in)
     db.session.commit()
 
     audit_log('gmail_oauth_connect', resource_type='email_account', uid=uid,
@@ -2331,6 +2901,7 @@ def api_gmail_status():
 
 @app.route('/api/gmail/disconnect', methods=['POST'])
 @login_required
+@csrf_protected
 def api_gmail_disconnect():
     """Clear Gmail OAuth tokens for current user."""
     uid = current_user_id()
@@ -2347,6 +2918,8 @@ def api_gmail_disconnect():
 
 @app.route('/api/gmail/test-send', methods=['POST'])
 @login_required
+@csrf_protected
+@limiter.limit("5 per minute")
 def api_gmail_test_send():
     """Minimal test: bypass all DAT logic, send one plain email via Gmail API only."""
     uid = current_user_id()
@@ -2375,7 +2948,7 @@ def api_gmail_test_send():
         import traceback
         tb = traceback.format_exc()
         app.logger.error(f'gmail/test-send FAILED uid={uid}: {e}\n{tb}')
-        return jsonify({'ok': False, 'error': str(e), 'traceback': tb}), 500
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ─── API ROUTES (all protected) ───────────────────────────────────────────────
@@ -2391,6 +2964,8 @@ def api_get_config():
 
 @app.route('/api/config', methods=['POST'])
 @login_required
+@limiter.limit("20 per minute")
+@csrf_protected
 def api_save_config():
     data = request.json or {}
     # Validate delay range
@@ -2410,6 +2985,14 @@ def api_save_config():
                 return jsonify({'error': 'delay_max must be 1–300 seconds'}), 400
         except (TypeError, ValueError):
             return jsonify({'error': 'delay_max must be an integer'}), 400
+    daily_target = data.get('daily_target')
+    if daily_target is not None:
+        try:
+            daily_target = int(daily_target)
+            if not (1 <= daily_target <= 500):
+                return jsonify({'error': 'daily_target must be 1–500'}), 400
+        except (TypeError, ValueError):
+            return jsonify({'error': 'daily_target must be an integer'}), 400
     if delay_min and delay_max and delay_min > delay_max:
         return jsonify({'error': 'delay_min must be ≤ delay_max'}), 400
     # Validate email format if provided
@@ -2417,7 +3000,7 @@ def api_save_config():
     if gmail and not re.match(r'^[\w.+\-]+@[\w.\-]+\.\w{2,}$', gmail):
         return jsonify({'error': 'Invalid Gmail address format'}), 400
     cfg = load_config()
-    for k in ['gmail_address','gmail_app_password','your_name','your_company','your_phone','delay_min','delay_max']:
+    for k in ['gmail_address','gmail_app_password','your_name','your_company','your_phone','delay_min','delay_max','daily_target']:
         if k in data and data[k] != '': cfg[k] = data[k]
     save_config(cfg)
     audit_log('config_save', resource_type='email_account',
@@ -2430,6 +3013,8 @@ def api_get_templates(): return jsonify(load_templates())
 
 @app.route('/api/templates', methods=['POST'])
 @login_required
+@limiter.limit("20 per minute")
+@csrf_protected
 def api_save_templates():
     outreach = request.json.get("templates", [])
     save_templates_file(outreach)
@@ -2441,6 +3026,8 @@ def api_get_stop(): return jsonify(get_stop_list_raw())
 
 @app.route('/api/stop-list', methods=['POST'])
 @login_required
+@limiter.limit("20 per minute")
+@csrf_protected
 def api_save_stop(): write_stop_list(request.json.get("entries", [])); return jsonify({"ok": True})
 
 @app.route('/api/parse-context', methods=['GET'])
@@ -2483,11 +3070,20 @@ def api_parse():
 @app.route('/api/send', methods=['POST'])
 @login_required
 @limiter.limit("5 per minute")   # prevent accidental double-clicks / runaway loops
+@csrf_protected
 def api_send():
     uid = current_user_id()
     app.logger.info(f'API /api/send called — uid={uid}')
     state = _user_send_state(uid)
-    if state["running"]: return jsonify({"error": "Already running"}), 400
+    if state.get("running"):
+        return jsonify({"error": "Already running"}), 400
+    from app.models import SendJob
+    active_job = SendJob.query.filter(
+        SendJob.user_id == uid,
+        SendJob.status.in_(['queued', 'running'])
+    ).order_by(SendJob.started_at.desc()).first()
+    if active_job:
+        return jsonify({"error": "Already running", "job_id": active_job.id}), 400
     loads = request.json.get("loads", [])
     if not loads: return jsonify({"error": "No loads"}), 400
     cfg = load_config()
@@ -2507,27 +3103,42 @@ def api_send():
                          f"({quota['used']}/{quota['limit']} used on {quota['plan']} plan).",
                 'quota': quota,
             }), 429
-    t = threading.Thread(target=run_send_job, args=(loads, cfg, load_templates(), uid))
+    templates = load_templates()
+    job = SendJob(user_id=uid, status='queued', total=len(loads))
+    db.session.add(job)
+    db.session.commit()
+
+    t = threading.Thread(target=run_send_job, args=(job.id, loads, cfg, templates, uid))
     t.daemon = True; t.start()
-    return jsonify({"ok": True, "total": len(loads), "quota": quota})
+    return jsonify({"ok": True, "total": len(loads), "quota": quota, "job_id": job.id})
 
 @app.route('/api/send-status', methods=['GET'])
 @login_required
 def api_send_status():
     uid = current_user_id()
     state = _user_send_state(uid)
-    # If no active in-memory job, check DB for latest job (covers post-restart case)
-    if not state.get('running') and not state.get('done'):
-        from app.models import SendJob
-        job = SendJob.query.filter_by(user_id=uid).order_by(SendJob.started_at.desc()).first()
-        if job:
-            return jsonify({
-                'running': False, 'done': job.status == 'done',
-                'total': job.total, 'current': job.sent + job.errors + job.skipped,
-                'sent': job.sent, 'errors': job.errors, 'skipped': job.skipped,
-                'log': [], 'status': job.status,
-            })
-    return jsonify(state)
+    from app.models import SendJob
+    job = SendJob.query.filter_by(user_id=uid).order_by(SendJob.started_at.desc()).first()
+    if not job:
+        return jsonify(state)
+
+    if state.get('running') and state.get('job_id') == job.id:
+        payload = dict(state)
+        payload['status'] = job.status
+        return jsonify(payload)
+
+    return jsonify({
+        'running': job.status in ('queued', 'running'),
+        'done': job.status == 'done',
+        'total': job.total,
+        'current': job.sent + job.errors + job.skipped,
+        'sent': job.sent,
+        'errors': job.errors,
+        'skipped': job.skipped,
+        'log': [],
+        'status': job.status,
+        'job_id': job.id,
+    })
 
 @app.route('/api/automation-impact', methods=['GET'])
 @login_required
@@ -2615,7 +3226,9 @@ def api_intelligence():
     from sqlalchemy import func
 
     # ── Reply & Rate Request aggregation ─────────────────────────────────────
-    all_replies = Reply.query.filter_by(user_id=uid).all()
+    all_replies = db.session.query(
+        Reply.from_email, Reply.body, Reply.status
+    ).filter_by(user_id=uid).all()
     # DISTINCT by from_email — avoids inflated counts from thread duplicates
     unique_reply_emails   = {r.from_email.lower() for r in all_replies if r.from_email}
     rate_request_emails   = {r.from_email.lower() for r in all_replies if _is_rate_request(r.body)}
@@ -2640,7 +3253,7 @@ def api_intelligence():
      .limit(20).all()
 
     # Build reply lookup: from_email → (has_reply, is_rate_request)
-    reply_lookup = {r.from_email.lower(): r for r in all_replies}
+    reply_lookup = {r.from_email.lower(): r for r in all_replies if r.from_email}
 
     # For each lane, cross-ref with replies
     lanes = []
@@ -2672,7 +3285,7 @@ def api_intelligence():
     # ── Broker Response Profile ───────────────────────────────────────────────
     # Group sends by domain
     sent_by_domain: dict = {}
-    all_sends = Send.query.filter_by(user_id=uid, status='sent').all()
+    all_sends = db.session.query(Send.recipient_email).filter_by(user_id=uid, status='sent').all()
     for s in all_sends:
         if not s.recipient_email or '@' not in s.recipient_email:
             continue
@@ -2723,21 +3336,46 @@ def api_intelligence():
 
 @app.route('/api/log', methods=['GET'])
 @login_required
-def api_log(): return jsonify(get_log_rows())
+def api_log():
+    page = request.args.get('page', 1)
+    per_page = request.args.get('per_page', 100)
+    search = (request.args.get('search') or '').strip()
+    status = (request.args.get('status') or '').strip()
+    date_from = (request.args.get('date_from') or '').strip()
+    date_to = (request.args.get('date_to') or '').strip()
+    return jsonify(get_log_page(
+        page=page, per_page=per_page, search=search,
+        status=status, date_from=date_from, date_to=date_to,
+    ))
 
 @app.route('/api/replies', methods=['GET'])
 @login_required
-def api_get_replies(): return jsonify(load_replies())
+def api_get_replies():
+    page = request.args.get('page', 1)
+    per_page = request.args.get('per_page', 25)
+    search = (request.args.get('search') or '').strip()
+    view = (request.args.get('view') or 'all').strip()
+    return jsonify(get_reply_groups_page(page=page, per_page=per_page, search=search, view=view))
 
 @app.route('/api/replies/fetch', methods=['POST'])
 @login_required
 @limiter.limit("2 per minute")   # IMAP is slow; prevent hammering Gmail
+@csrf_protected
 def api_fetch_replies(): return jsonify(fetch_replies_from_gmail())
 
 @app.route('/api/replies/status', methods=['POST'])
 @login_required
+@limiter.limit("120 per minute")
+@csrf_protected
 def api_reply_status():
-    data = request.json; msg_id = data.get('msg_id'); status = data.get('status')
+    data = request.json or {}
+    msg_id = data.get('msg_id')
+    status = data.get('status')
+    valid_statuses = {'new', 'viewed', 'follow_up', 'interested', 'ignored', 'not_interested'}
+    if not msg_id:
+        return jsonify({'error': 'msg_id is required'}), 400
+    if status not in valid_statuses:
+        return jsonify({'error': 'Invalid reply status'}), 400
     add_to_stop = data.get('add_to_stop', False)
     replies = load_replies(); reply_obj = None
     for r in replies:
@@ -2745,7 +3383,14 @@ def api_reply_status():
             r['status'] = status; reply_obj = r; break
     save_replies(replies)
     if reply_obj:
-        stage_map = {'new':'replied','interested':'interested','not_interested':'lost'}
+        stage_map = {
+            'new': 'replied',
+            'viewed': 'replied',
+            'follow_up': 'interested',
+            'interested': 'interested',
+            'ignored': 'lost',
+            'not_interested': 'lost',
+        }
         upsert_pipeline(reply_obj.get('email',''), {
             'stage': stage_map.get(status, 'replied'),
             'company': reply_obj.get('from','').split('<')[0].strip(),
@@ -2774,7 +3419,7 @@ def api_reply_status():
 
 @app.route('/')
 @login_required
-def index(): return render_template('index.html')
+def index(): return render_template('index.html', csrf_token=_get_csrf_token())
 
 # ── HEALTH CHECK ────────────────────────────────────────────────────────────
 # Used by Railway deployment to verify the app is alive.
@@ -2786,12 +3431,15 @@ def health():
         db_ok = True
     except Exception:
         db_ok = False
-    scheduler_ok = _scheduler.is_alive() if '_scheduler' in globals() else True
+    scheduler_ok = _scheduler_is_healthy()
     ok = db_ok and scheduler_ok
     return jsonify({
         'status':    'ok' if ok else 'degraded',
         'db':        db_ok,
         'scheduler': scheduler_ok,
+        'scheduler_enabled': _scheduler_enabled,
+        'rate_limit_store': _limiter_storage,
+        'rate_limit_shared': _limiter_shared,
     }), 200 if ok else 503
 
 # ── GLOBAL ERROR HANDLERS ────────────────────────────────────────────────────
@@ -2874,13 +3522,25 @@ DEFAULT_FU_TEMPLATES = {
     'FU3': "Hi,\n\nLast follow-up — if you have loads in the future, please reach out.\n\nBest,\n{name}\n{company} | {phone}",
 }
 
+def _normalize_fu_template_level(value):
+    raw = (value or '').strip()
+    if not raw:
+        return 'General'
+    upper = raw.upper()
+    return upper if upper in DEFAULT_FU_TEMPLATES else raw
+
 def get_fu_templates():
     uid = current_user_id()
     if not uid: return DEFAULT_FU_TEMPLATES.copy()
     from app.models import Template
     rows = Template.query.filter_by(user_id=uid, type='followup', is_active=True).all()
     if not rows: return DEFAULT_FU_TEMPLATES.copy()
-    return {r.level: r.body for r in rows if r.level}
+    core = DEFAULT_FU_TEMPLATES.copy()
+    for r in rows:
+        level = _normalize_fu_template_level(r.level)
+        if level in core and r.body:
+            core[level] = r.body
+    return core
 
 @app.route('/api/followups')
 @login_required
@@ -2910,14 +3570,14 @@ def api_followups_list():
             FollowupContact.company_name.ilike(f'%{search}%'),
         ))
 
-    now = datetime.utcnow()
+    now = _utcnow()
+    end_of_day = now.replace(hour=23, minute=59, second=59)
     if special == 'needs_action':
         q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
     elif special == 'overdue':
         q = q.filter(FollowupContact.next_followup_at < now, FollowupContact.state == 'active',
                      FollowupContact.is_followup_enabled == True)
     elif special == 'due_today':
-        end_of_day = now.replace(hour=23, minute=59, second=59)
         q = q.filter(FollowupContact.next_followup_at <= end_of_day,
                      FollowupContact.next_followup_at >= now,
                      FollowupContact.state == 'active', FollowupContact.is_followup_enabled == True)
@@ -2937,6 +3597,7 @@ def api_followups_list():
         func.count(case((FollowupContact.state == 'closed', 1))).label('closed'),
         func.count(case(((FollowupContact.stage == 'completed_fu3') & (FollowupContact.state == 'active'), 1))).label('needs_action'),
         func.count(case(((FollowupContact.next_followup_at < now) & (FollowupContact.state == 'active') & (FollowupContact.is_followup_enabled == True), 1))).label('overdue'),
+        func.count(case(((FollowupContact.next_followup_at <= end_of_day) & (FollowupContact.next_followup_at >= now) & (FollowupContact.state == 'active') & (FollowupContact.is_followup_enabled == True), 1))).label('due_today'),
         func.count(case(((FollowupContact.scheduled_once == True) & (FollowupContact.next_followup_at > now), 1))).label('scheduled'),
     ).filter(FollowupContact.user_id == uid).first()
 
@@ -2944,6 +3605,7 @@ def api_followups_list():
         'total': count_q.total, 'active': count_q.active, 'paused': count_q.paused,
         'warm': count_q.warm, 'loads': count_q.loads, 'blocked': count_q.blocked,
         'closed': count_q.closed, 'needs_action': count_q.needs_action, 'overdue': count_q.overdue,
+        'due_today': count_q.due_today,
         'scheduled': count_q.scheduled,
     }
     return jsonify(contacts=[c.to_dict() for c in contacts], counts=counts)
@@ -2974,7 +3636,7 @@ def api_followups_ids():
             FollowupContact.contact_name.ilike(f'%{search}%'),
             FollowupContact.company_name.ilike(f'%{search}%'),
         ))
-    now = datetime.utcnow()
+    now = _utcnow()
     if special == 'needs_action':
         q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
     elif special == 'overdue':
@@ -2994,6 +3656,8 @@ def api_followups_ids():
 
 @app.route('/api/followups/add', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute")
+@csrf_protected
 def api_followups_add():
     from app.models import FollowupContact, Workspace
     uid = _current_user_id()
@@ -3011,7 +3675,7 @@ def api_followups_add():
         return jsonify(error='Contact already in follow-ups'), 409
 
     settings = _get_fu_settings(ws.id)
-    now = datetime.utcnow()
+    now = _utcnow()
 
     fc = FollowupContact(
         user_id=uid, workspace_id=ws.id, contact_email=email,
@@ -3032,6 +3696,8 @@ def api_followups_add():
 
 @app.route('/api/followups/action', methods=['POST'])
 @login_required
+@limiter.limit("60 per minute")
+@csrf_protected
 def api_followups_action():
     from app.models import FollowupContact, EmailAccount
     uid = _current_user_id()
@@ -3040,7 +3706,7 @@ def api_followups_action():
     action = data.get('action')
     reason = data.get('reason', '')
 
-    fc = FollowupContact.query.get(contact_id)
+    fc = db.session.get(FollowupContact, contact_id)
     if not fc or fc.user_id != uid:
         return jsonify(error='Not found'), 404
 
@@ -3050,7 +3716,7 @@ def api_followups_action():
         if fc.stage not in STAGE_TO_TEMPLATE:
             return jsonify(error='No scheduled follow-up to send'), 400
 
-        template_text = _get_random_fu_template(uid)
+        template_text = _get_fu_template_for_stage(uid, fc.stage)
         if not template_text:
             return jsonify(error='No active follow-up templates. Add at least one before sending.'), 400
         acct = EmailAccount.query.filter_by(user_id=uid).first()
@@ -3070,7 +3736,7 @@ def api_followups_action():
             db.session.commit()
             return jsonify(error=f'Send failed: {err}'), 500
 
-        now = datetime.utcnow()
+        now = _utcnow()
         old_stage = fc.stage
         setattr(fc, STAGE_SENT_FIELD[fc.stage], now)
         fc.last_followup_sent_at = now
@@ -3095,7 +3761,7 @@ def api_followups_action():
     elif action == 'free-send':
         if fc.state in ('blocked', 'closed'):
             return jsonify(error='Cannot send to blocked or closed contact'), 400
-        template_text = _get_random_fu_template(uid)
+        template_text = _get_fu_template_for_stage(uid, fc.stage, allow_random_fallback=True)
         if not template_text:
             return jsonify(error='No active follow-up templates. Add at least one before sending.'), 400
         acct = EmailAccount.query.filter_by(user_id=uid).first()
@@ -3113,7 +3779,7 @@ def api_followups_action():
                           metadata_json=json.dumps({'error': err}), notes='Send failed')
             db.session.commit()
             return jsonify(error=f'Send failed: {err}'), 500
-        now = datetime.utcnow()
+        now = _utcnow()
         fc.is_followup_enabled = False
         fc.last_followup_sent_at = now
         fc.last_activity_at = now
@@ -3130,12 +3796,13 @@ def api_followups_action():
             return jsonify(error='scheduled_at is required (ISO8601 UTC)'), 400
         try:
             scheduled_at = datetime.fromisoformat(dt_str.replace('Z', '+00:00')).replace(tzinfo=None)
-            if scheduled_at < datetime.utcnow() + timedelta(minutes=1):
+            if scheduled_at < _utcnow() + timedelta(minutes=1):
                 return jsonify(error='scheduled_at must be at least 1 minute in the future'), 400
         except (ValueError, TypeError):
             return jsonify(error='Invalid scheduled_at format — use ISO8601 UTC'), 400
         fc.next_followup_at = scheduled_at
         fc.scheduled_once = True
+        fc.updated_at = _utcnow()
         _record_event(fc, 'scheduled_once', actor_user_id=uid,
                       notes=f'Scheduled for {scheduled_at.strftime("%Y-%m-%d %H:%M")} UTC')
         db.session.commit()
@@ -3160,7 +3827,9 @@ def api_followups_action():
         fc.recurring_enabled = True
         fc.recurring_days    = r_days
         fc.recurring_time    = r_time
+        fc.scheduled_once    = False
         fc.next_followup_at  = _next_recurring_datetime(r_days, r_time)
+        fc.updated_at = _utcnow()
         _record_event(fc, 'recurring_set', actor_user_id=uid,
                       notes=f'Recurring days={r_days} time={r_time} UTC')
         db.session.commit()
@@ -3168,13 +3837,16 @@ def api_followups_action():
 
     elif action == 'stop-recurring':
         fc.recurring_enabled = False
+        fc.recurring_days = None
+        fc.recurring_time = None
+        _restore_contact_schedule(fc)
         _record_event(fc, 'recurring_stopped', actor_user_id=uid)
         db.session.commit()
         return jsonify(ok=True, contact=fc.to_dict())
 
     elif action == 'cancel-schedule':
         fc.scheduled_once = False
-        fc.next_followup_at = None
+        _restore_contact_schedule(fc)
         _record_event(fc, 'schedule_cancelled', actor_user_id=uid)
         db.session.commit()
         return jsonify(ok=True, contact=fc.to_dict())
@@ -3191,6 +3863,8 @@ def api_followups_action():
         ok, err = _transition_state(fc, 'blocked', reason=reason, actor_user_id=uid)
     elif action == 'close':
         ok, err = _transition_state(fc, 'closed', reason=reason, actor_user_id=uid)
+    elif action == 'restart-fu1':
+        ok, err = _restart_contact_from_fu1(fc, actor_user_id=uid)
     else:
         return jsonify(error=f'Unknown action: {action}'), 400
 
@@ -3202,6 +3876,8 @@ def api_followups_action():
 
 @app.route('/api/followups/bulk-action', methods=['POST'])
 @login_required
+@limiter.limit("20 per minute")
+@csrf_protected
 def api_followups_bulk_action():
     from app.models import FollowupContact, EmailAccount
     uid = _current_user_id()
@@ -3212,7 +3888,7 @@ def api_followups_bulk_action():
 
     results = []
     for cid in ids:
-        fc = FollowupContact.query.get(cid)
+        fc = db.session.get(FollowupContact, cid)
         if not fc or fc.user_id != uid:
             results.append({'id': cid, 'ok': False, 'error': 'Not found'})
             continue
@@ -3222,11 +3898,15 @@ def api_followups_bulk_action():
             ok, err = _transition_state(fc, target, reason=reason, actor_user_id=uid)
             results.append({'id': cid, 'ok': ok, 'error': err})
 
+        elif action == 'restart-fu1':
+            ok, err = _restart_contact_from_fu1(fc, actor_user_id=uid)
+            results.append({'id': cid, 'ok': ok, 'error': err})
+
         elif action == 'send-now':
             if fc.state != 'active' or fc.stage not in STAGE_TO_TEMPLATE:
                 results.append({'id': cid, 'ok': False, 'skip': True, 'error': 'Not eligible for sequence send'})
                 continue
-            template_text = _get_random_fu_template(fc.user_id)
+            template_text = _get_fu_template_for_stage(fc.user_id, fc.stage)
             if not template_text:
                 results.append({'id': cid, 'ok': False, 'error': 'No active templates'})
                 continue
@@ -3242,7 +3922,7 @@ def api_followups_bulk_action():
                        'source_thread_id': fc.source_thread_id or ''}
             ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
             if ok:
-                now_dt = datetime.utcnow()
+                now_dt = _utcnow()
                 old_stage = fc.stage
                 setattr(fc, STAGE_SENT_FIELD[fc.stage], now_dt)
                 fc.last_followup_sent_at = now_dt
@@ -3267,7 +3947,7 @@ def api_followups_bulk_action():
             if fc.state in ('blocked', 'closed'):
                 results.append({'id': cid, 'ok': False, 'error': 'Blocked or closed'})
                 continue
-            template_text = _get_random_fu_template(fc.user_id)
+            template_text = _get_fu_template_for_stage(fc.user_id, fc.stage, allow_random_fallback=True)
             if not template_text:
                 results.append({'id': cid, 'ok': False, 'error': 'No active templates'})
                 continue
@@ -3283,7 +3963,7 @@ def api_followups_bulk_action():
                        'source_thread_id': fc.source_thread_id or ''}
             ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
             if ok:
-                now_dt = datetime.utcnow()
+                now_dt = _utcnow()
                 fc.is_followup_enabled = False
                 fc.last_followup_sent_at = now_dt
                 fc.last_activity_at = now_dt
@@ -3300,13 +3980,15 @@ def api_followups_bulk_action():
             dt_str = data.get('scheduled_at', '')
             try:
                 scheduled_at = datetime.fromisoformat(dt_str.replace('Z', '+00:00')).replace(tzinfo=None)
-                if scheduled_at < datetime.utcnow() + timedelta(minutes=1):
+                if scheduled_at < _utcnow() + timedelta(minutes=1):
                     results.append({'id': cid, 'ok': False, 'error': 'Date must be in future'})
                     continue
             except (ValueError, TypeError):
                 results.append({'id': cid, 'ok': False, 'error': 'Invalid date format'})
                 continue
             fc.next_followup_at = scheduled_at
+            fc.scheduled_once = True
+            fc.updated_at = _utcnow()
             _record_event(fc, 'scheduled_once', actor_user_id=uid,
                           notes=f'Scheduled {scheduled_at.strftime("%Y-%m-%d %H:%M")} UTC')
             results.append({'id': cid, 'ok': True})
@@ -3321,7 +4003,9 @@ def api_followups_bulk_action():
                 fc.recurring_enabled = True
                 fc.recurring_days    = r_days
                 fc.recurring_time    = r_time
+                fc.scheduled_once    = False
                 fc.next_followup_at  = _next_recurring_datetime(r_days, r_time)
+                fc.updated_at = _utcnow()
                 _record_event(fc, 'recurring_set', actor_user_id=uid,
                               notes=f'Recurring days={r_days} time={r_time} UTC')
                 results.append({'id': cid, 'ok': True})
@@ -3330,12 +4014,15 @@ def api_followups_bulk_action():
 
         elif action == 'stop-recurring':
             fc.recurring_enabled = False
+            fc.recurring_days = None
+            fc.recurring_time = None
+            _restore_contact_schedule(fc)
             _record_event(fc, 'recurring_stopped', actor_user_id=uid)
             results.append({'id': cid, 'ok': True})
 
         elif action == 'cancel-schedule':
             fc.scheduled_once = False
-            fc.next_followup_at = None
+            _restore_contact_schedule(fc)
             _record_event(fc, 'schedule_cancelled', actor_user_id=uid)
             results.append({'id': cid, 'ok': True})
 
@@ -3351,11 +4038,13 @@ def api_followups_bulk_action():
 
 @app.route('/api/followups/delete', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute")
+@csrf_protected
 def api_followups_delete():
     from app.models import FollowupContact
     uid = _current_user_id()
     data = request.get_json()
-    fc = FollowupContact.query.get(data.get('id'))
+    fc = db.session.get(FollowupContact, data.get('id'))
     if not fc or fc.user_id != uid:
         return jsonify(error='Not found'), 404
     db.session.delete(fc)
@@ -3365,15 +4054,17 @@ def api_followups_delete():
 
 @app.route('/api/followups/notes', methods=['POST'])
 @login_required
+@limiter.limit("60 per minute")
+@csrf_protected
 def api_followups_notes():
     from app.models import FollowupContact
     uid = _current_user_id()
     data = request.get_json()
-    fc = FollowupContact.query.get(data.get('id'))
+    fc = db.session.get(FollowupContact, data.get('id'))
     if not fc or fc.user_id != uid:
         return jsonify(error='Not found'), 404
     fc.notes = data.get('notes', '')
-    fc.updated_at = datetime.utcnow()
+    fc.updated_at = _utcnow()
     _record_event(fc, 'note_added', actor_user_id=uid, notes=fc.notes[:100])
     db.session.commit()
     return jsonify(ok=True)
@@ -3422,6 +4113,8 @@ def api_followups_candidates():
 
 @app.route('/api/settings/followup', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("20 per minute", methods=["POST"])
+@csrf_protected
 def api_settings_followup():
     from app.models import FollowupSettings, Workspace
     uid = _current_user_id()
@@ -3448,7 +4141,7 @@ def api_settings_followup():
     if 'fu3_delay_days' in data: s.fu3_delay_days = max(1, int(data['fu3_delay_days']))
     if 'auto_stop_on_reply' in data: s.auto_stop_on_reply = bool(data['auto_stop_on_reply'])
     if 'default_followup_enabled' in data: s.default_followup_enabled = bool(data['default_followup_enabled'])
-    s.updated_at = datetime.utcnow()
+    s.updated_at = _utcnow()
     db.session.commit()
     return jsonify(ok=True)
 
@@ -3505,14 +4198,30 @@ def api_get_fu_templates(): return jsonify(get_fu_templates())
 
 @app.route('/api/fu-templates', methods=['POST'])
 @login_required
+@limiter.limit("20 per minute")
+@csrf_protected
 def api_save_fu_templates():
     uid = current_user_id()
     if not uid: return jsonify({'error': 'Not authenticated'}), 401
     from app.models import Template
     data = request.json  # {'FU1': '...', 'FU2': '...', 'FU3': '...'}
-    Template.query.filter_by(user_id=uid, type='followup').delete()
     for level, body in data.items():
-        db.session.add(Template(user_id=uid, type='followup', level=level, body=body))
+        normalized_level = _normalize_fu_template_level(level)
+        tmpl = Template.query.filter_by(user_id=uid, type='followup', level=normalized_level).order_by(Template.created_at.asc()).first()
+        if tmpl:
+            tmpl.body = body
+            tmpl.is_active = True
+            if not tmpl.name:
+                tmpl.name = normalized_level
+        else:
+            db.session.add(Template(
+                user_id=uid,
+                type='followup',
+                level=normalized_level,
+                name=normalized_level,
+                body=body,
+                is_active=True,
+            ))
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -3528,6 +4237,8 @@ def api_list_fu_templates():
 
 @app.route('/api/fu-templates/add', methods=['POST'])
 @login_required
+@limiter.limit("20 per minute")
+@csrf_protected
 def api_add_fu_template():
     """Add a new FU template (any name allowed)."""
     uid = current_user_id()
@@ -3535,16 +4246,19 @@ def api_add_fu_template():
     from app.models import Template
     data = request.json or {}
     name = (data.get('name') or '').strip()
+    level = _normalize_fu_template_level(data.get('level') or name or 'General')
     body = (data.get('body') or '').strip()
     if not body:
         return jsonify({'error': 'Template body is required'}), 400
-    tmpl = Template(user_id=uid, type='followup', level=name or 'General', name=name, body=body)
+    tmpl = Template(user_id=uid, type='followup', level=level, name=name or level, body=body)
     db.session.add(tmpl)
     db.session.commit()
     return jsonify({'ok': True, 'template': tmpl.to_dict()})
 
 @app.route('/api/fu-templates/<tmpl_id>', methods=['PUT'])
 @login_required
+@limiter.limit("30 per minute")
+@csrf_protected
 def api_update_fu_template(tmpl_id):
     uid = current_user_id()
     if not uid: return jsonify({'error': 'Not authenticated'}), 401
@@ -3553,6 +4267,9 @@ def api_update_fu_template(tmpl_id):
     data = request.json or {}
     if 'name' in data:
         tmpl.name = data['name'].strip()
+    if 'level' in data:
+        tmpl.level = _normalize_fu_template_level(data['level'])
+    elif 'name' in data and tmpl.level not in DEFAULT_FU_TEMPLATES:
         tmpl.level = data['name'].strip() or 'General'
     if 'body' in data:
         tmpl.body = data['body']
@@ -3563,6 +4280,8 @@ def api_update_fu_template(tmpl_id):
 
 @app.route('/api/fu-templates/<tmpl_id>', methods=['DELETE'])
 @login_required
+@limiter.limit("30 per minute")
+@csrf_protected
 def api_delete_fu_template(tmpl_id):
     uid = current_user_id()
     if not uid: return jsonify({'error': 'Not authenticated'}), 401
@@ -3602,7 +4321,7 @@ def upsert_pipeline(email, updates):
     if existing:
         for k, v in updates.items():
             if hasattr(existing, k): setattr(existing, k, v)
-        existing.updated_at = datetime.now()
+        existing.updated_at = _utcnow()
     else:
         existing = PipelineContact(
             user_id=uid, email=email.lower(),
@@ -3619,12 +4338,14 @@ def api_get_pipeline(): return jsonify(load_pipeline())
 
 @app.route('/api/pipeline/add', methods=['POST'])
 @login_required
+@csrf_protected
 def api_add_pipeline():
     d = request.json; contact = upsert_pipeline(d['email'], d)
     return jsonify({'ok': True, 'contact': contact})
 
 @app.route('/api/pipeline/update', methods=['POST'])
 @login_required
+@csrf_protected
 def api_update_pipeline():
     d = request.json
     email = (d.get('email') or '').lower().strip()
@@ -3636,6 +4357,7 @@ def api_update_pipeline():
 
 @app.route('/api/pipeline/delete', methods=['POST'])
 @login_required
+@csrf_protected
 def api_delete_pipeline():
     email = request.json.get('email')
     save_pipeline([c for c in load_pipeline() if c['email'].lower() != email.lower()])
@@ -3660,7 +4382,7 @@ def add_to_followups(reply_obj):
         return
 
     settings = _get_fu_settings(ws.id)
-    now = datetime.utcnow()
+    now = _utcnow()
 
     fc = FollowupContact(
         user_id=uid, workspace_id=ws.id, contact_email=email,
@@ -3696,7 +4418,7 @@ def _check_reply_stops_followup(reply_email, user_id):
     if not fc or not fc.is_followup_enabled:
         return
 
-    now = datetime.utcnow()
+    now = _utcnow()
     fc.is_followup_enabled = False
     fc.last_reply_at = now
     fc.last_activity_at = now
@@ -3705,20 +4427,36 @@ def _check_reply_stops_followup(reply_email, user_id):
 
 
 def _get_fu_templates_for_user(uid):
-    """Fetch FU templates for a specific user — no session required (safe in threads)."""
+    """Fetch active FU templates for a specific user — safe in threads."""
     from app.models import Template
-    rows = Template.query.filter_by(user_id=uid, type='followup', is_active=True).all()
-    if not rows: return DEFAULT_FU_TEMPLATES.copy()
-    return {r.level: r.body for r in rows if r.level}
+    return Template.query.filter_by(user_id=uid, type='followup', is_active=True)\
+        .order_by(Template.sort_order, Template.created_at).all()
 
-def _get_random_fu_template(uid):
-    """Pick a random active follow-up template body for the given user.
-    Falls back to DEFAULT_FU_TEMPLATES pool if no custom templates exist."""
+def _get_random_fu_template(uid, stage=None, include_general=True):
+    """Pick a random active FU template for a stage, optionally including general pool entries."""
     from app.models import Template
-    rows = Template.query.filter_by(user_id=uid, type='followup', is_active=True).all()
-    if rows:
-        return random.choice(rows).body or ''
-    return random.choice(list(DEFAULT_FU_TEMPLATES.values()))
+    rows = Template.query.filter_by(user_id=uid, type='followup', is_active=True)\
+        .order_by(Template.sort_order, Template.created_at).all()
+    template_key = STAGE_TO_TEMPLATE.get(stage) if stage else None
+    stage_rows = []
+    general_rows = []
+    for row in rows:
+        level = _normalize_fu_template_level(row.level)
+        if template_key and level == template_key:
+            stage_rows.append(row)
+        elif level not in DEFAULT_FU_TEMPLATES:
+            general_rows.append(row)
+    pool = []
+    if stage_rows:
+        pool.extend(stage_rows)
+    if include_general:
+        pool.extend(general_rows)
+    if pool:
+        return random.choice(pool).body or ''
+    if template_key:
+        return DEFAULT_FU_TEMPLATES.get(template_key, '')
+    defaults = list(DEFAULT_FU_TEMPLATES.values())
+    return random.choice(defaults) if defaults else ''
 
 def _next_recurring_datetime(recurring_days, recurring_time):
     """Return next UTC datetime matching one of recurring_days at recurring_time (UTC).
@@ -3730,7 +4468,7 @@ def _next_recurring_datetime(recurring_days, recurring_time):
     if not days:
         raise ValueError(f'recurring_days is empty or invalid: {recurring_days!r}')
     h, m = map(int, recurring_time.split(':'))
-    now = datetime.utcnow()
+    now = _utcnow()
     for offset in range(0, 8):
         candidate = (now + timedelta(days=offset)).replace(
             hour=h, minute=m, second=0, microsecond=0)
@@ -3742,12 +4480,13 @@ def _run_scheduled_followups():
     """Process due follow-up contacts and send emails. Called from daemon thread.
     Uses SELECT FOR UPDATE SKIP LOCKED on PostgreSQL to prevent duplicate sends."""
     from app.models import FollowupContact, EmailAccount
-    now = datetime.utcnow()
+    now = _utcnow()
     with app.app_context():
         try:
             q = FollowupContact.query.filter(
                 FollowupContact.state == 'active',
                 FollowupContact.is_followup_enabled == True,
+                FollowupContact.scheduled_once == False,
                 FollowupContact.next_followup_at <= now,
                 FollowupContact.stage.in_(['fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled']),
             )
@@ -3771,12 +4510,13 @@ def _run_scheduled_followups():
                 if not acct:
                     continue
 
-                template_text = _get_random_fu_template(fc.user_id)
+                template_text = _get_fu_template_for_stage(fc.user_id, fc.stage)
                 if not template_text:
                     continue
 
                 cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-                       'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+                       'phone': acct.your_phone or '', 'route': fc.current_route or '',
+                       'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
                 fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                            'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
                            'source_thread_id': fc.source_thread_id or ''}
@@ -3821,6 +4561,7 @@ def _run_scheduled_followups():
         processed_ids = {fc.id for fc in contacts}
         try:
             sq = FollowupContact.query.filter(
+                FollowupContact.state == 'active',
                 FollowupContact.scheduled_once == True,
                 FollowupContact.next_followup_at <= now,
             )
@@ -3837,6 +4578,8 @@ def _run_scheduled_followups():
             if fc.id in processed_ids:
                 continue
             try:
+                if fc.state != 'active':
+                    continue
                 template_text = _get_random_fu_template(fc.user_id)
                 if not template_text:
                     continue
@@ -3844,7 +4587,8 @@ def _run_scheduled_followups():
                 if not acct:
                     continue
                 cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-                       'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+                       'phone': acct.your_phone or '', 'route': fc.current_route or '',
+                       'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
                 fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                            'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
                            'source_thread_id': fc.source_thread_id or ''}
@@ -3853,6 +4597,7 @@ def _run_scheduled_followups():
                     fc.scheduled_once = False
                     fc.last_followup_sent_at = now
                     fc.last_activity_at = now
+                    _restore_contact_schedule(fc, now=now)
                     _record_event(fc, 'scheduled_once_sent', actor_type='scheduler',
                                   from_stage=fc.stage, to_stage=fc.stage)
                     processed_ids.add(fc.id)
@@ -3905,7 +4650,8 @@ def _run_scheduled_followups():
                     continue
 
                 cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-                       'phone': acct.your_phone or '', 'route': fc.current_route or ''}
+                       'phone': acct.your_phone or '', 'route': fc.current_route or '',
+                       'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
                 fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
                            'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
                            'source_thread_id': fc.source_thread_id or ''}
@@ -3946,7 +4692,8 @@ def scheduled_followup_worker():
     while True:
         try:
             with app.app_context():
-                _run_scheduled_followups()
+                if _acquire_system_lease('followup_scheduler', lease_seconds=840):
+                    _run_scheduled_followups()
         except Exception as e:
             app.logger.error(f'[scheduler] Error: {e}')
         time.sleep(900)   # 15 minutes
@@ -3986,6 +4733,7 @@ with app.app_context():
         ('email_accounts', 'google_refresh_token', 'TEXT'),
         ('email_accounts', 'google_access_token',  'TEXT'),
         ('email_accounts', 'token_expiry',         'TIMESTAMP'),
+        ('email_accounts', 'daily_target',         'INTEGER DEFAULT 100'),
         ('follow_ups',     'auto_enabled',          'BOOLEAN DEFAULT TRUE'),
         ('follow_ups',     'scheduled_at',          'TIMESTAMP'),
         ('follow_ups',     'last_error',            'TEXT'),
@@ -3994,6 +4742,7 @@ with app.app_context():
         ('followup_contacts', 'recurring_days',     'VARCHAR(20)'),
         ('followup_contacts', 'recurring_time',     'VARCHAR(5)'),
         ('followup_contacts', 'scheduled_once',     'BOOLEAN NOT NULL DEFAULT FALSE'),
+        ('replies',           'thread_id',           'VARCHAR(255)'),
     ]
     try:
         with db.engine.connect() as _conn:
@@ -4023,17 +4772,23 @@ with app.app_context():
             _conn.execute(db.text(
                 'CREATE INDEX IF NOT EXISTS ix_sends_user_status ON sends (user_id, status)'
             ))
+            _conn.execute(db.text(
+                'CREATE INDEX IF NOT EXISTS ix_sends_user_status_sent_at ON sends (user_id, status, sent_at)'
+            ))
+            _conn.execute(db.text(
+                'CREATE INDEX IF NOT EXISTS ix_sends_user_recipient_email ON sends (user_id, recipient_email)'
+            ))
             _conn.commit()
     except Exception:
         pass
     # Mark any DB jobs still "running" as "interrupted" (handles deploy mid-send)
     try:
         from app.models import SendJob
-        stale = SendJob.query.filter_by(status='running').all()
+        stale = SendJob.query.filter(SendJob.status.in_(['queued', 'running'])).all()
         if stale:
             for _j in stale:
                 _j.status = 'interrupted'
-                _j.finished_at = datetime.utcnow()
+                _j.finished_at = _utcnow()
             db.session.commit()
             print(f'✓ Marked {len(stale)} stale send job(s) as interrupted')
     except Exception as _e:
@@ -4042,10 +4797,16 @@ with app.app_context():
         auto_create_admin()
     except Exception as _e:
         print(f'auto_create_admin skipped: {_e}')
+    try:
+        _recover_followup_data()
+    except Exception as _e:
+        db.session.rollback()
+        print(f'follow-up recovery skipped: {_e}')
 
 # ── Start background follow-up scheduler ──────────────────────────────────────
-_scheduler = threading.Thread(target=scheduled_followup_worker, daemon=True, name='fu-scheduler')
-_scheduler.start()
+if _scheduler_enabled:
+    _scheduler = threading.Thread(target=scheduled_followup_worker, daemon=True, name='fu-scheduler')
+    _scheduler.start()
 
 # ── Legal pages ───────────────────────────────────────────────────────────────
 

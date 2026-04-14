@@ -308,6 +308,99 @@
     .main { padding: 20px 16px; }
     .header { padding: 16px; }
   }
+
+  .page-intro { margin-bottom: 22px; }
+  .page-title { font-size: 30px; font-weight: 700; line-height: 1.05; }
+  .page-subtitle { margin-top: 8px; color: var(--muted); font-size: 14px; }
+  .section-stack { display: grid; gap: 20px; }
+  .admin-health-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .health-card {
+    background: linear-gradient(180deg, rgba(22,22,31,0.96), rgba(17,17,24,0.96));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    cursor: pointer;
+    transition: border-color .15s, transform .15s, background .15s;
+  }
+  .health-card:hover { border-color: rgba(99,102,241,.45); transform: translateY(-1px); }
+  .health-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(99,102,241,.25) inset; }
+  .health-card.danger { background: linear-gradient(180deg, rgba(95,24,31,.28), rgba(17,17,24,.98)); }
+  .health-card.warn { background: linear-gradient(180deg, rgba(88,58,10,.24), rgba(17,17,24,.98)); }
+  .health-card.success { background: linear-gradient(180deg, rgba(10,68,39,.22), rgba(17,17,24,.98)); }
+  .health-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 12px; }
+  .health-value { font-size: 28px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+  .health-note { margin-top: 10px; color: var(--muted); font-size: 12px; }
+  .toolbar-card { padding: 18px 20px; }
+  .toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 16px; }
+  .toolbar-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .admin-search {
+    min-width: 320px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 10px 12px;
+    font: inherit;
+  }
+  .admin-search:focus { outline: none; border-color: var(--accent); }
+  .quick-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  .quick-filter {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.02);
+    color: var(--muted);
+    padding: 7px 12px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .quick-filter:hover { color: var(--text); border-color: rgba(99,102,241,.3); }
+  .quick-filter.active { color: #fff; background: rgba(99,102,241,.18); border-color: rgba(99,102,241,.45); }
+  .table-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 700;
+    border: 1px solid transparent;
+  }
+  .status-healthy { color: #86efac; background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.18); }
+  .status-disconnected { color: #fca5a5; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.2); }
+  .status-near-quota { color: #fde047; background: rgba(234,179,8,.12); border-color: rgba(234,179,8,.2); }
+  .status-inactive { color: #c4b5fd; background: rgba(139,92,246,.14); border-color: rgba(139,92,246,.24); }
+  .status-issue { color: #fdba74; background: rgba(249,115,22,.12); border-color: rgba(249,115,22,.2); }
+  .quota-cell { min-width: 140px; }
+  .account-cell { display: grid; gap: 4px; min-width: 220px; }
+  .account-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .account-email { font-size: 12px; color: var(--muted); }
+  .gmail-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  }
+  .gmail-chip.yes { color: #86efac; background: rgba(34,197,94,.12); }
+  .gmail-chip.no { color: var(--muted); background: rgba(107,107,138,.16); }
+  .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  .section-copy h2 { font-size: 18px; font-weight: 700; }
+  .section-copy p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .secondary-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; }
+  .secondary-stack { display: grid; gap: 20px; }
+  .reporting-block .stat-grid { grid-template-columns: repeat(4, 1fr); margin-bottom: 16px; }
+  .reporting-block .stat-card { background: var(--surface2); }
+  .card-subtle { background: linear-gradient(180deg, rgba(17,17,24,.9), rgba(13,13,20,.95)); }
+  .accounts-table td.compact { white-space: nowrap; }
+  .actions-cell { text-align: right; }
+  @media (max-width: 1100px) {
+    .admin-health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .secondary-grid { grid-template-columns: 1fr; }
+    .reporting-block .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 700px) {
+    .admin-health-grid { grid-template-columns: 1fr; }
+    .admin-search { min-width: 0; width: 100%; }
+    .toolbar-row { align-items: stretch; }
+    .toolbar-group { width: 100%; }
+    .reporting-block .stat-grid, .top-users-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -329,61 +422,71 @@
 
 <!-- Main -->
 <div class="main">
-
-  <!-- Tabs -->
-  <div class="tabs">
-    <button class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
-    <button class="tab" data-tab="accounts" onclick="switchTab('accounts')">Accounts</button>
-    <button class="tab" data-tab="invites" onclick="switchTab('invites')">Invites</button>
+  <div class="page-intro">
+    <div class="page-title">Admin</div>
+    <div class="page-subtitle">Manage account health, quotas, and workspace access without digging through tables.</div>
   </div>
 
-  <!-- ══ OVERVIEW ══ -->
-  <div class="section active" id="section-overview">
-    <div class="period-bar" id="period-bar">
-      <label>Period:</label>
-      <button class="period-btn" data-period="total" onclick="setPeriod('total')">Total</button>
-      <button class="period-btn active" data-period="today" onclick="setPeriod('today')">Today</button>
-      <button class="period-btn" data-period="yesterday" onclick="setPeriod('yesterday')">Yesterday</button>
-      <button class="period-btn" data-period="7d" onclick="setPeriod('7d')">7 days</button>
-      <button class="period-btn" data-period="30d" onclick="setPeriod('30d')">30 days</button>
-    </div>
-    <div class="stat-grid" id="overview-cards">
-      <div class="stat-card"><div class="stat-label">Total Users <span class="all-time-badge">All time</span></div><div class="stat-value" id="ov-users">—</div><div class="stat-sub" id="ov-users-sub">registered</div></div>
-      <div class="stat-card"><div class="stat-label">Active Users</div><div class="stat-value green" id="ov-active">—</div><div class="stat-sub" id="ov-active-sub"></div></div>
-      <div class="stat-card"><div class="stat-label">Sends</div><div class="stat-value accent" id="ov-sends">—</div><div class="stat-sub" id="ov-sends-sub"></div></div>
-      <div class="stat-card"><div class="stat-label">Replies</div><div class="stat-value" id="ov-replies" style="color:#3b82f6">—</div><div class="stat-sub" id="ov-replies-sub"></div></div>
-      <div class="stat-card"><div class="stat-label">Reply Rate</div><div class="stat-value yellow" id="ov-rate">—</div><div class="stat-sub">replies / sends</div></div>
-      <div class="stat-card"><div class="stat-label">Follow-ups</div><div class="stat-value" id="ov-fu">—</div><div class="stat-sub" id="ov-fu-sub"></div></div>
-      <div class="stat-card"><div class="stat-label">Inactive</div><div class="stat-value" id="ov-inactive" style="color:var(--red)">—</div><div class="stat-sub">0 sends in period</div></div>
-    </div>
-    <div class="plan-row" id="plan-pills">
-      <div class="plan-pill"><div class="dot dot-free"></div><span>Free</span><strong id="pp-free">—</strong></div>
-      <div class="plan-pill"><div class="dot dot-starter"></div><span>Starter</span><strong id="pp-starter">—</strong></div>
-      <div class="plan-pill"><div class="dot dot-pro"></div><span>Pro</span><strong id="pp-pro">—</strong></div>
-    </div>
-    <div class="section-title" id="top-users-title">Top Users — Today</div>
-    <div class="top-users-grid" id="top-users-grid">
-      <div style="color:var(--muted);font-size:13px;padding:12px">No activity in this period</div>
-    </div>
+  <div class="period-bar" id="period-bar">
+    <label>Period:</label>
+    <button class="period-btn" data-period="total" onclick="setPeriod('total')">Total</button>
+    <button class="period-btn active" data-period="today" onclick="setPeriod('today')">Today</button>
+    <button class="period-btn" data-period="yesterday" onclick="setPeriod('yesterday')">Yesterday</button>
+    <button class="period-btn" data-period="7d" onclick="setPeriod('7d')">7 days</button>
+    <button class="period-btn" data-period="30d" onclick="setPeriod('30d')">30 days</button>
   </div>
 
-  <!-- ══ ACCOUNTS ══ -->
-  <div class="section" id="section-accounts">
-    <div class="card">
-      <div class="card-title">All Accounts <span class="count" id="accounts-count">0</span></div>
+  <div class="section-stack">
+    <div class="card toolbar-card card-subtle">
+      <div class="section-heading">
+        <div class="section-copy">
+          <h2>Admin Health</h2>
+          <p>Surface the accounts that need admin attention before everything else.</p>
+        </div>
+        <div class="table-meta"><span id="health-summary-text">Loading account health…</span></div>
+      </div>
+      <div class="admin-health-grid" id="health-grid">
+        <div class="health-card" data-filter="disconnected" onclick="setAccountFilter('disconnected')"><div class="health-kicker">Disconnected</div><div class="health-value" id="health-disconnected">—</div><div class="health-note">Accounts that cannot send right now</div></div>
+        <div class="health-card" data-filter="near-quota" onclick="setAccountFilter('near-quota')"><div class="health-kicker">Near quota</div><div class="health-value" id="health-near-quota">—</div><div class="health-note">80%+ of today's send allowance used</div></div>
+        <div class="health-card" data-filter="inactive" onclick="setAccountFilter('inactive')"><div class="health-kicker">Inactive</div><div class="health-value" id="health-inactive">—</div><div class="health-note">No recent sending activity</div></div>
+        <div class="health-card" data-filter="errors" onclick="setAccountFilter('errors')"><div class="health-kicker">Errors</div><div class="health-value" id="health-errors">—</div><div class="health-note">Accounts with send failures in the selected period</div></div>
+      </div>
+    </div>
+
+    <div class="card toolbar-card">
+      <div class="section-heading">
+        <div class="section-copy">
+          <h2>Accounts</h2>
+          <p>The main admin workspace for quota, Gmail health, recent activity, and intervention.</p>
+        </div>
+        <div class="table-meta"><span id="accounts-count">0</span><span>accounts</span></div>
+      </div>
+      <div class="toolbar-row">
+        <div class="toolbar-group">
+          <input class="admin-search" id="accounts-search" type="search" placeholder="Search email, name, or workspace…" oninput="setAccountSearch(this.value)">
+          <div class="quick-filters">
+            <button class="quick-filter active" data-filter="all" onclick="setAccountFilter('all')">All</button>
+            <button class="quick-filter" data-filter="disconnected" onclick="setAccountFilter('disconnected')">Disconnected</button>
+            <button class="quick-filter" data-filter="near-quota" onclick="setAccountFilter('near-quota')">Near Quota</button>
+            <button class="quick-filter" data-filter="inactive" onclick="setAccountFilter('inactive')">Inactive</button>
+            <button class="quick-filter" data-filter="errors" onclick="setAccountFilter('errors')">Errors</button>
+          </div>
+        </div>
+        <div class="table-meta"><span id="accounts-results-meta">Loading…</span></div>
+      </div>
       <div class="table-wrap">
         <table class="accounts-table">
           <thead>
             <tr>
-              <th class="sortable" data-col="email" onclick="sortAccounts('email')">Email <span class="sort-icon">▼</span></th>
-              <th>Plan</th>
+              <th class="sortable" data-col="email" onclick="sortAccounts('email')">Account <span class="sort-icon">▼</span></th>
+              <th>Gmail</th>
+              <th class="sortable" data-col="quota_pct" onclick="sortAccounts('quota_pct')">Quota <span class="sort-icon">▼</span></th>
               <th class="sortable" data-col="sends" onclick="sortAccounts('sends')">Sends <span class="sort-icon">▼</span></th>
               <th class="sortable" data-col="replies" onclick="sortAccounts('replies')">Replies <span class="sort-icon">▼</span></th>
-              <th class="sortable" data-col="reply_rate" onclick="sortAccounts('reply_rate')">Reply Rate <span class="sort-icon">▼</span></th>
-              <th class="sortable" data-col="followups" onclick="sortAccounts('followups')">Follow-ups <span class="sort-icon">▼</span></th>
-              <th>Gmail</th>
-              <th class="sortable" data-col="days_inactive" onclick="sortAccounts('days_inactive')">Last Active <span class="sort-icon">▼</span></th>
-              <th>Joined</th>
+              <th class="sortable" data-col="followups" onclick="sortAccounts('followups')">Follow-up <span class="sort-icon">▼</span></th>
+              <th class="sortable" data-col="days_inactive" onclick="sortAccounts('days_inactive')">Recent Activity <span class="sort-icon">▼</span></th>
+              <th class="sortable" data-col="errors" onclick="sortAccounts('errors')">Status <span class="sort-icon">▼</span></th>
+              <th>Plan</th>
               <th></th>
             </tr>
           </thead>
@@ -393,52 +496,74 @@
         </table>
       </div>
     </div>
-  </div>
 
-  <!-- ══ INVITES ══ -->
-  <div class="section" id="section-invites">
+    <div class="secondary-grid">
+      <div class="secondary-stack">
+        <div class="card card-subtle">
+          <div class="section-heading">
+            <div class="section-copy">
+              <h2>Invites</h2>
+              <p>Keep access management available without interrupting account monitoring.</p>
+            </div>
+          </div>
+          <div class="invite-form">
+            <input type="email" id="inviteEmail" placeholder="email@example.com">
+            <button class="btn-invite" id="inviteBtn" onclick="sendInvite()">Send Invite</button>
+          </div>
+          <div class="invite-url" id="inviteUrl"></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:12px">
+            An email with a registration link will be sent. The link can only be used once and expires in 7 days.
+          </div>
+        </div>
 
-    <!-- Invite form -->
-    <div class="card">
-      <div class="card-title">👥 Invite User</div>
-      <div class="invite-form">
-        <input type="email" id="inviteEmail" placeholder="email@example.com">
-        <button class="btn-invite" id="inviteBtn" onclick="sendInvite()">Send Invite</button>
+        <div class="card">
+          <div class="card-title">Pending & Sent Invites <span class="count" id="inviteCount">0</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Email</th><th>Sent</th><th>Expires</th><th>Status</th><th>Used At</th><th>Link</th></tr></thead>
+              <tbody id="invitesTable"><tr><td colspan="6" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <div class="invite-url" id="inviteUrl"></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:12px">
-        An email with a registration link will be sent. The link can only be used once and expires in 7 days.
+
+      <div class="card">
+        <div class="card-title">Access & User Management <span class="count" id="userCount">0</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th>Actions</th></tr></thead>
+            <tbody id="usersTable"><tr><td colspan="4" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <!-- Users table -->
-    <div class="card">
-      <div class="card-title">
-        Active Users
-        <span class="count" id="userCount">0</span>
+    <div class="card reporting-block card-subtle">
+      <div class="section-heading">
+        <div class="section-copy">
+          <h2>Reporting</h2>
+          <p>Secondary system-wide trends and plan distribution for broader admin review.</p>
+        </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th>Actions</th></tr></thead>
-          <tbody id="usersTable"><tr><td colspan="4" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
-        </table>
+      <div class="stat-grid" id="overview-cards">
+        <div class="stat-card"><div class="stat-label">Total Users <span class="all-time-badge">All time</span></div><div class="stat-value" id="ov-users">—</div><div class="stat-sub" id="ov-users-sub">registered</div></div>
+        <div class="stat-card"><div class="stat-label">Active Users</div><div class="stat-value green" id="ov-active">—</div><div class="stat-sub" id="ov-active-sub"></div></div>
+        <div class="stat-card"><div class="stat-label">Sends</div><div class="stat-value accent" id="ov-sends">—</div><div class="stat-sub" id="ov-sends-sub"></div></div>
+        <div class="stat-card"><div class="stat-label">Replies</div><div class="stat-value" id="ov-replies" style="color:#3b82f6">—</div><div class="stat-sub" id="ov-replies-sub"></div></div>
+        <div class="stat-card"><div class="stat-label">Reply Rate</div><div class="stat-value yellow" id="ov-rate">—</div><div class="stat-sub">replies / sends</div></div>
+        <div class="stat-card"><div class="stat-label">Follow-ups</div><div class="stat-value" id="ov-fu">—</div><div class="stat-sub" id="ov-fu-sub"></div></div>
+        <div class="stat-card"><div class="stat-label">Inactive</div><div class="stat-value" id="ov-inactive" style="color:var(--red)">—</div><div class="stat-sub">0 sends in period</div></div>
+      </div>
+      <div class="plan-row" id="plan-pills">
+        <div class="plan-pill"><div class="dot dot-free"></div><span>Free</span><strong id="pp-free">—</strong></div>
+        <div class="plan-pill"><div class="dot dot-starter"></div><span>Starter</span><strong id="pp-starter">—</strong></div>
+        <div class="plan-pill"><div class="dot dot-pro"></div><span>Pro</span><strong id="pp-pro">—</strong></div>
+      </div>
+      <div class="section-title" id="top-users-title">Top Users — Today</div>
+      <div class="top-users-grid" id="top-users-grid">
+        <div style="color:var(--muted);font-size:13px;padding:12px">No activity in this period</div>
       </div>
     </div>
-
-    <!-- Sent invites -->
-    <div class="card">
-      <div class="card-title">
-        Sent Invites
-        <span class="count" id="inviteCount">0</span>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Email</th><th>Sent</th><th>Expires</th><th>Status</th><th>Used At</th><th>Link</th></tr></thead>
-          <tbody id="invitesTable"><tr><td colspan="6" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-
   </div>
 
 </div><!-- /main -->
@@ -486,43 +611,29 @@ const CSRF_TOKEN = '{{ csrf_token|default("", true) }}';
 })();
 
 /* ─── State + Period switching ─── */
-let currentTab = 'overview';
 let currentPeriod = 'today';
 let overviewLoaded = false, accountsLoaded = false, invitesLoaded = false;
+let accountFilter = 'all';
+let accountSearch = '';
 const PERIOD_LABELS = { total: 'Total', today: 'Today', yesterday: 'Yesterday', '7d': '7 Days', '30d': '30 Days' };
 
 function setPeriod(period) {
   currentPeriod = period;
   document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === period));
-  overviewLoaded = false; accountsLoaded = false;
-  if (currentTab === 'overview') loadOverview();
-  if (currentTab === 'accounts') loadAccounts();
-}
-
-/* ─── Tab switching ─── */
-function switchTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + tab));
-  const bar = document.getElementById('period-bar');
-  if (bar) bar.style.display = tab === 'invites' ? 'none' : 'flex';
-  if (tab === 'accounts') {
-    const sec = document.getElementById('section-accounts');
-    if (bar && sec) sec.insertBefore(bar, sec.firstChild);
-  } else if (tab === 'overview') {
-    const sec = document.getElementById('section-overview');
-    if (bar && sec) sec.insertBefore(bar, sec.firstChild);
-  }
-  if (tab === 'overview' && !overviewLoaded) loadOverview();
-  if (tab === 'accounts' && !accountsLoaded) loadAccounts();
-  if (tab === 'invites' && !invitesLoaded) { loadUsers(); loadInvites(); }
+  overviewLoaded = false;
+  accountsLoaded = false;
+  loadOverview();
+  loadAccounts();
 }
 
 function refreshCurrent() {
-  overviewLoaded = false; accountsLoaded = false;
-  if (currentTab === 'overview') loadOverview();
-  if (currentTab === 'accounts') loadAccounts();
-  if (currentTab === 'invites') { loadUsers(); loadInvites(); }
+  overviewLoaded = false;
+  accountsLoaded = false;
+  invitesLoaded = false;
+  loadOverview();
+  loadAccounts();
+  loadUsers();
+  loadInvites();
 }
 
 /* ─── Overview ─── */
@@ -602,6 +713,72 @@ function sortAccounts(col) {
 
 /* ─── Accounts ─── */
 let accountsData = [];
+function getAccountStatus(account) {
+  if (!account.email_connected) return { key: 'disconnected', label: 'Disconnected', className: 'status-disconnected' };
+  if ((account.errors ?? 0) > 0) return { key: 'errors', label: 'Issue', className: 'status-issue' };
+  if ((account.quota_pct ?? 0) >= 80) return { key: 'near-quota', label: 'Near Quota', className: 'status-near-quota' };
+  if (account.days_inactive === null || account.days_inactive === undefined || account.days_inactive >= 7) {
+    return { key: 'inactive', label: 'Inactive', className: 'status-inactive' };
+  }
+  return { key: 'healthy', label: 'Healthy', className: 'status-healthy' };
+}
+
+function setAccountFilter(filter) {
+  accountFilter = filter;
+  document.querySelectorAll('.quick-filter').forEach(btn => btn.classList.toggle('active', btn.dataset.filter === filter));
+  document.querySelectorAll('.health-card').forEach(card => card.classList.toggle('active', card.dataset.filter === filter));
+  renderHealthSummary();
+  renderAccountsTable();
+}
+
+function setAccountSearch(value) {
+  accountSearch = (value || '').trim().toLowerCase();
+  renderAccountsTable();
+}
+
+function getFilteredAccounts() {
+  return accountsData.filter(a => {
+    const status = getAccountStatus(a);
+    const haystack = [a.email, a.name, a.workspace_name].join(' ').toLowerCase();
+    const matchesSearch = !accountSearch || haystack.includes(accountSearch);
+    if (!matchesSearch) return false;
+    if (accountFilter === 'all') return true;
+    if (accountFilter === 'errors') return (a.errors ?? 0) > 0;
+    return status.key === accountFilter;
+  });
+}
+
+function renderHealthSummary() {
+  const disconnected = accountsData.filter(a => !a.email_connected).length;
+  const nearQuota = accountsData.filter(a => (a.quota_pct ?? 0) >= 80).length;
+  const inactive = accountsData.filter(a => a.days_inactive === null || a.days_inactive === undefined || a.days_inactive >= 7).length;
+  const errors = accountsData.filter(a => (a.errors ?? 0) > 0).length;
+
+  document.getElementById('health-disconnected').textContent = disconnected;
+  document.getElementById('health-near-quota').textContent = nearQuota;
+  document.getElementById('health-inactive').textContent = inactive;
+  document.getElementById('health-errors').textContent = errors;
+
+  const grid = document.getElementById('health-grid');
+  const cards = grid ? grid.querySelectorAll('.health-card') : [];
+  cards.forEach(card => {
+    card.classList.remove('danger', 'warn', 'success');
+    const value = Number(card.querySelector('.health-value')?.textContent || 0);
+    if (card.dataset.filter === 'errors' || card.dataset.filter === 'disconnected') {
+      card.classList.add(value > 0 ? 'danger' : 'success');
+    } else if (card.dataset.filter === 'near-quota' || card.dataset.filter === 'inactive') {
+      card.classList.add(value > 0 ? 'warn' : 'success');
+    }
+  });
+
+  const summary = [];
+  if (disconnected) summary.push(`${disconnected} disconnected`);
+  if (nearQuota) summary.push(`${nearQuota} near quota`);
+  if (errors) summary.push(`${errors} with errors`);
+  if (!summary.length) summary.push('All visible accounts look healthy');
+  document.getElementById('health-summary-text').textContent = summary.join(' · ');
+}
+
 async function loadAccounts() {
   accountsLoaded = true;
   const tbody = document.getElementById('accounts-tbody');
@@ -611,6 +788,7 @@ async function loadAccounts() {
     if (!res.ok) throw new Error();
     accountsData = await res.json();
     document.getElementById('accounts-count').textContent = accountsData.length;
+    renderHealthSummary();
     sortAccounts(sortCol);
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="10" class="empty">Failed to load accounts</td></tr>';
@@ -620,29 +798,37 @@ async function loadAccounts() {
 
 function renderAccountsTable() {
   const tbody = document.getElementById('accounts-tbody');
+  const filtered = getFilteredAccounts();
+  document.getElementById('accounts-results-meta').textContent = `${filtered.length} of ${accountsData.length} shown`;
   if (!accountsData.length) {
     tbody.innerHTML = '<tr><td colspan="10" class="empty">No accounts yet</td></tr>';
     return;
   }
-  tbody.innerHTML = accountsData.map(a => {
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">No accounts match the current filters</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(a => {
     const info = getInactivityInfo(a.days_inactive);
-    const rateText = a.sends > 0 ? a.reply_rate + '%' : '—';
-    const rateColor = a.sends === 0 ? 'var(--muted)' : a.reply_rate >= 10 ? 'var(--green)' : a.reply_rate >= 5 ? '#eab308' : 'var(--muted)';
+    const status = getAccountStatus(a);
+    const quotaPct = a.quota_pct ?? 0;
+    const quotaFillClass = quotaPct >= 100 ? 'full' : quotaPct >= 80 ? 'warn' : '';
+    const quotaLabel = `${a.quota_used ?? 0} / ${a.quota_limit ?? 0}`;
     return '<tr class="' + (info.muted ? 'row-muted' : '') + '" onclick="openAccountModal(\'' + a.user_id + '\')">' +
-      '<td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">' + esc(a.email) + '</td>' +
+      '<td><div class="account-cell"><div class="account-name">' + esc(a.name || a.workspace_name || a.email) + '</div><div class="account-email mono">' + esc(a.email) + '</div></div></td>' +
+      '<td class="compact"><span class="gmail-chip ' + (a.email_connected ? 'yes' : 'no') + '">' + (a.email_connected ? '● Connected' : '○ Disconnected') + '</span></td>' +
+      '<td class="quota-cell"><div class="mono">' + quotaLabel + '</div><div class="quota-bar"><div class="quota-fill ' + quotaFillClass + '" style="width:' + quotaPct + '%"></div></div></td>' +
+      '<td class="mono compact">' + (a.sends ?? 0) + '</td>' +
+      '<td class="mono compact">' + (a.replies ?? 0) + '</td>' +
+      '<td class="mono compact">' + (a.followups ?? 0) + '</td>' +
+      '<td><div class="last-active-cell"><span class="activity-dot ' + info.dot + '"></span>' + info.label + '</div></td>' +
+      '<td><span class="status-pill ' + status.className + '">' + status.label + ((a.errors ?? 0) > 0 ? ' · ' + a.errors + ' err' : '') + '</span></td>' +
       '<td><select class="plan-select" onchange="event.stopPropagation();changePlan(\'' + esc(a.email) + '\',this.value)" onclick="event.stopPropagation()">' +
         '<option value="free"' + ((a.plan||'free')==='free' ? ' selected' : '') + '>free</option>' +
         '<option value="starter"' + ((a.plan||'free')==='starter' ? ' selected' : '') + '>starter</option>' +
         '<option value="pro"' + ((a.plan||'free')==='pro' ? ' selected' : '') + '>pro</option>' +
       '</select></td>' +
-      '<td class="mono">' + (a.sends ?? 0) + '</td>' +
-      '<td class="mono">' + (a.replies ?? 0) + '</td>' +
-      '<td class="mono" style="color:' + rateColor + '">' + rateText + '</td>' +
-      '<td class="mono">' + (a.followups ?? 0) + '</td>' +
-      '<td class="' + (a.email_connected ? 'conn-yes' : 'conn-no') + '">' + (a.email_connected ? '●' : '○') + '</td>' +
-      '<td><div class="last-active-cell"><span class="activity-dot ' + info.dot + '"></span>' + info.label + '</div></td>' +
-      '<td class="muted" style="font-size:12px">' + (a.created_at || '').slice(0, 10) + '</td>' +
-      '<td><button class="del-btn" onclick="event.stopPropagation();deleteUser(\'' + esc(a.email) + '\')">Remove</button></td>' +
+      '<td class="actions-cell"><button class="del-btn" onclick="event.stopPropagation();deleteUser(\'' + esc(a.email) + '\')">Remove</button></td>' +
     '</tr>';
   }).join('');
 }
@@ -947,7 +1133,8 @@ async function deleteUser(email) {
   if (res.ok) {
     toast('User removed', 'green');
     loadUsers();
-    if (currentTab === 'accounts') { accountsLoaded = false; loadAccounts(); }
+    accountsLoaded = false;
+    loadAccounts();
   } else {
     toast('Failed to remove user', 'red');
   }
@@ -966,6 +1153,9 @@ function toast(msg, type='green') {
 
 /* ─── Init ─── */
 loadOverview();
+loadAccounts();
+loadUsers();
+loadInvites();
 </script>
 </body>
 </html>

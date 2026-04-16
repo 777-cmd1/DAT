@@ -1692,7 +1692,7 @@ def load_stop_list(uid=None):
     be, bd = set(), set()
     for e in StopListEntry.query.filter_by(user_id=uid).all():
         if e.type == 'email': be.add(e.value.lower())
-        else: bd.add(e.value.lower())
+        else: bd.add(e.value.lower().lstrip('@'))  # strip leading @ so 'landstarmail.com' and '@landstarmail.com' both match
     result = (be, bd)
     _cache_set(cache_key, result)
     return result

@@ -2146,8 +2146,37 @@ def fetch_replies_from_gmail():
         if _pending_replies:
             sender_emails = {r['email'] for r in _pending_replies}
             route_map = _bulk_routes_for_emails(uid, sender_emails)
+
+            # Bulk status-inheritance lookup — if contact was ignored/not_interested,
+            # inherit that status so they don't re-appear in the queue as 'new'.
+            # 'follow_up'/'interested' contacts still get 'new' so the user sees the reply.
+            from app.models import Reply as _ReplyModel
+            from sqlalchemy import func as _func
+            _suppressed_statuses = {'ignored', 'not_interested'}
+            _inherited_status: dict = {}
+            try:
+                _status_rows = db.session.query(
+                    _func.lower(_ReplyModel.from_email),
+                    _ReplyModel.status,
+                    _func.max(_ReplyModel.received_at),
+                ).filter(
+                    _ReplyModel.user_id == uid,
+                    _func.lower(_ReplyModel.from_email).in_(sender_emails),
+                    _ReplyModel.status.in_(list(_suppressed_statuses)),
+                ).group_by(
+                    _func.lower(_ReplyModel.from_email),
+                    _ReplyModel.status,
+                ).all()
+                for em, st, _ in _status_rows:
+                    if em not in _inherited_status or st in _suppressed_statuses:
+                        _inherited_status[em] = st
+            except Exception:
+                pass  # if lookup fails, fall back to 'new' — safe default
+
             for r in _pending_replies:
                 r['route'] = route_map.get(r['email'], '')
+                # Inherit suppressed status so ignored contacts stay quiet
+                r['status'] = _inherited_status.get(r['email'], 'new')
             new_replies.extend(_pending_replies)
 
     except Exception as e:
@@ -2283,17 +2312,28 @@ def get_stats(period='lifetime'):
         .group_by(Send.origin, Send.destination)\
         .order_by(func.count(Send.id).desc()).limit(10).all()
 
-    # ── Reply stats — always lifetime (replies don't have a clear send date) ─
-    reply_agg = db.session.query(
-        func.count(Reply.id).label('total'),
-        func.count(case((Reply.status == 'interested', 1))).label('interested'),
-        func.count(case((Reply.status == 'not_interested', 1))).label('not_interested'),
-        func.count(case((Reply.status == 'new', 1))).label('new_r'),
-    ).filter(Reply.user_id == uid).first()
-    tr = reply_agg.total or 0
-    interested = reply_agg.interested or 0
-    not_int = reply_agg.not_interested or 0
-    new_r = reply_agg.new_r or 0
+    # ── Reply stats — contact-based (distinct from_email), lifetime ─────
+    # Count unique contacts, not messages — prevents multi-message threads
+    # from inflating Reply Rate (1 broker sending 5 msgs = 1 reply, not 5).
+    from sqlalchemy import func as _sfunc
+    reply_contact_rows = db.session.query(
+        func.lower(Reply.from_email).label('em'),
+        # Best status per contact: follow_up/interested > new/viewed > not_interested/ignored
+        func.min(case(
+            (Reply.status.in_(['follow_up', 'interested']), 0),
+            (Reply.status.in_(['new', 'viewed']), 1),
+            else_=2,
+        )).label('priority'),
+    ).filter(
+        Reply.user_id == uid,
+        Reply.from_email.isnot(None),
+        Reply.from_email != '',
+    ).group_by(func.lower(Reply.from_email)).all()
+
+    tr = len(reply_contact_rows)                          # unique contacts who replied
+    interested = sum(1 for r in reply_contact_rows if r.priority == 0)   # follow_up or interested
+    not_int    = sum(1 for r in reply_contact_rows if r.priority == 2)   # ignored/not_interested
+    new_r      = sum(1 for r in reply_contact_rows if r.priority == 1)   # new/viewed
 
     response_rate_pct = round(100 * tr / sent, 1) if sent > 0 else 0
     interest_rate_pct = round(100 * interested / tr, 1) if tr > 0 else 0

@@ -1105,7 +1105,8 @@ def api_admin_delete_user():
     if email == ADMIN_EMAIL.lower():
         return jsonify({'error': 'Cannot delete admin'}), 400
     from app.models import (User as UserModel, EmailAccount, Send, Reply,
-                            FollowUp, PipelineContact, StopListEntry, Template,
+                            FollowUp, FollowupContact, FollowupSettings,
+                            PipelineContact, StopListEntry, Template,
                             UsageEvent, AuditLog, Invitation, Workspace,
                             SendJob, PasswordResetToken)
     user = UserModel.query.filter_by(email=email).first()
@@ -1119,15 +1120,21 @@ def api_admin_delete_user():
         return jsonify({'error': 'User not found'}), 404
 
     uid = user.id
+    ws = Workspace.query.filter_by(owner_id=uid).first()
     # Delete all dependent records first (FK cascade)
-    for model in [Send, Reply, FollowUp, PipelineContact, StopListEntry,
-                  Template, UsageEvent, AuditLog, EmailAccount, SendJob]:
-        model.query.filter_by(user_id=uid).delete()
+    # FollowupContact must go before Workspace (FK: workspace_id); FollowupEvents cascade from FollowupContact
+    for model in [Send, Reply, FollowUp, FollowupContact,
+                  PipelineContact, StopListEntry, Template,
+                  UsageEvent, AuditLog, EmailAccount, SendJob]:
+        model.query.filter_by(user_id=uid).delete(synchronize_session=False)
+    # FollowupSettings is keyed by workspace_id, delete before workspace
+    if ws:
+        FollowupSettings.query.filter_by(workspace_id=ws.id).delete(synchronize_session=False)
     # Delete owned workspaces
-    Workspace.query.filter_by(owner_id=uid).delete()
+    Workspace.query.filter_by(owner_id=uid).delete(synchronize_session=False)
     # Reset invitations and password tokens for this email
-    Invitation.query.filter_by(email=email).delete()
-    PasswordResetToken.query.filter_by(email=email).delete()
+    Invitation.query.filter_by(email=email).delete(synchronize_session=False)
+    PasswordResetToken.query.filter_by(email=email).delete(synchronize_session=False)
     # Finally delete the user
     db.session.delete(user)
     db.session.commit()

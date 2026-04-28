@@ -566,6 +566,23 @@
     </div>
   </div>
 
+  <!-- Danger Zone -->
+  <div class="card card-subtle" style="border:1px solid rgba(239,68,68,.25);margin-top:0">
+    <div class="section-heading">
+      <div class="section-copy">
+        <h2 style="color:var(--red,#ef4444)">Danger Zone</h2>
+        <p>Purge all records for a contact email (replies, sends, follow-ups, pipeline). This cannot be undone.</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="purge-contact-email" type="email" placeholder="contact@example.com"
+             style="flex:1;min-width:220px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px"
+             onkeydown="if(event.key==='Enter')purgeContact()">
+      <button class="del-btn" onclick="purgeContact()" style="padding:8px 18px;white-space:nowrap">Delete All Records</button>
+    </div>
+    <div id="purge-result" style="margin-top:12px;font-size:13px;color:var(--muted);display:none"></div>
+  </div>
+
 </div><!-- /main -->
 
 <!-- ══ Account Detail Modal ══ -->
@@ -1121,6 +1138,33 @@ async function reinviteUser(email) {
     toast('Invite sent', 'green');
   }
   loadUsers(); invitesLoaded = false; loadInvites();
+}
+
+async function purgeContact() {
+  const email = (document.getElementById('purge-contact-email').value || '').trim().toLowerCase();
+  if (!email) { toast('Enter an email', 'red'); return; }
+  if (!confirm(`Delete ALL records for contact ${email}?\n\nThis removes them from Replies, Sends, Follow-ups, Pipeline, and Stop List. This cannot be undone.`)) return;
+  const res = await fetch('/api/admin/contact/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ email })
+  });
+  const el = document.getElementById('purge-result');
+  if (res.ok) {
+    const d = await res.json();
+    const rows = Object.entries(d.deleted).map(([k,v]) => `${k}: ${v}`).join(' · ');
+    el.style.display = 'block';
+    el.style.color = 'var(--accent)';
+    el.textContent = `✓ Purged ${d.email} — ${rows}`;
+    document.getElementById('purge-contact-email').value = '';
+    toast('Contact records deleted', 'green');
+  } else {
+    const err = await res.json().catch(() => ({}));
+    el.style.display = 'block';
+    el.style.color = 'var(--red,#ef4444)';
+    el.textContent = `Error: ${err.error || res.statusText}`;
+    toast('Failed to delete', 'red');
+  }
 }
 
 async function deleteUser(email) {

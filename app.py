@@ -1134,6 +1134,29 @@ def api_admin_delete_user():
     app.logger.info(f'Admin deleted user {email} and all related data')
     return jsonify({'ok': True})
 
+@app.route('/api/admin/contact/delete', methods=['POST'])
+@login_required
+@admin_required
+@csrf_protected
+def api_admin_delete_contact():
+    """Delete all records for a contact email across all tables (not a platform user)."""
+    contact_email = (request.json.get('email') or '').strip().lower()
+    if not contact_email:
+        return jsonify({'error': 'Email required'}), 400
+    from app.models import (Send, Reply, FollowUp, FollowupContact,
+                            PipelineContact, StopListEntry)
+    counts = {}
+    counts['replies']           = Reply.query.filter(db.func.lower(Reply.from_email) == contact_email).delete(synchronize_session=False)
+    counts['sends']             = Send.query.filter(db.func.lower(Send.recipient_email) == contact_email).delete(synchronize_session=False)
+    counts['follow_ups']        = FollowUp.query.filter(db.func.lower(FollowUp.contact_email) == contact_email).delete(synchronize_session=False)
+    # FollowupEvents cascade on delete of FollowupContact
+    counts['followup_contacts'] = FollowupContact.query.filter(db.func.lower(FollowupContact.contact_email) == contact_email).delete(synchronize_session=False)
+    counts['pipeline_contacts'] = PipelineContact.query.filter(db.func.lower(PipelineContact.email) == contact_email).delete(synchronize_session=False)
+    counts['stop_list']         = StopListEntry.query.filter(db.func.lower(StopListEntry.value) == contact_email).delete(synchronize_session=False)
+    db.session.commit()
+    app.logger.info(f'Admin purged contact {contact_email}: {counts}')
+    return jsonify({'ok': True, 'email': contact_email, 'deleted': counts})
+
 @app.route('/api/admin/users/plan', methods=['POST'])
 @login_required
 @admin_required

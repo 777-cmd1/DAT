@@ -2660,10 +2660,16 @@ def parse_dat_text(text):
             if _WT_RE.match(cand) or _LEN_RE.match(cand): continue
             # Skip known DAT keywords
             if cand in _NOT_CITY: continue
+            # Skip single-character lines (equipment codes: F, V, R, etc.)
+            if len(cand) == 1: continue
             # Skip all-caps short codes: ANATXFL1, SSLARFL
             if re.match(r'^[A-Z0-9]{3,12}$', cand): continue
-            # Skip commodity-like ALL-CAPS lines (CANNED FOOD, SNACKS) — but allow mixed case companies
-            if re.match(r'^[A-Z\s]{3,30}$', cand) and not re.search(r'[a-z]', cand) and len(cand.split()) <= 3: continue
+            # Skip commodity-like ALL-CAPS lines (CANNED FOOD, SNACKS) — but allow
+            # company names that contain a business suffix (LLC, INC, CORP, etc.)
+            _BIZ_SUFFIX = r'\b(?:LLC|INC|CORP|LTD|LP|LLP|CO|GROUP|LOGISTICS|TRANSPORT|FREIGHT|TRUCKING|CARRIERS?|SOLUTIONS?|SYSTEMS?)\b'
+            if (re.match(r'^[A-Z\s]{3,}$', cand) and not re.search(r'[a-z]', cand)
+                    and len(cand.split()) <= 3 and not re.search(_BIZ_SUFFIX, cand)):
+                continue
             # Skip EXT/ext lines (phone extension hints)
             if re.match(r'^(?:EXT|ext)\b', cand): continue
             company = cand

@@ -4345,7 +4345,19 @@ async function startSend() {
   if (ld) { ld.style.background = ''; ld.style.animation = 'bpDotSend .8s ease-in-out infinite'; }
   const res = await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loads})});
   const data = await res.json();
-  if (!data.ok) { toast(data.error, true); document.getElementById('sendBtn').disabled = false; return; }
+  if (!data.ok) {
+    document.getElementById('sendBtn').disabled = false;
+    if (data.error && data.error.toLowerCase().includes('already running')) {
+      const confirmed = confirm('A previous send job appears to be stuck.\n\nClick OK to reset it and try again.');
+      if (confirmed) {
+        await fetch('/api/send/reset', {method:'POST', headers:{'Content-Type':'application/json'}});
+        toast('Send queue cleared — try sending again', false);
+      }
+    } else {
+      toast(data.error, true);
+    }
+    return;
+  }
   pollInterval = setInterval(pollStatus, 1500);
 }
 async function pollStatus() {

@@ -3197,6 +3197,23 @@ def api_send():
     if state.get("running"):
         return jsonify({"error": "Already running"}), 400
     from app.models import SendJob
+    # Auto-recover stale jobs left over from a server restart / crash
+    stale_cutoff = _utcnow() - timedelta(minutes=30)
+    stale = SendJob.query.filter(
+        SendJob.user_id == uid,
+        SendJob.status.in_(['queued', 'running']),
+        db.or_(
+            SendJob.started_at < stale_cutoff,
+            SendJob.started_at == None
+        )
+    ).all()
+    for s in stale:
+        s.status = 'error'
+        s.error_msg = 'Stale job auto-recovered after server restart'
+        s.finished_at = _utcnow()
+    if stale:
+        db.session.commit()
+        app.logger.warning(f'api_send: auto-recovered {len(stale)} stale job(s) for uid={uid}')
     active_job = SendJob.query.filter(
         SendJob.user_id == uid,
         SendJob.status.in_(['queued', 'running'])
@@ -3230,6 +3247,28 @@ def api_send():
     t = threading.Thread(target=run_send_job, args=(job.id, loads, cfg, templates, uid))
     t.daemon = True; t.start()
     return jsonify({"ok": True, "total": len(loads), "quota": quota, "job_id": job.id})
+
+@app.route('/api/send/reset', methods=['POST'])
+@login_required
+@csrf_protected
+def api_send_reset():
+    """Manually clear any stuck/stale send jobs so the user can send again."""
+    uid = current_user_id()
+    from app.models import SendJob
+    stuck = SendJob.query.filter(
+        SendJob.user_id == uid,
+        SendJob.status.in_(['queued', 'running'])
+    ).all()
+    for j in stuck:
+        j.status = 'error'
+        j.error_msg = 'Manually reset by user'
+        j.finished_at = _utcnow()
+    db.session.commit()
+    # Also clear in-memory state
+    state = _user_send_state(uid)
+    state.update({"running": False, "done": True})
+    app.logger.info(f'api_send_reset: cleared {len(stuck)} job(s) for uid={uid}')
+    return jsonify({"ok": True, "cleared": len(stuck)})
 
 @app.route('/api/send-status', methods=['GET'])
 @login_required

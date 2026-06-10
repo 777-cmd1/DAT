@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DAT Mailer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%236366f1%22/><text x=%2250%22 y=%2268%22 font-size=%2252%22 text-anchor=%22middle%22 fill=%22white%22 font-family=%22sans-serif%22 font-weight=%22bold%22>D</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
 <style>
@@ -3722,10 +3723,10 @@ async function addReplyToPipeline(email) {
       })
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    toast('📋 Added to Pipeline!');
+    toast('Added to Pipeline');
     if (document.getElementById('page-pipeline').classList.contains('active')) await loadPipeline();
   } catch(e) {
-    toast('❌ Error: ' + e.message + ' — check that app.py is updated');
+    toast('Could not add to Pipeline — please try again', true);
   }
 }
 
@@ -3735,7 +3736,7 @@ async function addReplyToPipeline(email, route) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({email, route, stage: 'replied'})
   });
-  toast('📋 Added to Pipeline!');
+  toast('Added to Pipeline');
   await loadPipeline();
 }
 function filterStale() {
@@ -3746,7 +3747,7 @@ function filterStale() {
   // Highlight stale in list - just scroll to list and show all
   document.getElementById('pipelineStageFilter').value = 'all';
   renderPipeline();
-  toast('⚠️ Showing all contacts — stale ones need attention!');
+  toast('Showing all contacts — stale ones need attention');
 }
 function openEditContactByEmail(email) {
   const c = allContacts.find(x => x.email === email);
@@ -3776,7 +3777,7 @@ function closeModal() {
 async function saveContact() {
   const isEdit = !!document.getElementById('modalEmail').value;
   const email = isEdit ? document.getElementById('modalEmail').value : document.getElementById('mEmail').value;
-  if (!email || !email.includes('@')) { toast('⚠️ Enter a valid email'); return; }
+  if (!email || !email.includes('@')) { toast('Enter a valid email', true); return; }
   const data = {
     email: email,
     company: document.getElementById('mCompany').value,
@@ -3793,7 +3794,7 @@ async function saveContact() {
     await loadPipeline();
     toast('✅ Contact saved!');
   } catch(e) {
-    toast('❌ Error: ' + e.message);
+    toast('Something went wrong — please try again', true);
   }
 }
 
@@ -4993,7 +4994,7 @@ async function loadSettings() {
     window.history.replaceState({}, '', window.location.pathname);
   }
   if (params.has('gmail_error')) {
-    toast('❌ Gmail connection failed: ' + params.get('gmail_error'));
+    toast('Gmail connection failed: ' + params.get('gmail_error'), true);
     window.history.replaceState({}, '', window.location.pathname);
   }
 }

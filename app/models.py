@@ -3,12 +3,17 @@ DAT Mailer v2 — Database Models
 All tables include workspace_id for future multi-tenant isolation.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from app.extensions import db
 
 
 def _uuid():
     return str(uuid.uuid4())
+
+
+def _utcnow():
+    """Naive UTC now (_utcnow is deprecated in py3.12)."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 # ── USERS & WORKSPACES ──────────────────────────────────────────────────────
@@ -22,7 +27,7 @@ class User(db.Model):
     password     = db.Column(db.String(255), nullable=False)   # bcrypt hash
     role         = db.Column(db.String(20), default='user')    # 'admin' | 'user'
     invited_by   = db.Column(db.String(255))
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
     last_login   = db.Column(db.DateTime)
 
     def to_dict(self):
@@ -42,7 +47,7 @@ class Workspace(db.Model):
     owner_id         = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     plan             = db.Column(db.String(20), default='free')  # 'free' | 'starter' | 'pro'
     fu_auto_enabled  = db.Column(db.Boolean, default=True, nullable=False, server_default='1')
-    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at       = db.Column(db.DateTime, default=_utcnow)
 
     owner = db.relationship('User', backref='owned_workspaces')
 
@@ -56,7 +61,7 @@ class Invitation(db.Model):
     email        = db.Column(db.String(255), nullable=False)
     token        = db.Column(db.String(255), unique=True, nullable=False)
     status       = db.Column(db.String(20), default='pending')  # 'pending' | 'accepted' | 'expired'
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
     expires_at   = db.Column(db.DateTime)   # NULL = no expiry (legacy); new invites set 7-day expiry
     used_at      = db.Column(db.DateTime)
 
@@ -91,8 +96,8 @@ class EmailAccount(db.Model):
     delay_min      = db.Column(db.Integer, default=20)
     delay_max      = db.Column(db.Integer, default=45)
     daily_target   = db.Column(db.Integer, default=100)
-    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at     = db.Column(db.DateTime, default=_utcnow)
+    updated_at     = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     user = db.relationship('User', backref='email_accounts')
 
@@ -128,7 +133,7 @@ class Send(db.Model):
     template_variant = db.Column(db.Integer, default=1)
     status           = db.Column(db.String(20), default='sent')  # 'sent' | 'error' | 'skipped'
     error_msg        = db.Column(db.Text)
-    sent_at          = db.Column(db.DateTime, default=datetime.utcnow)
+    sent_at          = db.Column(db.DateTime, default=_utcnow)
 
     user = db.relationship('User', backref='sends')
 
@@ -161,7 +166,7 @@ class Reply(db.Model):
     body         = db.Column(db.Text, default='')
     route        = db.Column(db.String(512), default='')
     status       = db.Column(db.String(30), default='new')  # 'new' | 'interested' | 'not_interested'
-    received_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    received_at  = db.Column(db.DateTime, default=_utcnow)
     classified_at = db.Column(db.DateTime)
 
     user = db.relationship('User', backref='replies')
@@ -197,7 +202,7 @@ class FollowUp(db.Model):
     reply_msg_id    = db.Column(db.String(512), default='')
     level           = db.Column(db.String(10), default='FU1')   # 'FU1'|'FU2'|'FU3'|'closed'
     status          = db.Column(db.String(20), default='pending')  # 'pending'|'sent'|'paused'|'failed'|'closed'
-    added_at        = db.Column(db.DateTime, default=datetime.utcnow)
+    added_at        = db.Column(db.DateTime, default=_utcnow)
     last_contact    = db.Column(db.DateTime)
     last_fu_sent    = db.Column(db.DateTime)
     notes           = db.Column(db.Text, default='')
@@ -276,8 +281,8 @@ class FollowupContact(db.Model):
     reply_msg_id = db.Column(db.String(512))
     current_route = db.Column(db.String(512))
     notes = db.Column(db.Text, default='')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
     recurring_enabled = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
     recurring_days    = db.Column(db.String(20))   # "0,2,4" = Mon/Wed/Fri (0=Mon...6=Sun)
     recurring_time    = db.Column(db.String(5))    # "HH:MM" stored as UTC
@@ -327,7 +332,7 @@ class FollowupEvent(db.Model):
     to_state = db.Column(db.String(20))
     from_stage = db.Column(db.String(30))
     to_stage = db.Column(db.String(30))
-    event_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    event_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
     actor_type = db.Column(db.String(20), nullable=False)
     actor_user_id = db.Column(db.String(36))
     metadata_json = db.Column(db.Text)
@@ -351,8 +356,8 @@ class FollowupSettings(db.Model):
     fu3_delay_days = db.Column(db.Integer, default=7, nullable=False)
     auto_stop_on_reply = db.Column(db.Boolean, default=True, nullable=False)
     default_followup_enabled = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 # ── PIPELINE ─────────────────────────────────────────────────────────────────
@@ -370,8 +375,8 @@ class PipelineContact(db.Model):
     # 'new_lead'|'contacted'|'replied'|'interested'|'deal'|'lost'
     deal_value   = db.Column(db.Numeric(10, 2))
     notes        = db.Column(db.Text, default='')
-    added_at     = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at   = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    added_at     = db.Column(db.DateTime, default=_utcnow)
+    updated_at   = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     user = db.relationship('User', backref='pipeline_contacts')
 
@@ -402,7 +407,7 @@ class StopListEntry(db.Model):
     type         = db.Column(db.String(10), nullable=False)   # 'email' | 'domain'
     value        = db.Column(db.String(255), nullable=False)
     reason       = db.Column(db.String(255), default='')
-    added_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    added_at     = db.Column(db.DateTime, default=_utcnow)
 
     __table_args__ = (
         db.UniqueConstraint('user_id', 'type', 'value', name='uq_stop_user_type_value'),
@@ -426,7 +431,7 @@ class Template(db.Model):
     body         = db.Column(db.Text, nullable=False)
     sort_order   = db.Column(db.Integer, default=0)
     is_active    = db.Column(db.Boolean, default=True)
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
 
     __table_args__ = (
         db.Index('ix_template_user_type_active', 'user_id', 'type', 'is_active'),
@@ -451,8 +456,8 @@ class UsageEvent(db.Model):
     event_type   = db.Column(db.String(50), nullable=False)
     # 'email_sent' | 'reply_fetched' | 'followup_sent'
     count        = db.Column(db.Integer, default=1)
-    period_date  = db.Column(db.Date, default=datetime.utcnow)
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    period_date  = db.Column(db.Date, default=_utcnow)
+    created_at   = db.Column(db.DateTime, default=_utcnow)
 
 
 # ── AUDIT LOG ────────────────────────────────────────────────────────────────
@@ -469,7 +474,7 @@ class AuditLog(db.Model):
     resource_id   = db.Column(db.String(36))
     detail        = db.Column(db.Text)          # JSON string for extra context
     ip_address    = db.Column(db.String(45))    # IPv4 or IPv6
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
         return {
@@ -488,7 +493,7 @@ class PasswordResetToken(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     email      = db.Column(db.String(255), nullable=False, index=True)
     token      = db.Column(db.String(86), unique=True, nullable=False)  # urlsafe base64, 64 chars
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
     used_at    = db.Column(db.DateTime, nullable=True)   # NULL = not yet used
 
 
@@ -504,7 +509,7 @@ class SendJob(db.Model):
     sent        = db.Column(db.Integer, default=0)
     errors      = db.Column(db.Integer, default=0)
     skipped     = db.Column(db.Integer, default=0)
-    started_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    started_at  = db.Column(db.DateTime, default=_utcnow)
     finished_at = db.Column(db.DateTime, nullable=True)
     error_msg   = db.Column(db.Text, nullable=True)
 
@@ -515,7 +520,7 @@ class SystemLease(db.Model):
     name        = db.Column(db.String(100), primary_key=True)
     owner       = db.Column(db.String(255), nullable=False)
     lease_until = db.Column(db.DateTime, nullable=False)
-    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at  = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 # ── PERFORMANCE INDEXES ───────────────────────────────────────────────────────

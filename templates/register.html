@@ -71,6 +71,8 @@
   }
   .error.show { display: block; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .strength { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .strength-bar { height: 100%; width: 0; border-radius: 2px; background: #ef4444; transition: width .2s, background .2s; }
 </style>
 </head>
 <body>
@@ -86,25 +88,28 @@
   <div class="invite-badge">✓ You've been invited to join DAT Mailer</div>
   <h1>Create your account</h1>
   <p class="subtitle">Set up your credentials to get started</p>
-  <div class="error" id="err"></div>
-  <div class="field">
-    <label>Email</label>
-    <input type="email" id="email" value="{{ email }}" readonly>
-  </div>
-  <div class="field">
-    <label>Your name</label>
-    <input type="text" id="name" placeholder="John Smith">
-  </div>
-  <div class="field">
-    <label>Password</label>
-    <input type="password" id="password" placeholder="Min 8 characters">
-    <div class="hint">At least 8 characters</div>
-  </div>
-  <div class="field">
-    <label>Confirm password</label>
-    <input type="password" id="password2" placeholder="Repeat password">
-  </div>
-  <button class="btn" id="regBtn" onclick="doRegister()">Create Account</button>
+  <div class="error" id="err" role="alert" aria-live="polite"></div>
+  <form id="regForm" novalidate>
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" value="{{ email }}" readonly>
+    </div>
+    <div class="field">
+      <label for="name">Your name</label>
+      <input type="text" id="name" placeholder="John Smith" autocomplete="name" required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Min 8 characters" autocomplete="new-password" required oninput="updateStrength()">
+      <div class="strength"><div class="strength-bar" id="strengthBar"></div></div>
+      <div class="hint" id="strengthHint">At least 8 characters</div>
+    </div>
+    <div class="field">
+      <label for="password2">Confirm password</label>
+      <input type="password" id="password2" placeholder="Repeat password" autocomplete="new-password" required>
+    </div>
+    <button class="btn" id="regBtn" type="submit">Create Account</button>
+  </form>
 </div>
 
 <script>
@@ -139,7 +144,29 @@
     err.textContent = msg; err.classList.add('show');
   }
 
-  document.addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
+  function updateStrength() {
+    const v = document.getElementById('password').value;
+    let score = 0;
+    if (v.length >= 8) score++;
+    if (v.length >= 12) score++;
+    if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+    if (/\d/.test(v) || /[^A-Za-z0-9]/.test(v)) score++;
+    const bar = document.getElementById('strengthBar');
+    const hint = document.getElementById('strengthHint');
+    const levels = [
+      { w: '10%', c: '#ef4444', t: 'Too short — at least 8 characters' },
+      { w: '35%', c: '#f59e0b', t: 'Weak — add length or mixed case' },
+      { w: '60%', c: '#f59e0b', t: 'Okay — could be stronger' },
+      { w: '80%', c: '#22c55e', t: 'Good password' },
+      { w: '100%', c: '#22c55e', t: 'Strong password' },
+    ];
+    const l = levels[score];
+    bar.style.width = v ? l.w : '0';
+    bar.style.background = l.c;
+    hint.textContent = v ? l.t : 'At least 8 characters';
+  }
+
+  document.getElementById('regForm').addEventListener('submit', e => { e.preventDefault(); doRegister(); });
 </script>
 </body>
 </html>

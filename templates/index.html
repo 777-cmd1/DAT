@@ -5161,7 +5161,7 @@ function tqCard(msgs) {
   const latest = msgs[0];
   const state = normalizeState(contactState(msgs));
   const emailRaw = latest.email || '';
-  const emailEsc = emailRaw.replace(/'/g, "\\'");
+  const emailEsc = esc(emailRaw.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
   const company  = parseCompany(latest);
   const avatarBg = avatarColor(emailRaw);
   const ini      = initials(company, emailRaw);
@@ -5220,7 +5220,7 @@ function tqCompactRow(msgs) {
   const latest = msgs[0];
   const state   = normalizeState(contactState(msgs));
   const emailRaw = latest.email || '';
-  const emailEsc = emailRaw.replace(/'/g, "\\'");
+  const emailEsc = esc(emailRaw.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
   const company  = parseCompany(latest);
   const avatarBg = avatarColor(emailRaw);
   const ini      = initials(company, emailRaw);

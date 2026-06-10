@@ -3635,6 +3635,11 @@ def err_500(e):
 def send_followup_email(fu, template_text, cfg, uid=None):
     try:
         to_email = fu.get('contact_email') or fu.get('email', '')
+        # Stop-list guard — covers scheduler, send-now and any future callers
+        _uid_for_stop = uid or current_user_id()
+        be, bd = load_stop_list(uid=_uid_for_stop)
+        if is_blocked(to_email, be, bd):
+            return False, 'blocked by stop list'
         route = fu.get('current_route') or fu.get('route', '')
         if fu.get('reply_subject'):
             subject = 'Re: ' + fu['reply_subject']

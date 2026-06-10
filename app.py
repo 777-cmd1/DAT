@@ -1738,10 +1738,20 @@ def save_templates_file(bodies):
         db.session.add(Template(user_id=uid, type='outreach', body=body, sort_order=i))
     db.session.commit()
 
+_TMPL_FIELD_RE = re.compile(r'\{(\w+)\}')
+
+def _safe_render(tmpl, values):
+    """Substitute {name}-style placeholders without str.format.
+    Unknown placeholders and stray braces are left as-is — a '{' in a
+    user-edited template can no longer crash the send."""
+    return _TMPL_FIELD_RE.sub(lambda m: str(values.get(m.group(1), m.group(0))), tmpl)
+
 def render_template_text(tmpl, load, cfg):
-    return tmpl.format(name=cfg.get("your_name",""),company=cfg.get("your_company",""),
-        phone=cfg.get("your_phone",""),origin=load.get("origin",""),
-        destination=load.get("destination",""),date=load.get("date",""),equip=load.get("equip",""))
+    return _safe_render(tmpl, {
+        'name': cfg.get("your_name",""), 'company': cfg.get("your_company",""),
+        'phone': cfg.get("your_phone",""), 'origin': load.get("origin",""),
+        'destination': load.get("destination",""), 'date': load.get("date",""),
+        'equip': load.get("equip","")})
 
 def load_stop_list(uid=None):
     if uid is None: uid = current_user_id()
@@ -3685,14 +3695,14 @@ def send_followup_email(fu, template_text, cfg, uid=None):
             subject = f'Following up — {fu["current_route"]}'
         else:
             subject = 'Following up'
-        body = template_text.format(
-            name=cfg.get('your_name', '') or cfg.get('name', ''),
-            company=cfg.get('your_company', '') or cfg.get('company', ''),
-            phone=cfg.get('your_phone', '') or cfg.get('phone', ''),
-            route=route,
-            origin=route.split('→')[0].strip() if '→' in route else '',
-            destination=route.split('→')[1].strip() if '→' in route else '',
-        )
+        body = _safe_render(template_text, {
+            'name': cfg.get('your_name', '') or cfg.get('name', ''),
+            'company': cfg.get('your_company', '') or cfg.get('company', ''),
+            'phone': cfg.get('your_phone', '') or cfg.get('phone', ''),
+            'route': route,
+            'origin': route.split('→')[0].strip() if '→' in route else '',
+            'destination': route.split('→')[1].strip() if '→' in route else '',
+        })
         # Try Gmail API OAuth first
         _uid = uid or current_user_id()
         if _uid:

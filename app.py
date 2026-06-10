@@ -1564,7 +1564,8 @@ DAT Mailer Team"""
         msg.attach(MIMEText(body, 'plain'))
         _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, cfg['gmail_app_password'])
         return True
-    except:
+    except Exception as e:
+        app.logger.warning(f'_send_invite_email failed for {to_email}: {e}')
         return False
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -1596,8 +1597,9 @@ def audit_log(action, resource_type=None, resource_id=None, detail=None, uid=Non
             ip_address=ip,
         ))
         db.session.commit()
-    except Exception:
-        pass   # Audit must never crash the main flow
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning(f'audit_log failed for action={action}: {e}')   # never crash the main flow
 
 # ── WORKSPACE HELPERS ────────────────────────────────────────────────────────
 
@@ -1663,8 +1665,9 @@ def _track_usage(uid, event_type, count=1):
                 count=count, period_date=today,
             ))
         db.session.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning(f'_track_usage failed uid={uid} type={event_type}: {e}')
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 

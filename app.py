@@ -1653,12 +1653,11 @@ def _track_usage(uid, event_type, count=1):
     try:
         from app.models import UsageEvent
         today = date.today()
-        ev = UsageEvent.query.filter_by(
+        # Atomic increment — safe under concurrent sends (no read-modify-write race)
+        updated = UsageEvent.query.filter_by(
             user_id=uid, event_type=event_type, period_date=today
-        ).first()
-        if ev:
-            ev.count += count
-        else:
+        ).update({UsageEvent.count: UsageEvent.count + count})
+        if not updated:
             db.session.add(UsageEvent(
                 user_id=uid, event_type=event_type,
                 count=count, period_date=today,
@@ -2890,6 +2889,13 @@ def run_send_job(job_id, loads, cfg, templates, uid=None):
             if em in sent_today_set or em in session_sent:
                 state["skipped"] += 1
                 state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
+                continue
+            # Re-check quota at send time — the pre-flight check in /api/send can
+            # race with parallel jobs or follow-up sends consuming the same quota
+            quota_now = get_daily_quota(uid)
+            if not quota_now['unlimited'] and (quota_now['remaining'] or 0) <= 0:
+                state["skipped"] += 1
+                state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"daily quota exhausted"})
                 continue
             tmpl = random.choice(templates); vi = templates.index(tmpl) + 1
             body = render_template_text(tmpl, load, cfg)

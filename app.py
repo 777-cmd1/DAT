@@ -831,10 +831,21 @@ def _current_user_id():
     u = _U.query.filter_by(email=session['user_email']).first()
     return u.id if u else None
 
+def _is_admin_user():
+    """Admin = role='admin' in DB; ADMIN_EMAIL env kept as legacy fallback."""
+    email = session.get('user_email', '').lower()
+    if not email:
+        return False
+    from app.models import User as _U
+    u = _U.query.filter_by(email=email).first()
+    if u and u.role == 'admin':
+        return True
+    return bool(ADMIN_EMAIL) and email == ADMIN_EMAIL.lower()
+
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if session.get('user_email', '').lower() != ADMIN_EMAIL.lower():
+        if not _is_admin_user():
             if request.is_json:
                 return jsonify({'error': 'Admin only'}), 403
             return redirect(url_for('login_page'))
@@ -983,8 +994,7 @@ def api_reset_confirm():
 def api_me():
     if 'user_email' not in session:
         return jsonify({'authenticated': False}), 401
-    is_admin = session['user_email'].lower() == ADMIN_EMAIL.lower()
-    return jsonify({'authenticated': True, 'email': session['user_email'], 'name': session.get('user_name'), 'is_admin': is_admin})
+    return jsonify({'authenticated': True, 'email': session['user_email'], 'name': session.get('user_name'), 'is_admin': _is_admin_user()})
 
 @app.route('/register/<token>', methods=['GET'])
 def register_page(token):
@@ -1119,7 +1129,9 @@ def api_admin_invites():
 @csrf_protected
 def api_admin_delete_user():
     email = (request.json.get('email') or '').lower()
-    if email == ADMIN_EMAIL.lower():
+    from app.models import User as _UCheck
+    _target = _UCheck.query.filter_by(email=email).first()
+    if email == ADMIN_EMAIL.lower() or (_target and _target.role == 'admin'):
         return jsonify({'error': 'Cannot delete admin'}), 400
     from app.models import (User as UserModel, EmailAccount, Send, Reply,
                             FollowUp, FollowupContact, FollowupSettings,

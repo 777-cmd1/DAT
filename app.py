@@ -58,7 +58,14 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+_is_prod_env = bool(os.environ.get('DATABASE_URL')) or os.environ.get('FLASK_ENV') == 'production'
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    if _is_prod_env:
+        raise RuntimeError('SECRET_KEY env var is required in production — '
+                           'a random fallback would invalidate all sessions on every restart')
+    _secret_key = secrets.token_hex(32)   # dev only
+app.secret_key = _secret_key
 
 # ── Database configuration ─────────────────────────────────────────────────
 # Dev: SQLite  |  Prod (Railway): PostgreSQL via DATABASE_URL env var
@@ -75,8 +82,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # SECURE flag: active when DATABASE_URL is set (Railway/prod) OR FLASK_ENV=production.
 # Dev with SQLite has no DATABASE_URL so cookies stay HTTP-safe locally.
-_is_production = bool(os.environ.get('DATABASE_URL')) or os.environ.get('FLASK_ENV') == 'production'
-app.config['SESSION_COOKIE_SECURE'] = _is_production
+app.config['SESSION_COOKIE_SECURE'] = _is_prod_env
 
 db.init_app(app)
 flask_migrate.init_app(app, db)
@@ -197,7 +203,12 @@ def _get_fernet():
             try:
                 _fernet_instance = Fernet(raw.encode() if isinstance(raw, str) else raw)
             except Exception:
-                pass   # bad key — fall through to unencrypted mode
+                if _is_prod_env:
+                    raise RuntimeError('ENCRYPTION_KEY is set but is not a valid Fernet key')
+                app.logger.warning('Invalid ENCRYPTION_KEY — falling back to unencrypted storage (dev only)')
+        elif _is_prod_env:
+            raise RuntimeError('ENCRYPTION_KEY env var is required in production — '
+                               'without it Gmail credentials would be stored in plaintext')
     return _fernet_instance
 
 def encrypt_field(value: str) -> str:
@@ -218,8 +229,14 @@ def decrypt_field(value: str) -> str:
         return value   # no key — assume plaintext
     try:
         return f.decrypt(value.encode('utf-8')).decode('utf-8')
-    except (_FernetInvalidToken, Exception):
-        return value   # not a Fernet token (legacy plaintext) — return as-is
+    except _FernetInvalidToken:
+        # Encrypted-looking values that fail to decrypt mean a wrong/rotated key —
+        # surface that instead of silently using ciphertext as a credential.
+        if value.startswith('gAAAA'):
+            app.logger.error('decrypt_field: Fernet token failed to decrypt — ENCRYPTION_KEY mismatch?')
+        return value   # legacy plaintext — return as-is
+    except Exception:
+        return value
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

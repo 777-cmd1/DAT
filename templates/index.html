@@ -3799,7 +3799,7 @@ async function saveContact() {
 
 async function deleteContact() {
   const email = document.getElementById('modalEmail').value;
-  if (!confirm('Delete ' + email + ' from pipeline?')) return;
+  if (!await showConfirm('Delete ' + email + ' from the pipeline? This cannot be undone.', { okText: 'Delete' })) return;
   await fetch('/api/pipeline/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email})});
   closeModal();
   await loadPipeline();
@@ -3915,6 +3915,38 @@ async function loadQuota() {
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
+// ── Styled confirm modal (replaces native confirm()) ─────────────────────────
+function showConfirm(msg, opts = {}) {
+  const { okText = 'Confirm', cancelText = 'Cancel', danger = true, title = 'Are you sure?' } = opts;
+  return new Promise(resolve => {
+    let ov = document.getElementById('confirmOverlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'confirmOverlay';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px';
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML =
+      '<div role="dialog" aria-modal="true" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:400px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.5)">' +
+        '<div style="font-size:15px;font-weight:700;margin-bottom:8px">' + esc(title) + '</div>' +
+        '<div style="font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-line;margin-bottom:20px">' + esc(msg) + '</div>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+          '<button id="cfCancel" class="btn btn-outline" style="font-size:12px;padding:8px 16px">' + esc(cancelText) + '</button>' +
+          '<button id="cfOk" class="btn" style="font-size:12px;padding:8px 16px;' + (danger ? 'background:#ef4444;border-color:#ef4444;color:#fff' : '') + '">' + esc(okText) + '</button>' +
+        '</div>' +
+      '</div>';
+    ov.style.display = 'flex';
+    const done = val => { ov.style.display = 'none'; ov.innerHTML = ''; document.removeEventListener('keydown', onKey); resolve(val); };
+    const onKey = e => { if (e.key === 'Escape') done(false); };
+    document.addEventListener('keydown', onKey);
+    ov.onclick = e => { if (e.target === ov) done(false); };
+    document.getElementById('cfCancel').onclick = () => done(false);
+    const ok = document.getElementById('cfOk');
+    ok.onclick = () => done(true);
+    ok.focus();
+  });
+}
+
 function toast(msg, isErr) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -4366,7 +4398,7 @@ async function startSend() {
   if (!data.ok) {
     document.getElementById('sendBtn').disabled = false;
     if (data.error && data.error.toLowerCase().includes('already running')) {
-      const confirmed = confirm('A previous send job appears to be stuck.\n\nClick OK to reset it and try again.');
+      const confirmed = await showConfirm('A previous send job appears to be stuck.\n\nReset it and try again?', { okText: 'Reset job', danger: false, title: 'Send job stuck' });
       if (confirmed) {
         await fetch('/api/send/reset', {method:'POST', headers:{'Content-Type':'application/json'}});
         toast('Send queue cleared — try sending again', false);
@@ -4912,7 +4944,7 @@ async function toggleFuTmplActive(id, active) {
 }
 
 async function deleteFuTmpl(id) {
-  if (!confirm('Delete this template?')) return;
+  if (!await showConfirm('Delete this template? This cannot be undone.', { okText: 'Delete' })) return;
   await fetch(`/api/fu-templates/${id}`, {method:'DELETE'});
   toast('Template deleted');
   await loadExtraFuTmpls();
@@ -5381,6 +5413,11 @@ async function markContact(email, status, addToStop) {
 }
 
 async function markContactStop(email) {
+  const ok = await showConfirm(
+    email + ' will be added to your stop list — no outreach or follow-ups will ever be sent to them again.',
+    { okText: 'Block contact', title: 'Block ' + email + '?' }
+  );
+  if (!ok) return;
   await markContact(email, 'not_interested', true);
 }
 
@@ -6013,7 +6050,7 @@ async function fuDropdownAction(action) {
   _fuDropdownContactId = null;
   if (!id) return;
   if (action==='delete') {
-    if (!confirm('Delete this contact?')) return;
+    if (!await showConfirm('Delete this contact and its follow-up history? This cannot be undone.', { okText: 'Delete' })) return;
     await fetch('/api/followups/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
     toast('Deleted'); await loadFollowups(); return;
   }

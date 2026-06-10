@@ -1119,7 +1119,7 @@ async function getResetLink(email) {
 }
 
 async function reinviteUser(email) {
-  if (!confirm(`Send a new invite link for ${email}?`)) return;
+  if (!await showConfirm(`Send a new invite link for ${email}?`, { okText: 'Send invite', danger: false, title: 'Re-invite user' })) return;
   const res = await fetch('/api/admin/invite', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1143,7 +1143,7 @@ async function reinviteUser(email) {
 async function purgeContact() {
   const email = (document.getElementById('purge-contact-email').value || '').trim().toLowerCase();
   if (!email) { toast('Enter an email', 'red'); return; }
-  if (!confirm(`Delete ALL records for contact ${email}?\n\nThis removes them from Replies, Sends, Follow-ups, Pipeline, and Stop List. This cannot be undone.`)) return;
+  if (!await showConfirm(`This removes ${email} from Replies, Sends, Follow-ups, Pipeline, and Stop List.\n\nThis cannot be undone.`, { okText: 'Delete all records', title: `Delete contact ${email}?` })) return;
   const res = await fetch('/api/admin/contact/delete', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1168,7 +1168,7 @@ async function purgeContact() {
 }
 
 async function deleteUser(email) {
-  if (!confirm(`Remove user ${email}? This cannot be undone.`)) return;
+  if (!await showConfirm(`This permanently deletes the user and all of their data.\n\nThis cannot be undone.`, { okText: 'Remove user', title: `Remove ${email}?` })) return;
   const res = await fetch('/api/admin/users/delete', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1187,6 +1187,38 @@ async function deleteUser(email) {
 /* ─── Helpers ─── */
 function esc(str) {
   return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Styled confirm modal (replaces native confirm())
+function showConfirm(msg, opts = {}) {
+  const { okText = 'Confirm', cancelText = 'Cancel', danger = true, title = 'Are you sure?' } = opts;
+  return new Promise(resolve => {
+    let ov = document.getElementById('confirmOverlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'confirmOverlay';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px';
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML =
+      '<div role="dialog" aria-modal="true" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:420px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.5)">' +
+        '<div style="font-size:15px;font-weight:700;margin-bottom:8px">' + esc(title) + '</div>' +
+        '<div style="font-size:13px;color:var(--muted);line-height:1.6;white-space:pre-line;margin-bottom:20px">' + esc(msg) + '</div>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+          '<button id="cfCancel" style="font-size:12px;padding:8px 16px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">' + esc(cancelText) + '</button>' +
+          '<button id="cfOk" style="font-size:12px;padding:8px 16px;border:none;border-radius:8px;color:#fff;cursor:pointer;background:' + (danger ? '#ef4444' : 'var(--accent, #6366f1)') + '">' + esc(okText) + '</button>' +
+        '</div>' +
+      '</div>';
+    ov.style.display = 'flex';
+    const done = val => { ov.style.display = 'none'; ov.innerHTML = ''; document.removeEventListener('keydown', onKey); resolve(val); };
+    const onKey = e => { if (e.key === 'Escape') done(false); };
+    document.addEventListener('keydown', onKey);
+    ov.onclick = e => { if (e.target === ov) done(false); };
+    document.getElementById('cfCancel').onclick = () => done(false);
+    const ok = document.getElementById('cfOk');
+    ok.onclick = () => done(true);
+    ok.focus();
+  });
 }
 
 function toast(msg, type='green') {

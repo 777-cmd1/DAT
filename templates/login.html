@@ -106,6 +106,15 @@
     font-size: 13px; color: var(--muted); text-decoration: none; transition: color .15s;
   }
   .forgot-link:hover, .forgot-link:focus-visible { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 </style>
 </head>
 <body>

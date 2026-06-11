@@ -10,6 +10,9 @@
 <style>
 /* ── TOKENS ─────────────────────────────────────────────────────────── */
 :root {
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 450ms;
   --radius: 10px;
   --radius-sm: 6px;
   --radius-lg: 14px;
@@ -79,6 +82,16 @@
   --glow:     0 0 24px rgba(109,92,230,.12);
   --glass:    rgba(255,255,255,.85);
   --glass-border: rgba(0,0,0,.06);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── RESET ──────────────────────────────────────────────────────────── */

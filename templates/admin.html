@@ -236,6 +236,12 @@
   .toast.green { border-color: rgba(34,197,94,0.4); color: #86efac; }
   .toast.red   { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
 
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+  .skel { display:block; height:12px; border-radius:6px; background:linear-gradient(90deg, var(--border) 25%, var(--surface2) 50%, var(--border) 75%); background-size:200% 100%; animation:skelShimmer 1.2s ease-in-out infinite; }
+  @keyframes skelShimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
+
   /* ── Loading spinner ── */
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -492,7 +498,7 @@
             </tr>
           </thead>
           <tbody id="accounts-tbody">
-            <tr><td colspan="10" class="empty"><span class="spinner"></span>Loading…</td></tr>
+            <tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -522,7 +528,7 @@
           <div class="table-wrap">
             <table>
               <thead><tr><th>Email</th><th>Sent</th><th>Expires</th><th>Status</th><th>Used At</th><th>Link</th></tr></thead>
-              <tbody id="invitesTable"><tr><td colspan="6" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
+              <tbody id="invitesTable"><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr></tbody>
             </table>
           </div>
         </div>
@@ -533,7 +539,7 @@
         <div class="table-wrap">
           <table>
             <thead><tr><th>Email</th><th>Name</th><th>Joined</th><th>Actions</th></tr></thead>
-            <tbody id="usersTable"><tr><td colspan="4" class="empty"><span class="spinner"></span>Loading…</td></tr></tbody>
+            <tbody id="usersTable"><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr></tbody>
           </table>
         </div>
       </div>
@@ -800,7 +806,7 @@ function renderHealthSummary() {
 async function loadAccounts() {
   accountsLoaded = true;
   const tbody = document.getElementById('accounts-tbody');
-  tbody.innerHTML = '<tr><td colspan="10" class="empty"><span class="spinner"></span>Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr><tr><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td><td><span class="skel"></span></td></tr>';
   try {
     const res = await fetch('/api/admin/stats/accounts?period=' + currentPeriod);
     if (!res.ok) throw new Error();

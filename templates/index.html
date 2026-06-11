@@ -2063,12 +2063,15 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .an-bar-count.zero { color:var(--text3); font-weight:400; }
 .an-bar-fill {
   width:100%; border-radius:10px 10px 2px 2px;
-  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  background: var(--accent);
   transition: height .5s cubic-bezier(.4,0,.2,1);
   min-height:3px;
   position:relative;
   box-shadow:0 12px 22px rgba(124,108,240,.16);
+  transform-origin:bottom;
+  animation:barGrow .45s var(--ease) backwards;
 }
+@keyframes barGrow { from { transform:scaleY(0); } }
 .an-bar-fill:hover { filter:brightness(1.1); cursor:default; }
 .an-bar-label { font-size:10px; color:var(--text3); margin-top:8px; white-space:nowrap; font-weight:600; }
 
@@ -2090,7 +2093,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
 }
 .an-hour-label { width:40px; color:var(--text2); flex-shrink:0; font-weight:700; }
 .an-hour-bar-wrap { flex:1; height:8px; background:var(--bg2,rgba(0,0,0,.05)); border-radius:99px; overflow:hidden; }
-.an-hour-bar { height:100%; border-radius:99px; background:var(--accent); transition:width .4s; }
+.an-hour-bar { height:100%; border-radius:99px; background:var(--accent); transition:width .4s; transform-origin:left; animation:hbarGrow .45s var(--ease) backwards; }
+@keyframes hbarGrow { from { transform:scaleX(0); } }
 .an-hour-count { width:24px; text-align:right; color:var(--text); flex-shrink:0; font-weight:700; }
 
 /* Automation Impact strip */
@@ -2507,6 +2511,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
         <div class="an-kpi-label">Emails Sent</div>
         <div class="an-kpi-value" id="anSent">—</div>
         <div class="an-kpi-sub" id="anSentSub"></div>
+        <svg id="anSentSpark" width="120" height="28" style="display:block;margin-top:8px"></svg>
       </div>
       <div class="an-kpi">
         <div class="an-kpi-label">Reply Rate</div>
@@ -6299,6 +6304,32 @@ let _anAiTab  = 'today';
 
 function setHtml(id, html) { const e = document.getElementById(id); if (e) e.innerHTML = html; }
 
+function countUp(id, target, fmt) {
+  const el = document.getElementById(id); if (!el) return;
+  fmt = fmt || (v => Math.round(v).toLocaleString());
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { el.textContent = fmt(target); return; }
+  const dur = 600, t0 = performance.now();
+  (function tick(t) {
+    const pr = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - pr, 3);
+    el.textContent = fmt(target * e);
+    if (pr < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+
+function renderSpark(id, values) {
+  const el = document.getElementById(id); if (!el) return;
+  if (!values || values.length < 2) { el.innerHTML = ''; return; }
+  const w = 120, h = 28, max = Math.max.apply(null, values.concat(1));
+  const pts = values.map((v, i) => (i * (w / (values.length - 1))).toFixed(1) + ',' + (h - 3 - (v / max) * (h - 6)).toFixed(1)).join(' ');
+  el.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  el.innerHTML = '<polyline points="' + pts + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>';
+}
+
+function staggerCharts() {
+  document.querySelectorAll('#page-stats .an-bar-fill').forEach((b, i) => b.style.animationDelay = (i * 35) + 'ms');
+  document.querySelectorAll('#page-stats .an-hour-bar').forEach((b, i) => b.style.animationDelay = (i * 45) + 'ms');
+}
+
 async function loadAnalytics() {
   try {
     const [sRes, aRes] = await Promise.all([
@@ -6314,6 +6345,7 @@ async function loadAnalytics() {
 function renderAnalytics() {
   if (!_anStats && !_anAiData) return;
   renderAnKpis(); renderAnQuality(); renderAnWhatWorks(); renderAnTiming(); renderAnAi(); renderAnProblems();
+  staggerCharts();
 }
 
 function setAnPeriod(p) {
@@ -6336,10 +6368,11 @@ function renderAnKpis() {
   const interested = rr.interested || 0;
   const pct = rr.pct || 0;
   const intPct = rr.interest_pct || 0;
-  setEl2('anSent', sent.toLocaleString());
-  setEl2('anReplyRate', pct > 0 ? pct.toFixed(1) + '%' : '\u2014');
-  setEl2('anInterested', interested > 0 ? interested : '\u2014');
-  setEl2('anErrors', errors > 0 ? errors : '0');
+  countUp('anSent', sent);
+  if (pct > 0) countUp('anReplyRate', pct, v => v.toFixed(1) + '%'); else setEl2('anReplyRate', '\u2014');
+  if (interested > 0) countUp('anInterested', interested); else setEl2('anInterested', '\u2014');
+  countUp('anErrors', errors);
+  renderSpark('anSentSpark', ((_anAiData && _anAiData.daily) || []).map(d => d.emails));
   setEl2('anSentSub', s.today ? s.today + ' today' : '');
   setEl2('anReplyRateSub', pct > 0 ? (rr.total_replies || 0) + ' replies' : 'no replies yet');
   setEl2('anInterestedSub', intPct > 0 ? intPct.toFixed(0) + '% of replies' : '');
@@ -6404,11 +6437,11 @@ function anBarCol(pct, label, count) {
   const countHtml = count > 0
     ? '<div class="an-bar-count">' + count + '</div>'
     : '<div class="an-bar-count zero">·</div>';
-  return '<div class="an-bar-col">' + countHtml + '<div class="an-bar-fill" style="height:' + Math.max(pct, 2) + '%"></div><div class="an-bar-label">' + label + '</div></div>';
+  return '<div class="an-bar-col" title="' + label + ': ' + count + '">' + countHtml + '<div class="an-bar-fill" style="height:' + Math.max(pct, 2) + '%"></div><div class="an-bar-label">' + label + '</div></div>';
 }
 
 function anHourRow(label, pct, count) {
-  return '<div class="an-hour-row"><div class="an-hour-label">' + label + '</div><div class="an-hour-bar-wrap"><div class="an-hour-bar" style="width:' + pct + '%"></div></div><div class="an-hour-count">' + count + '</div></div>';
+  return '<div class="an-hour-row" title="' + label + ': ' + count + '"><div class="an-hour-label">' + label + '</div><div class="an-hour-bar-wrap"><div class="an-hour-bar" style="width:' + pct + '%"></div></div><div class="an-hour-count">' + count + '</div></div>';
 }
 
 function renderAnTiming() {

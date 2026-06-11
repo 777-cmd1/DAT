@@ -1036,12 +1036,12 @@ async function loadInvites() {
   const tbody = document.getElementById('invitesTable');
   if (!invites.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No invites sent yet</td></tr>'; return; }
   tbody.innerHTML = [...invites].reverse().map(i => {
-    let statusClass = 'status-pending', statusText = '⏳ Pending';
+    let statusClass = 'status-pending', statusText = 'Pending';
     if (i.used)    { statusClass = 'status-used';    statusText = '✓ Used'; }
     if (i.expired) { statusClass = 'status-expired'; statusText = '✕ Expired'; }
     const inviteLink = i.token ? `${location.origin}/register/${i.token}` : null;
     const copyBtn = inviteLink
-      ? `<button onclick="copyInviteLink('${inviteLink}', this)" style="font-size:11px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">📋 Copy Link</button>`
+      ? `<button onclick="copyInviteLink('${inviteLink}', this)" style="font-size:11px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">Copy Link</button>`
       : '—';
     return `
       <tr>

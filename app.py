@@ -58,7 +58,14 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+_is_prod_env = bool(os.environ.get('DATABASE_URL')) or os.environ.get('FLASK_ENV') == 'production'
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    if _is_prod_env:
+        raise RuntimeError('SECRET_KEY env var is required in production — '
+                           'a random fallback would invalidate all sessions on every restart')
+    _secret_key = secrets.token_hex(32)   # dev only
+app.secret_key = _secret_key
 
 # ── Database configuration ─────────────────────────────────────────────────
 # Dev: SQLite  |  Prod (Railway): PostgreSQL via DATABASE_URL env var
@@ -75,8 +82,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # SECURE flag: active when DATABASE_URL is set (Railway/prod) OR FLASK_ENV=production.
 # Dev with SQLite has no DATABASE_URL so cookies stay HTTP-safe locally.
-_is_production = bool(os.environ.get('DATABASE_URL')) or os.environ.get('FLASK_ENV') == 'production'
-app.config['SESSION_COOKIE_SECURE'] = _is_production
+app.config['SESSION_COOKIE_SECURE'] = _is_prod_env
 
 db.init_app(app)
 flask_migrate.init_app(app, db)
@@ -197,7 +203,12 @@ def _get_fernet():
             try:
                 _fernet_instance = Fernet(raw.encode() if isinstance(raw, str) else raw)
             except Exception:
-                pass   # bad key — fall through to unencrypted mode
+                if _is_prod_env:
+                    raise RuntimeError('ENCRYPTION_KEY is set but is not a valid Fernet key')
+                app.logger.warning('Invalid ENCRYPTION_KEY — falling back to unencrypted storage (dev only)')
+        elif _is_prod_env:
+            raise RuntimeError('ENCRYPTION_KEY env var is required in production — '
+                               'without it Gmail credentials would be stored in plaintext')
     return _fernet_instance
 
 def encrypt_field(value: str) -> str:
@@ -218,8 +229,14 @@ def decrypt_field(value: str) -> str:
         return value   # no key — assume plaintext
     try:
         return f.decrypt(value.encode('utf-8')).decode('utf-8')
-    except (_FernetInvalidToken, Exception):
-        return value   # not a Fernet token (legacy plaintext) — return as-is
+    except _FernetInvalidToken:
+        # Encrypted-looking values that fail to decrypt mean a wrong/rotated key —
+        # surface that instead of silently using ciphertext as a credential.
+        if value.startswith('gAAAA'):
+            app.logger.error('decrypt_field: Fernet token failed to decrypt — ENCRYPTION_KEY mismatch?')
+        return value   # legacy plaintext — return as-is
+    except Exception:
+        return value
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -814,10 +831,21 @@ def _current_user_id():
     u = _U.query.filter_by(email=session['user_email']).first()
     return u.id if u else None
 
+def _is_admin_user():
+    """Admin = role='admin' in DB; ADMIN_EMAIL env kept as legacy fallback."""
+    email = session.get('user_email', '').lower()
+    if not email:
+        return False
+    from app.models import User as _U
+    u = _U.query.filter_by(email=email).first()
+    if u and u.role == 'admin':
+        return True
+    return bool(ADMIN_EMAIL) and email == ADMIN_EMAIL.lower()
+
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if session.get('user_email', '').lower() != ADMIN_EMAIL.lower():
+        if not _is_admin_user():
             if request.is_json:
                 return jsonify({'error': 'Admin only'}), 403
             return redirect(url_for('login_page'))
@@ -966,8 +994,7 @@ def api_reset_confirm():
 def api_me():
     if 'user_email' not in session:
         return jsonify({'authenticated': False}), 401
-    is_admin = session['user_email'].lower() == ADMIN_EMAIL.lower()
-    return jsonify({'authenticated': True, 'email': session['user_email'], 'name': session.get('user_name'), 'is_admin': is_admin})
+    return jsonify({'authenticated': True, 'email': session['user_email'], 'name': session.get('user_name'), 'is_admin': _is_admin_user()})
 
 @app.route('/register/<token>', methods=['GET'])
 def register_page(token):
@@ -1102,7 +1129,9 @@ def api_admin_invites():
 @csrf_protected
 def api_admin_delete_user():
     email = (request.json.get('email') or '').lower()
-    if email == ADMIN_EMAIL.lower():
+    from app.models import User as _UCheck
+    _target = _UCheck.query.filter_by(email=email).first()
+    if email == ADMIN_EMAIL.lower() or (_target and _target.role == 'admin'):
         return jsonify({'error': 'Cannot delete admin'}), 400
     from app.models import (User as UserModel, EmailAccount, Send, Reply,
                             FollowUp, FollowupContact, FollowupSettings,
@@ -1535,7 +1564,8 @@ DAT Mailer Team"""
         msg.attach(MIMEText(body, 'plain'))
         _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, cfg['gmail_app_password'])
         return True
-    except:
+    except Exception as e:
+        app.logger.warning(f'_send_invite_email failed for {to_email}: {e}')
         return False
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -1567,8 +1597,9 @@ def audit_log(action, resource_type=None, resource_id=None, detail=None, uid=Non
             ip_address=ip,
         ))
         db.session.commit()
-    except Exception:
-        pass   # Audit must never crash the main flow
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning(f'audit_log failed for action={action}: {e}')   # never crash the main flow
 
 # ── WORKSPACE HELPERS ────────────────────────────────────────────────────────
 
@@ -1624,19 +1655,19 @@ def _track_usage(uid, event_type, count=1):
     try:
         from app.models import UsageEvent
         today = date.today()
-        ev = UsageEvent.query.filter_by(
+        # Atomic increment — safe under concurrent sends (no read-modify-write race)
+        updated = UsageEvent.query.filter_by(
             user_id=uid, event_type=event_type, period_date=today
-        ).first()
-        if ev:
-            ev.count += count
-        else:
+        ).update({UsageEvent.count: UsageEvent.count + count})
+        if not updated:
             db.session.add(UsageEvent(
                 user_id=uid, event_type=event_type,
                 count=count, period_date=today,
             ))
         db.session.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning(f'_track_usage failed uid={uid} type={event_type}: {e}')
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
@@ -1707,10 +1738,20 @@ def save_templates_file(bodies):
         db.session.add(Template(user_id=uid, type='outreach', body=body, sort_order=i))
     db.session.commit()
 
+_TMPL_FIELD_RE = re.compile(r'\{(\w+)\}')
+
+def _safe_render(tmpl, values):
+    """Substitute {name}-style placeholders without str.format.
+    Unknown placeholders and stray braces are left as-is — a '{' in a
+    user-edited template can no longer crash the send."""
+    return _TMPL_FIELD_RE.sub(lambda m: str(values.get(m.group(1), m.group(0))), tmpl)
+
 def render_template_text(tmpl, load, cfg):
-    return tmpl.format(name=cfg.get("your_name",""),company=cfg.get("your_company",""),
-        phone=cfg.get("your_phone",""),origin=load.get("origin",""),
-        destination=load.get("destination",""),date=load.get("date",""),equip=load.get("equip",""))
+    return _safe_render(tmpl, {
+        'name': cfg.get("your_name",""), 'company': cfg.get("your_company",""),
+        'phone': cfg.get("your_phone",""), 'origin': load.get("origin",""),
+        'destination': load.get("destination",""), 'date': load.get("date",""),
+        'equip': load.get("equip","")})
 
 def load_stop_list(uid=None):
     if uid is None: uid = current_user_id()
@@ -2862,6 +2903,13 @@ def run_send_job(job_id, loads, cfg, templates, uid=None):
                 state["skipped"] += 1
                 state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
                 continue
+            # Re-check quota at send time — the pre-flight check in /api/send can
+            # race with parallel jobs or follow-up sends consuming the same quota
+            quota_now = get_daily_quota(uid)
+            if not quota_now['unlimited'] and (quota_now['remaining'] or 0) <= 0:
+                state["skipped"] += 1
+                state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"daily quota exhausted"})
+                continue
             tmpl = random.choice(templates); vi = templates.index(tmpl) + 1
             body = render_template_text(tmpl, load, cfg)
             subject = _build_subject(load)
@@ -3635,6 +3683,11 @@ def err_500(e):
 def send_followup_email(fu, template_text, cfg, uid=None):
     try:
         to_email = fu.get('contact_email') or fu.get('email', '')
+        # Stop-list guard — covers scheduler, send-now and any future callers
+        _uid_for_stop = uid or current_user_id()
+        be, bd = load_stop_list(uid=_uid_for_stop)
+        if is_blocked(to_email, be, bd):
+            return False, 'blocked by stop list'
         route = fu.get('current_route') or fu.get('route', '')
         if fu.get('reply_subject'):
             subject = 'Re: ' + fu['reply_subject']
@@ -3642,14 +3695,14 @@ def send_followup_email(fu, template_text, cfg, uid=None):
             subject = f'Following up — {fu["current_route"]}'
         else:
             subject = 'Following up'
-        body = template_text.format(
-            name=cfg.get('your_name', '') or cfg.get('name', ''),
-            company=cfg.get('your_company', '') or cfg.get('company', ''),
-            phone=cfg.get('your_phone', '') or cfg.get('phone', ''),
-            route=route,
-            origin=route.split('→')[0].strip() if '→' in route else '',
-            destination=route.split('→')[1].strip() if '→' in route else '',
-        )
+        body = _safe_render(template_text, {
+            'name': cfg.get('your_name', '') or cfg.get('name', ''),
+            'company': cfg.get('your_company', '') or cfg.get('company', ''),
+            'phone': cfg.get('your_phone', '') or cfg.get('phone', ''),
+            'route': route,
+            'origin': route.split('→')[0].strip() if '→' in route else '',
+            'destination': route.split('→')[1].strip() if '→' in route else '',
+        })
         # Try Gmail API OAuth first
         _uid = uid or current_user_id()
         if _uid:

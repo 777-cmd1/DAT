@@ -2604,9 +2604,84 @@ _NOT_CITY = frozenset({
     'Factoring', 'Factoring Available', 'Quick Pay', 'Quick Pay Available',
     'Fuel Advance', 'Fuel Advance Available',
 })
+# ── Truckstop loadboard parser ────────────────────────────────────────────────
+_TS_CITY_RE   = re.compile(r'^([A-Z][a-zA-Z\.\'\-]*(?:\s+[A-Z][a-zA-Z\.\'\-]*)*,\s*[A-Z]{2})\b')
+_TS_TRIPMI_RE = re.compile(r'^[\d,]+\s*mi$')
+_TS_WT_RE     = re.compile(r'^([\d,]+)\s*lbs$', re.IGNORECASE)
+_TS_LEN_RE    = re.compile(r"^([\d.]+)'\s*L$", re.IGNORECASE)
+_TS_DATE_RE   = re.compile(r'(\d{1,2}/\d{1,2})')
+
+def _ts_is_phone(s):
+    core = re.sub(r'(?i)\bext\.?\s*\d+', '', s).strip()
+    if not core: return False
+    if not re.fullmatch(r'[\d\s\(\)\-\+\.]+', core): return False
+    return len(re.sub(r'\D', '', core)) >= 7
+
+def parse_truckstop_text(text):
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    blocks, cur = [], []
+    for l in lines:
+        cur.append(l)
+        if _EMAIL_RE.search(l):
+            blocks.append(cur); cur = []
+    loads, seen = [], set()
+    for block in blocks:
+        em_m = _EMAIL_RE.search(block[-1])
+        if not em_m: continue
+        email = em_m.group().lower()
+        cities = []
+        for bl in block:
+            cm = _TS_CITY_RE.match(bl)
+            if cm: cities.append(cm.group(1).strip())
+            if len(cities) >= 2: break
+        origin      = cities[0] if len(cities) >= 1 else ""
+        destination = cities[1] if len(cities) >= 2 else ""
+        equip = ""
+        for idx, bl in enumerate(block):
+            if _TS_TRIPMI_RE.match(bl) and idx + 1 < len(block):
+                cand = block[idx + 1].strip()
+                if re.fullmatch(r'[A-Z]{1,4}', cand): equip = cand
+                break
+        weight = length = ""
+        for bl in block:
+            if not weight:
+                wm = _TS_WT_RE.match(bl)
+                if wm: weight = f"{wm.group(1)} lbs"
+            if not length:
+                lm = _TS_LEN_RE.match(bl)
+                if lm: length = f"{lm.group(1)} ft"
+        date = ""
+        for idx, bl in enumerate(block):
+            if bl.lower() == 'pickup' and idx + 1 < len(block):
+                dm = _TS_DATE_RE.search(block[idx + 1])
+                if dm: date = dm.group(1)
+                break
+        company = ""
+        for idx, bl in enumerate(block):
+            if re.match(r'(?i)^days to pay\b', bl) and idx >= 1:
+                company = block[idx - 1].strip(); break
+        contact = ""
+        em_idx = len(block) - 1
+        prev = block[em_idx - 1].strip() if em_idx >= 1 else ""
+        if _ts_is_phone(prev):
+            name_line = block[em_idx - 2].strip() if em_idx >= 2 else ""
+        else:
+            name_line = prev
+        if (name_line and re.search(r'[A-Za-z]', name_line)
+                and not re.match(r'(?i)^(authority requirement|days to pay|additional stops)', name_line)
+                and '@' not in name_line and not _ts_is_phone(name_line)):
+            contact = name_line
+        key = f"{email}|{origin}|{destination}"
+        if key in seen: continue
+        seen.add(key)
+        loads.append({"email": email, "origin": origin, "destination": destination,
+            "date": date, "equip": equip, "length": length, "weight": weight,
+            "company": company, "contact": contact})
+    return loads
 
 def parse_dat_text(text):
-    """Parse both compact (list) and detailed (card) DAT board formats."""
+    """Parse both compact (list) and detailed (card) DAT board formats."""    if re.search(r'(?im)^\s*posted rate\s*$', text) and re.search(r'(?i)\bdays to pay\b', text):
+        return parse_truckstop_text(text)
     # Expand tab-separated lines into individual tokens so both
     # newline-per-field and tab-per-field DAT board formats work
     raw_lines = text.strip().splitlines()

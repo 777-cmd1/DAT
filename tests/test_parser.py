@@ -209,3 +209,93 @@ test@equip.com
         result = parse_dat_text(text)
         if result:   # equipment presence depends on block ordering
             assert result[0]['email'] == 'test@equip.com'
+            
+
+# ── Truckstop loadboard format ──────────────────────────────────────────────────
+
+TRUCKSTOP_BLOCK = """Conroe, TX 46 mi
+Lake Ozark, MO
+707 mi
+RGN
+24,660 lbs
+41.6' L
+8.4' W
+11.3' H
+$2,500
+Posted Rate
+$3.54
+Per Mile
+Truckstop Rate Estimate
+
+$1,908
+Estimated Fuel Cost
+$578 ($0.82/mi)
+Pickup
+6/16, 12:00 AM - 6/17, 11:59 PM
+Drop-off
+Not Available
+Additional Stops
+0
+SMART TALK TRANSPORT CORP
+Days to Pay 32*EXP B
+Authority Requirement Not Available
+Saul A.
+888.884.0608
+saul.alvarez@sttlg.us
+"""
+
+
+def test_truckstop_is_detected_and_parsed():
+    result = parse_dat_text(TRUCKSTOP_BLOCK)
+    assert len(result) == 1
+    assert result[0]['email'] == 'saul.alvarez@sttlg.us'
+
+
+def test_truckstop_company_is_real_company_not_name_or_phone():
+    """Regression: parser used to grab the contact name/phone as the company."""
+    load = parse_dat_text(TRUCKSTOP_BLOCK)[0]
+    assert load['company'] == 'SMART TALK TRANSPORT CORP'
+    assert load['contact'] == 'Saul A.'
+
+
+def test_truckstop_route_equipment_weight_length_date():
+    load = parse_dat_text(TRUCKSTOP_BLOCK)[0]
+    assert load['origin'] == 'Conroe, TX'
+    assert load['destination'] == 'Lake Ozark, MO'
+    assert load['equip'] == 'RGN'
+    assert load['weight'] == '24,660 lbs'
+    assert load['length'] == '41.6 ft'
+    assert load['date'] == '6/16'
+
+
+def test_truckstop_phone_with_extension_not_taken_as_company():
+    """'(785) 748-2700 Ext 3' must be recognized as a phone, not the company."""
+    text = """Baytown, TX 35 mi
+Channahon, IL
+1,027 mi
+RGN
+22,000 lbs
+24' L
+$3,600
+Posted Rate
+Pickup
+6/16, 12:00 AM - 6/18, 11:59 PM
+Additional Stops
+0
+SP CARTER LLC/CTLN LOGISTICS
+Days to Pay 21EXP A
+Authority Requirement Not Available
+CTLN C.
+(785) 748-2700 Ext 3
+dispatch@ctlnlogistics.com
+"""
+    load = parse_dat_text(text)[0]
+    assert load['company'] == 'SP CARTER LLC/CTLN LOGISTICS'
+    assert load['contact'] == 'CTLN C.'
+
+
+def test_truckstop_multiple_blocks_and_dedup():
+    """Adjacent identical loads (same email+route) dedupe to one entry."""
+    text = TRUCKSTOP_BLOCK + "\n" + TRUCKSTOP_BLOCK
+    result = parse_dat_text(text)
+    assert sum(1 for l in result if l['email'] == 'saul.alvarez@sttlg.us') == 1

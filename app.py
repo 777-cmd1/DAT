@@ -2682,7 +2682,7 @@ def parse_truckstop_text(text):
 def parse_dat_text(text):
     """Parse both compact (list) and detailed (card) DAT board formats.
     Delegates to the Truckstop parser when the text is a Truckstop loadboard export."""
-        if re.search(r'(?i)\bdays to pay\b', text) and re.search(r'(?i)\b(?:additional stops|estimated fuel cost)\b', text):
+    if re.search(r'(?i)\bdays to pay\b', text) and re.search(r'(?i)\b(?:additional stops|estimated fuel cost)\b', text):
         return parse_truckstop_text(text)
     # Expand tab-separated lines into individual tokens so both
     # newline-per-field and tab-per-field DAT board formats work

@@ -332,6 +332,31 @@ def _get_stage_delay(stage, settings):
     return timedelta(days=days)
 
 
+# Minimum gap between manual follow-up sends to the same contact (anti-duplicate guard).
+FU_DUPLICATE_GUARD_HOURS = 24
+
+
+def _recent_followup_block(fc, now=None):
+    """Anti-duplicate guard for manual sends.
+
+    Returns a human-readable error string if a follow-up was already sent to
+    this contact within the last FU_DUPLICATE_GUARD_HOURS, else None.
+    Prevents rapid double-clicks / double-selection from firing 2-3 identical
+    follow-ups before the queue reloads.
+    """
+    if not fc.last_followup_sent_at:
+        return None
+    now = now or _utcnow()
+    elapsed = now - fc.last_followup_sent_at
+    window = timedelta(hours=FU_DUPLICATE_GUARD_HOURS)
+    if elapsed < window:
+        remaining_secs = int((window - elapsed).total_seconds())
+        remaining_h = max(1, (remaining_secs + 3599) // 3600)  # ceil to whole hours
+        return (f'Already sent a follow-up to this contact in the last '
+                f'{FU_DUPLICATE_GUARD_HOURS}h — try again in ~{remaining_h}h.')
+    return None
+
+
 LEGACY_STATE_MAP = {
     'pending': 'active',
     'sent': 'active',
@@ -4006,9 +4031,12 @@ def api_followups_action():
 
     if action == 'send-now':
         if fc.state != 'active':
-            return jsonify(error='Contact must be active to send'), 400
+            return jsonify(error='Contact must be active to send', skip=True), 400
         if fc.stage not in STAGE_TO_TEMPLATE:
-            return jsonify(error='No scheduled follow-up to send'), 400
+            return jsonify(error='No scheduled follow-up to send', skip=True), 400
+        dup = _recent_followup_block(fc)
+        if dup:
+            return jsonify(error=dup, duplicate=True), 409
 
         template_text = _get_fu_template_for_stage(uid, fc.stage)
         if not template_text:
@@ -4055,6 +4083,9 @@ def api_followups_action():
     elif action == 'free-send':
         if fc.state in ('blocked', 'closed'):
             return jsonify(error='Cannot send to blocked or closed contact'), 400
+        dup = _recent_followup_block(fc)
+        if dup:
+            return jsonify(error=dup, duplicate=True), 409
         template_text = _get_fu_template_for_stage(uid, fc.stage, allow_random_fallback=True)
         if not template_text:
             return jsonify(error='No active follow-up templates. Add at least one before sending.'), 400
@@ -4200,6 +4231,10 @@ def api_followups_bulk_action():
             if fc.state != 'active' or fc.stage not in STAGE_TO_TEMPLATE:
                 results.append({'id': cid, 'ok': False, 'skip': True, 'error': 'Not eligible for sequence send'})
                 continue
+            dup = _recent_followup_block(fc)
+            if dup:
+                results.append({'id': cid, 'ok': False, 'skip': True, 'duplicate': True, 'error': dup})
+                continue
             template_text = _get_fu_template_for_stage(fc.user_id, fc.stage)
             if not template_text:
                 results.append({'id': cid, 'ok': False, 'error': 'No active templates'})
@@ -4240,6 +4275,10 @@ def api_followups_bulk_action():
         elif action == 'free-send':
             if fc.state in ('blocked', 'closed'):
                 results.append({'id': cid, 'ok': False, 'error': 'Blocked or closed'})
+                continue
+            dup = _recent_followup_block(fc)
+            if dup:
+                results.append({'id': cid, 'ok': False, 'skip': True, 'duplicate': True, 'error': dup})
                 continue
             template_text = _get_fu_template_for_stage(fc.user_id, fc.stage, allow_random_fallback=True)
             if not template_text:

@@ -1638,6 +1638,21 @@ html:not([data-theme="dark"]) .send-cta-bar {
   border:1px solid var(--border); background:var(--surface2); color:var(--text2); transition:all .15s;
 }
 .fu-row-menu-btn:hover { border-color:var(--border-h); color:var(--text); }
+/* Sortable column headers */
+.fu-th-sort { cursor:pointer; user-select:none; white-space:nowrap; }
+.fu-th-sort:hover { color:var(--text); }
+.fu-sort-arrow { font-size:9px; opacity:.85; margin-left:2px; }
+.fu-th-sort.active { color:var(--accent); }
+/* Sent today/yesterday badge */
+.fu-sent-badge { font-size:10px; font-weight:700; padding:3px 7px; border-radius:20px; white-space:nowrap; display:inline-flex; align-items:center; gap:3px; }
+.fu-sent-badge.today { background:rgba(59,130,246,.14); color:#60a5fa; }
+.fu-sent-badge.yesterday { background:var(--yellow-dim); color:var(--yellow); }
+/* Batch send progress bar */
+.fu-progress { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:flex; flex-direction:column; gap:8px; animation:slideDown .15s ease; }
+.fu-progress-head { display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700; color:var(--text2); }
+.fu-progress-count { font-family:'JetBrains Mono',monospace; }
+.fu-progress-track { height:8px; background:var(--surface2); border-radius:6px; overflow:hidden; }
+.fu-progress-fill { height:100%; width:0%; background:var(--accent); border-radius:6px; transition:width .2s ease; }
 
 @media (max-width:1100px) {
   .fu-table { min-width:980px; }
@@ -2786,6 +2801,12 @@ html:not([data-theme="dark"]) .send-cta-bar {
                 <option value="FU3">FU3</option>
                 <option value="Done">Done</option>
               </select>
+              <select class="fu-select" id="fuSentSelect" onchange="setFuSentFilter(this.value)" title="Filter by recent follow-up sends">
+                <option value="">Any send status</option>
+                <option value="unsent_today">Not sent today</option>
+                <option value="today">Sent today</option>
+                <option value="yesterday">Sent yesterday</option>
+              </select>
               <button class="btn btn-outline btn-sm" onclick="resetFuFilters()">Clear</button>
             </div>
           </div>
@@ -2812,6 +2833,14 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
           </div>
 
+          <div class="fu-progress" id="fuProgress" style="display:none">
+            <div class="fu-progress-head">
+              <span id="fuProgressLabel">Sending follow-ups…</span>
+              <span id="fuProgressCount">0/0</span>
+            </div>
+            <div class="fu-progress-track"><div class="fu-progress-fill" id="fuProgressFill"></div></div>
+          </div>
+
           <div class="fu-table-wrap" id="fuTableWrap">
             <table class="fu-table">
               <thead>
@@ -2822,8 +2851,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
                   <th>Contact</th>
                   <th>State</th>
                   <th>Stage</th>
-                  <th>Next Follow-up</th>
-                  <th>Last Activity</th>
+                  <th class="fu-th-sort" onclick="setFuSort('next_followup_at')" title="Sort by next follow-up">Next Follow-up <span class="fu-sort-arrow" id="fuSortArrow-next_followup_at"></span></th>
+                  <th class="fu-th-sort" onclick="setFuSort('last_activity_at')" title="Sort by last activity">Last Activity <span class="fu-sort-arrow" id="fuSortArrow-last_activity_at"></span></th>
                   <th>Route</th>
                   <th>Action</th>
                   <th class="fu-col-menu">More</th>
@@ -5455,6 +5484,10 @@ async function markRStop(sid) {
 let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSpecialFilter = '', fuTab = 'contacts';
 let _fuDropdownContactId = null;
 let selectedFuIds = new Set();
+let fuSentFilter = '';            // '' | 'unsent_today' | 'today' | 'yesterday'  (client-side)
+let fuSortKey = '';               // '' = default urgency sort | 'next_followup_at' | 'last_activity_at'
+let fuSortDir = 'desc';           // 'asc' | 'desc'
+let _fuInflight = new Set();      // guards against double-click duplicate sends
 
 function buildFuFilterParams() {
   const params = new URLSearchParams();
@@ -5464,6 +5497,73 @@ function buildFuFilterParams() {
   const q = (document.getElementById('fuSearch')?.value||'').trim();
   if (q) params.set('q', q);
   return params;
+}
+
+// Classify a contact's last follow-up send relative to the viewer's local day.
+// Returns 'today' | 'yesterday' | null.
+function fuSentRecency(iso) {
+  if (!iso) return null;
+  const d = new Date(iso); if (isNaN(d)) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  const diff = Math.round((today - dd) / 86400000);
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'yesterday';
+  return null;
+}
+
+// Client-side filters (search box + sent-status dropdown) applied on top of the
+// server-side state/stage/special filters.
+function fuMatchesFilters(c) {
+  const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
+  if (search && !(
+    (c.contact_email||'').toLowerCase().includes(search) ||
+    (c.contact_name||'').toLowerCase().includes(search) ||
+    (c.company_name||'').toLowerCase().includes(search)
+  )) return false;
+  if (fuSentFilter) {
+    const r = fuSentRecency(c.last_followup_sent_at);
+    if (fuSentFilter === 'today' && r !== 'today') return false;
+    if (fuSentFilter === 'yesterday' && r !== 'yesterday') return false;
+    if (fuSentFilter === 'unsent_today' && r === 'today') return false;
+  }
+  return true;
+}
+
+function getVisibleFuContacts() {
+  return fuContacts.filter(fuMatchesFilters);
+}
+
+function setFuSentFilter(v) {
+  fuSentFilter = v;
+  renderFuContacts();
+  renderFuSelection();
+}
+
+function setFuSort(key) {
+  if (fuSortKey === key) {
+    fuSortDir = fuSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    fuSortKey = key;
+    // Most-recent-first feels natural for activity; soonest-first for next send.
+    fuSortDir = (key === 'last_activity_at') ? 'desc' : 'asc';
+  }
+  renderFuContacts();
+}
+
+function updateFuSortIndicators() {
+  ['next_followup_at', 'last_activity_at'].forEach(key => {
+    const arrow = document.getElementById('fuSortArrow-' + key);
+    if (!arrow) return;
+    const th = arrow.closest('th');
+    if (fuSortKey === key) {
+      arrow.textContent = fuSortDir === 'asc' ? '▲' : '▼';
+      if (th) th.classList.add('active');
+    } else {
+      arrow.textContent = '';
+      if (th) th.classList.remove('active');
+    }
+  });
 }
 
 function toggleFuSelect(id, e) {
@@ -5477,14 +5577,7 @@ function toggleFuSelect(id, e) {
 }
 
 function selectAllVisibleFu() {
-  const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
-  let list = fuContacts;
-  if (search) list = list.filter(c =>
-    (c.contact_email||'').toLowerCase().includes(search) ||
-    (c.contact_name||'').toLowerCase().includes(search) ||
-    (c.company_name||'').toLowerCase().includes(search)
-  );
-  list.forEach(c => selectedFuIds.add(c.id));
+  getVisibleFuContacts().forEach(c => selectedFuIds.add(c.id));
   renderFuContacts();
   renderFuSelection();
 }
@@ -5505,9 +5598,12 @@ function clearFuSelection() {
   renderFuSelection();
 }
 
-async function fuMasterCheckboxChange(cb) {
+function fuMasterCheckboxChange(cb) {
+  // Master checkbox selects only the rows currently visible (after search +
+  // sent-status filters). Use the "Select all matching" pill to reach the full
+  // server-filtered set.
   if (cb.checked) {
-    await selectAllFilteredFu();  // select all from server
+    selectAllVisibleFu();
   } else {
     clearFuSelection();
   }
@@ -5524,14 +5620,7 @@ function renderFuSelection() {
   if (countEl) countEl.textContent = n + ' selected';
 
   // sync master checkbox state
-  const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
-  const visibleRows = search
-    ? fuContacts.filter(c =>
-        (c.contact_email||'').toLowerCase().includes(search) ||
-        (c.contact_name||'').toLowerCase().includes(search) ||
-        (c.company_name||'').toLowerCase().includes(search)
-      )
-    : fuContacts;
+  const visibleRows = getVisibleFuContacts();
   const total = visibleRows.length;
   const visibleSelected = visibleRows.filter(c => selectedFuIds.has(c.id)).length;
   if (master) {
@@ -5631,6 +5720,8 @@ function setFuSpecialFilter(v) {
 function syncFuFilterControls() {
   document.getElementById('fuStateSelect').value = fuStateFilter || '';
   document.getElementById('fuStageSelect').value = fuStageFilter || '';
+  const sentSel = document.getElementById('fuSentSelect');
+  if (sentSel) sentSel.value = fuSentFilter || '';
   document.querySelectorAll('.fu-segment-btn').forEach(el => el.classList.remove('active'));
   document.getElementById('fuf-special-' + (fuSpecialFilter || 'all'))?.classList.add('active');
 }
@@ -5639,8 +5730,13 @@ function resetFuFilters() {
   fuStageFilter = '';
   fuStateFilter = '';
   fuSpecialFilter = '';
+  fuSentFilter = '';
+  fuSortKey = '';
+  fuSortDir = 'desc';
   const search = document.getElementById('fuSearch');
   if (search) search.value = '';
+  const sentSel = document.getElementById('fuSentSelect');
+  if (sentSel) sentSel.value = '';
   loadFollowups();
 }
 
@@ -5730,28 +5826,37 @@ function formatFuRelative(iso) {
 }
 
 function renderFuContacts() {
-  const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
-  let list = fuContacts;
-  if (search) list = list.filter(c =>
-    (c.contact_email||'').toLowerCase().includes(search) ||
-    (c.contact_name||'').toLowerCase().includes(search) ||
-    (c.company_name||'').toLowerCase().includes(search)
-  );
+  updateFuSortIndicators();
+  let list = getVisibleFuContacts();
 
   const container = document.getElementById('fuContactsList');
   const empty = document.getElementById('fuTableEmpty');
   const wrap = document.getElementById('fuTableWrap');
   if (!container || !empty || !wrap) return;
 
-  list = [...list].sort((a, b) => {
-    const ma = getFuUrgencyMeta(a);
-    const mb = getFuUrgencyMeta(b);
-    if (ma.rank !== mb.rank) return ma.rank - mb.rank;
-    if (ma.next && mb.next) return ma.next - mb.next;
-    if (ma.next) return -1;
-    if (mb.next) return 1;
-    return (new Date(b.last_activity_at || 0)) - (new Date(a.last_activity_at || 0));
-  });
+  if (fuSortKey) {
+    // Explicit column sort: missing values always sink to the bottom.
+    const dir = fuSortDir === 'asc' ? 1 : -1;
+    list = [...list].sort((a, b) => {
+      const av = a[fuSortKey] ? new Date(a[fuSortKey]).getTime() : null;
+      const bv = b[fuSortKey] ? new Date(b[fuSortKey]).getTime() : null;
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      return (av - bv) * dir;
+    });
+  } else {
+    // Default: urgency-first queue ordering.
+    list = [...list].sort((a, b) => {
+      const ma = getFuUrgencyMeta(a);
+      const mb = getFuUrgencyMeta(b);
+      if (ma.rank !== mb.rank) return ma.rank - mb.rank;
+      if (ma.next && mb.next) return ma.next - mb.next;
+      if (ma.next) return -1;
+      if (mb.next) return 1;
+      return (new Date(b.last_activity_at || 0)) - (new Date(a.last_activity_at || 0));
+    });
+  }
 
   if (!list.length) {
     container.innerHTML = '';
@@ -5786,6 +5891,12 @@ function renderFuContacts() {
     const isMuted = c.state === 'paused';
     const nextFu = formatFuDate(c.next_followup_at);
     const lastAct = formatFuRelative(c.last_activity_at);
+    const sentRec = fuSentRecency(c.last_followup_sent_at);
+    const sentBadge = sentRec === 'today'
+      ? `<span class="fu-sent-badge today" title="Follow-up sent today">🔵 Sent today</span>`
+      : sentRec === 'yesterday'
+      ? `<span class="fu-sent-badge yesterday" title="Follow-up sent yesterday">🟡 Sent yesterday</span>`
+      : '';
     const company = esc(c.company_name || c.contact_name || c.contact_email.split('@')[0]);
     const email = esc(c.contact_email);
     const route = esc(c.current_route || '—');
@@ -5812,6 +5923,7 @@ function renderFuContacts() {
       <td>
         <div class="fu-meta-stack">
           <span class="fu-state-badge ${sti.cls}">${sti.label}</span>
+          ${sentBadge}
           ${c.recurring_enabled ? `<span class="fu-state-badge" style="background:rgba(59,130,246,.12);color:#60a5fa">Recurring</span>` : ''}
         </div>
       </td>
@@ -5845,12 +5957,20 @@ function renderFuContacts() {
 
 // ── Action handlers ────────────────────────────────────────────────────────────
 async function fuAction(id, action, reason, extraPayload) {
+  const inflightKey = id + ':' + action;
+  if (_fuInflight.has(inflightKey)) return;   // block rapid double-clicks
+  _fuInflight.add(inflightKey);
   const body = {id, action, ...(extraPayload||{})};
   if (reason) body.reason = reason;
   try {
     const res = await fetch('/api/followups/action', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     const data = await res.json();
-    if (!res.ok) { toast('Error: ' + (data.error||'unknown'), true); return; }
+    if (!res.ok) {
+      // 409 duplicate guard: show the friendly message as a warning, not "Error:"
+      const isDup = res.status === 409 || data.duplicate;
+      toast((isDup ? '' : 'Error: ') + (data.error || 'unknown'), true);
+      return;
+    }
     const contextualMsgs = {
       'send-now':'Follow-up sent',
       'cancel-schedule':'Schedule cancelled',
@@ -5873,11 +5993,18 @@ async function fuAction(id, action, reason, extraPayload) {
     }
     toast(msg);
     await loadFollowups();
-  } catch(e) { toast('Error: '+e.message, true); }
+  } catch(e) {
+    toast('Error: '+e.message, true);
+  } finally {
+    _fuInflight.delete(inflightKey);
+  }
 }
 
 async function bulkFuAction(action, extraPayload) {
   if (!selectedFuIds.size) return;
+  // Batch sends run one-at-a-time so we can show real-time progress and catch
+  // per-contact errors (incl. the 24h duplicate guard) individually.
+  if (action === 'send-now') return bulkSendNowWithProgress();
   const ids = [...selectedFuIds];
   const body = {ids, action, ...(extraPayload||{})};
   try {
@@ -5900,6 +6027,60 @@ async function bulkFuAction(action, extraPayload) {
     clearFuSelection();
     await loadFollowups();
   } catch(e) { toast('Error: '+e.message, true); }
+}
+
+// Batch "Send Now" with a live progress bar. Sends sequentially via the single
+// /action endpoint so each contact is processed (and deduped) independently.
+let _fuBatchSending = false;
+async function bulkSendNowWithProgress() {
+  if (_fuBatchSending) return;            // ignore re-entry / double-click
+  const ids = [...selectedFuIds];
+  if (!ids.length) return;
+  _fuBatchSending = true;
+
+  const prog    = document.getElementById('fuProgress');
+  const fill    = document.getElementById('fuProgressFill');
+  const countEl = document.getElementById('fuProgressCount');
+  const labelEl = document.getElementById('fuProgressLabel');
+  const bulkBtns = document.querySelectorAll('#fuBulkBar button');
+  bulkBtns.forEach(b => b.disabled = true);
+  if (prog) prog.style.display = '';
+  if (countEl) { countEl.className = 'fu-progress-count'; countEl.textContent = '0/' + ids.length; }
+  if (labelEl) labelEl.textContent = 'Sending follow-ups…';
+  if (fill) fill.style.width = '0%';
+
+  let sent = 0, skipped = 0, failed = 0, done = 0;
+  for (const id of ids) {
+    try {
+      const res = await fetch('/api/followups/action', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({id, action:'send-now'})
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) sent++;
+      else if (res.status === 409 || data.duplicate) skipped++;  // already sent recently
+      else if (data.skip) skipped++;                              // not eligible (state/stage)
+      else failed++;
+    } catch(e) { failed++; }
+    done++;
+    if (countEl) countEl.textContent = done + '/' + ids.length;
+    if (fill) fill.style.width = Math.round(done / ids.length * 100) + '%';
+  }
+
+  if (labelEl) labelEl.textContent = '✓ Finished';
+  let msg = sent > 0 ? `Sent ${sent}` : 'Nothing sent';
+  if (skipped) msg += ` — ${skipped} skipped`;
+  if (failed)  msg += ` — ${failed} failed`;
+  toast(msg, failed > 0 && sent === 0);
+
+  bulkBtns.forEach(b => b.disabled = false);
+  setTimeout(() => {
+    if (prog) prog.style.display = 'none';
+    if (fill) fill.style.width = '0%';
+  }, 1400);
+  _fuBatchSending = false;
+  clearFuSelection();
+  await loadFollowups();
 }
 
 // ── Schedule modal ────────────────────────────────────────────────────────────

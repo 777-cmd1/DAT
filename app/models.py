@@ -201,6 +201,8 @@ class Reply(db.Model):
     body         = db.Column(db.Text, default='')
     route        = db.Column(db.String(512), default='')
     status       = db.Column(db.String(30), default='new')  # 'new' | 'interested' | 'not_interested'
+    reply_filter_key = db.Column(db.String(50), nullable=True)   # pipeline reply-filter tag
+    auto_advanced    = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     received_at  = db.Column(db.DateTime, default=_utcnow)
     classified_at = db.Column(db.DateTime)
 
@@ -218,6 +220,7 @@ class Reply(db.Model):
             'email': self.from_email, 'from': self.from_name,
             'subject': self.subject, 'body': self.body,
             'route': self.route, 'status': self.status,
+            'reply_filter_key': self.reply_filter_key or '',
             'received_at': self.received_at.strftime('%Y-%m-%d %H:%M') if self.received_at else '',
         }
 

@@ -98,6 +98,69 @@ def test_bulk_set_pipeline_stage_and_stats(app, db, client):
     assert stats['transitions'].get('1_to_2') == 3
 
 
+def test_put_pipeline_config_customizes_and_validates(app, db, client):
+    user, ws = _make_user_and_login(db, client)
+    # a contact parked in stage 5, which we are about to remove
+    ids = _add_contacts(db, user, ws, 1)
+    client.post('/api/followups/action',
+                json={'id': ids[0], 'action': 'set-pipeline-stage',
+                      'pipeline_stage': 5, '_csrf': 'test-csrf-token'})
+
+    # save a 3-stage config (drops 4 & 5) + a filter with no explicit key
+    r = client.put('/api/followups/pipeline-config', json={
+        'stages': [{'id': 1, 'name': 'Lead', 'color': '#111'},
+                   {'id': 2, 'name': 'Quoted', 'color': '#222'},
+                   {'id': 3, 'name': 'Won', 'color': '#333'}],
+        'reply_filters': [{'label': 'we can use you', 'auto_advance_to': 2}],
+        '_csrf': 'test-csrf-token'})
+    assert r.status_code == 200, r.get_json()
+    cfg = r.get_json()
+    assert [s['name'] for s in cfg['stages']] == ['Lead', 'Quoted', 'Won']
+    assert cfg['reply_filters'][0]['key'] == 'we_can_use_you'   # slugged
+
+    # contact that was in removed stage 5 got reassigned to first stage
+    from app.models import FollowupContact
+    db.session.expire_all()
+    assert db.session.get(FollowupContact, ids[0]).pipeline_stage == 1
+
+    # < 2 stages rejected
+    r = client.put('/api/followups/pipeline-config',
+                   json={'stages': [{'id': 1, 'name': 'Only'}], '_csrf': 'test-csrf-token'})
+    assert r.status_code == 400
+
+
+def test_reply_tag_auto_advances_forward_only(app, db, client):
+    from app.models import Reply, FollowupContact
+    user, ws = _make_user_and_login(db, client)
+    cid = _add_contacts(db, user, ws, 1)[0]
+    fc = db.session.get(FollowupContact, cid)
+    email = fc.contact_email
+    db.session.add(Reply(user_id=user.id, workspace_id=ws.id, msg_id='MX',
+                         from_email=email, from_name='B', subject='re', status='new'))
+    db.session.commit()
+
+    # default 'can_use' filter advances to stage 2
+    r = client.post('/api/replies/pipeline-tag',
+                    json={'msg_id': 'MX', 'filter_key': 'can_use', '_csrf': 'test-csrf-token'})
+    body = r.get_json()
+    assert r.status_code == 200 and body['advanced'] is True and body['pipeline_stage'] == 2
+    db.session.expire_all()
+    assert db.session.get(FollowupContact, cid).pipeline_stage == 2
+    assert db.session.get(Reply, Reply.query.filter_by(msg_id='MX').first().id).auto_advanced is True
+
+    # re-tagging with the same (target 2) is a no-op forward-only
+    r = client.post('/api/replies/pipeline-tag',
+                    json={'msg_id': 'MX', 'filter_key': 'can_use', '_csrf': 'test-csrf-token'})
+    assert r.get_json()['advanced'] is False
+
+    # a filter with no auto_advance_to just tags, never moves
+    r = client.post('/api/replies/pipeline-tag',
+                    json={'msg_id': 'MX', 'filter_key': 'dnu', '_csrf': 'test-csrf-token'})
+    assert r.get_json()['advanced'] is False
+    db.session.expire_all()
+    assert db.session.get(FollowupContact, cid).pipeline_stage == 2   # unchanged
+
+
 def test_user_view_mode_preference_persists(app, db, client):
     _make_user_and_login(db, client)
     r = client.post('/api/user/preferences',

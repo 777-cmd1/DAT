@@ -1689,6 +1689,22 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-kanban-card-foot { font-size:10px; color:var(--text3); margin-top:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fu-kanban-card-menu { position:absolute; top:6px; right:6px; border:none; background:transparent; color:var(--text3); font-size:14px; line-height:1; cursor:pointer; padding:2px 4px; border-radius:4px; }
 .fu-kanban-card-menu:hover { background:var(--surface2); color:var(--text); }
+/* Pipeline config editor (Settings) */
+.pl-cfg-subhead { font-size:12px; font-weight:800; color:var(--text2); margin:6px 0 8px; text-transform:uppercase; letter-spacing:.05em; }
+.pl-cfg-hint { font-size:11px; font-weight:500; color:var(--text3); text-transform:none; letter-spacing:0; margin-left:6px; }
+.pl-cfg-list { display:flex; flex-direction:column; gap:7px; }
+.pl-row, .pl-frow { display:flex; align-items:center; gap:8px; }
+.pl-row input.pl-stage-name, .pl-frow input.pl-filter-label { flex:1 1 auto; width:auto; min-width:0; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:7px 10px; font-size:13px; color:var(--text); font-family:inherit; }
+.pl-row input[type=color] { width:36px; height:34px; padding:2px; border:1px solid var(--border); border-radius:7px; background:var(--surface2); cursor:pointer; flex:0 0 auto; }
+.pl-frow select.pl-filter-adv { width:auto; flex:0 0 auto; min-width:160px; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:7px 8px; font-size:12px; color:var(--text); font-family:inherit; }
+.pl-row input:focus, .pl-frow input:focus, .pl-frow select:focus { outline:none; border-color:var(--accent); }
+.pl-row-del { border:none; background:var(--surface2); color:var(--text3); width:30px; height:30px; border-radius:7px; cursor:pointer; font-size:13px; flex-shrink:0; }
+.pl-row-del:hover { background:var(--red-dim); color:var(--red); }
+/* Reply-filter tag select on triage cards */
+.tq-pl-tag { margin-top:7px; }
+.tq-pl-tag select { font-size:11px; padding:3px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-family:inherit; max-width:100%; }
+.tq-pl-tag select:focus { outline:none; border-color:var(--accent); }
+.tq-pl-tag.tagged select { border-color:var(--accent); color:var(--accent); }
 
 @media (max-width:1100px) {
   .fu-table { min-width:980px; }
@@ -3500,6 +3516,26 @@ html:not([data-theme="dark"]) .send-cta-bar {
           </div>
         </section>
 
+        <section class="settings-card">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-title">Pipeline / Kanban</div>
+              <div class="settings-sub">Customize the Kanban stages and reply-filter tags used by the Follow-up board. Saved separately below.</div>
+            </div>
+          </div>
+          <div class="pl-cfg-subhead">Stages <span class="pl-cfg-hint">minimum 2 — these are the Kanban columns</span></div>
+          <div id="pipelineStagesEditor" class="pl-cfg-list"></div>
+          <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineStageRow()">+ Add Stage</button>
+
+          <div class="pl-cfg-subhead" style="margin-top:18px">Reply filters <span class="pl-cfg-hint">tag a reply → optional auto-advance</span></div>
+          <div id="pipelineFiltersEditor" class="pl-cfg-list"></div>
+          <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineFilterRow()">+ Add Filter</button>
+
+          <div style="margin-top:16px">
+            <button class="btn btn-primary" onclick="savePipelineConfig()">Save Pipeline Config</button>
+          </div>
+        </section>
+
         <section class="settings-savebar">
           <div class="settings-savecopy">
             <div class="settings-title">Save Workspace Settings</div>
@@ -5079,6 +5115,9 @@ async function loadSettings() {
   document.getElementById('fuDefaultEnabled').checked = fu.default_followup_enabled !== false;
   renderSettingsPreview();
 
+  if (!_fuPipelineConfigLoaded) await loadPipelineConfig();
+  renderPipelineConfigEditor();
+
   // Handle ?gmail_connected=1 redirect from OAuth callback
   const params = new URLSearchParams(window.location.search);
   if (params.has('gmail_connected')) {
@@ -5163,6 +5202,7 @@ async function initReplies() {
   if (!repliesTimer) repliesTimer = setInterval(() => fetchReplies(true), 120000);
 }
 async function loadReplies() {
+  if (!_fuPipelineConfigLoaded) await loadPipelineConfig();   // reply-filter tags need the config
   const search = (document.getElementById('repliesSearch')?.value || '').trim();
   const params = new URLSearchParams({
     page: String(repliesPage),
@@ -5299,6 +5339,19 @@ function tqStatePill(state) {
   return '<span class="tq-state-pill ' + state + '">' + (labels[state] || state.toUpperCase()) + '</span>';
 }
 
+// Reply-filter tag selector (pipeline) for a triage card
+function tqPipelineTag(reply) {
+  if (!pipelineReplyFilters || !pipelineReplyFilters.length) return '';
+  const cur = reply.reply_filter_key || '';
+  const msgId = esc((reply.msg_id || '').replace(/'/g, "\\'"));
+  let opts = '<option value="">＋ Tag reply…</option>';
+  pipelineReplyFilters.forEach(f => {
+    opts += `<option value="${esc(f.key)}" ${f.key === cur ? 'selected' : ''}>${esc(f.label)}${f.auto_advance_to ? ' ↦' : ''}</option>`;
+  });
+  return `<div class="tq-pl-tag ${cur ? 'tagged' : ''}" onclick="event.stopPropagation()">` +
+    `<select onchange="tagReplyPipeline('${msgId}', this.value, this)">${opts}</select></div>`;
+}
+
 // Full triage card — 2-column layout
 function tqCard(msgs) {
   const latest = msgs[0];
@@ -5350,6 +5403,7 @@ function tqCard(msgs) {
           '<div class="tq-email">' + esc(emailRaw) + '</div>' +
           '<div class="tq-preview">' + esc(preview) + (preview.length >= 110 ? '…' : '') + '</div>' +
           (route ? '<div class="tq-route"><i class="ph-bold ph-map-pin" style="font-size:10px"></i> ' + esc(route) + '</div>' : '') +
+          tqPipelineTag(latest) +
           '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' + esc(latest.body || '(empty)') + '</div>' +
         '</div>' +
       '</div>' +
@@ -6188,6 +6242,96 @@ async function fuKanbanDrop(e, stageId) {
     renderFuKanban();
     toast('Error: ' + err.message, true);
   }
+}
+
+// ── Pipeline config editor (Settings) ──────────────────────────────────────────
+function _plStageOptionsHtml(selectedId) {
+  let opts = '<option value="">No auto-advance</option>';
+  pipelineStages.forEach(s => {
+    opts += `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>→ ${esc(s.name)}</option>`;
+  });
+  return opts;
+}
+
+function addPipelineStageRow(stage) {
+  const box = document.getElementById('pipelineStagesEditor');
+  if (!box) return;
+  const s = stage || { id: '', name: '', color: '#7c6cf8' };
+  const row = document.createElement('div');
+  row.className = 'pl-row';
+  if (s.id) row.dataset.id = s.id;
+  row.innerHTML =
+    `<input class="pl-stage-name" value="${esc(s.name)}" placeholder="Stage name" maxlength="60">` +
+    `<input class="pl-stage-color" type="color" value="${s.color || '#7c6cf8'}">` +
+    `<button class="pl-row-del" title="Remove stage" onclick="this.closest('.pl-row').remove()">✕</button>`;
+  box.appendChild(row);
+}
+
+function addPipelineFilterRow(filter) {
+  const box = document.getElementById('pipelineFiltersEditor');
+  if (!box) return;
+  const f = filter || { key: '', label: '', auto_advance_to: null };
+  const row = document.createElement('div');
+  row.className = 'pl-frow';
+  if (f.key) row.dataset.key = f.key;
+  row.innerHTML =
+    `<input class="pl-filter-label" value="${esc(f.label)}" placeholder="Reply text / label" maxlength="120">` +
+    `<select class="pl-filter-adv">${_plStageOptionsHtml(f.auto_advance_to)}</select>` +
+    `<button class="pl-row-del" title="Remove filter" onclick="this.closest('.pl-frow').remove()">✕</button>`;
+  box.appendChild(row);
+}
+
+function renderPipelineConfigEditor() {
+  const sBox = document.getElementById('pipelineStagesEditor');
+  const fBox = document.getElementById('pipelineFiltersEditor');
+  if (!sBox || !fBox) return;
+  sBox.innerHTML = ''; fBox.innerHTML = '';
+  pipelineStages.forEach(addPipelineStageRow);
+  pipelineReplyFilters.forEach(addPipelineFilterRow);
+}
+
+async function savePipelineConfig() {
+  const stages = [...document.querySelectorAll('#pipelineStagesEditor .pl-row')].map(r => ({
+    id: r.dataset.id ? parseInt(r.dataset.id) : null,
+    name: r.querySelector('.pl-stage-name').value.trim(),
+    color: r.querySelector('.pl-stage-color').value,
+  })).filter(s => s.name);
+  if (stages.length < 2) { toast('At least 2 stages required', true); return; }
+  const reply_filters = [...document.querySelectorAll('#pipelineFiltersEditor .pl-frow')].map(r => ({
+    key: r.dataset.key || '',
+    label: r.querySelector('.pl-filter-label').value.trim(),
+    auto_advance_to: r.querySelector('.pl-filter-adv').value ? parseInt(r.querySelector('.pl-filter-adv').value) : null,
+  })).filter(f => f.label);
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ stages, reply_filters })
+    });
+    const data = await res.json();
+    if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
+    pipelineStages = data.stages || [];
+    pipelineReplyFilters = data.reply_filters || [];
+    renderPipelineConfigEditor();
+    toast('Pipeline config saved');
+    if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {
+      await loadPipelineStats(); renderFuKanban();
+    }
+  } catch(e) { toast('Error: ' + e.message, true); }
+}
+
+// Tag a reply with a pipeline filter (Replies triage) → optional auto-advance.
+async function tagReplyPipeline(msgId, key, selectEl) {
+  try {
+    const res = await fetch('/api/replies/pipeline-tag', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ msg_id: msgId, filter_key: key })
+    });
+    const data = await res.json();
+    if (!res.ok) { toast('Error: ' + (data.error || 'tag failed'), true); return; }
+    if (selectEl) selectEl.parentElement.classList.toggle('tagged', !!key);
+    if (data.advanced) toast('Tagged & moved to ' + (data.stage_name || ('stage ' + data.pipeline_stage)));
+    else toast(key ? 'Reply tagged' : 'Tag cleared');
+  } catch(e) { toast('Error: ' + e.message, true); }
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────

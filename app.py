@@ -643,6 +643,13 @@ def _record_event(contact, event_type, actor_type='user', actor_user_id=None,
     return evt
 
 
+def _slug(text):
+    """Lowercase ascii slug for reply-filter keys."""
+    import re as _re
+    s = _re.sub(r'[^a-z0-9]+', '_', (text or '').strip().lower()).strip('_')
+    return s or 'filter'
+
+
 def _apply_pipeline_stage(fc, target_stage, actor_user_id=None, reason='manual'):
     """Move a follow-up contact to a Kanban pipeline stage (1..N).
 
@@ -1988,7 +1995,8 @@ def load_replies():
     from app.models import Reply
     rows = db.session.query(
         Reply.id, Reply.msg_id, Reply.from_email, Reply.from_name,
-        Reply.subject, Reply.body, Reply.route, Reply.status, Reply.received_at
+        Reply.subject, Reply.body, Reply.route, Reply.status,
+        Reply.reply_filter_key, Reply.received_at
     ).filter_by(user_id=uid).order_by(Reply.received_at.desc()).all()
     result = []
     for row in rows:
@@ -2001,6 +2009,7 @@ def load_replies():
             'body': row.body,
             'route': row.route,
             'status': row.status,
+            'reply_filter_key': row.reply_filter_key or '',
             'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
         })
     return result
@@ -2087,7 +2096,8 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
 
     msg_rows = db.session.query(
         Reply.id, Reply.msg_id, Reply.from_email, Reply.from_name,
-        Reply.subject, Reply.body, Reply.route, Reply.status, Reply.received_at
+        Reply.subject, Reply.body, Reply.route, Reply.status,
+        Reply.reply_filter_key, Reply.received_at
     ).filter(
         Reply.user_id == uid,
         func.lower(Reply.from_email).in_(email_keys)
@@ -2105,6 +2115,7 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
             'body': row.body,
             'route': row.route,
             'status': row.status,
+            'reply_filter_key': row.reply_filter_key or '',
             'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
         })
 
@@ -4468,6 +4479,127 @@ def api_user_preferences():
         user.followup_view_mode = mode
         db.session.commit()
     return jsonify(ok=True, followup_view_mode=user.followup_view_mode or 'table')
+
+
+@app.route('/api/followups/pipeline-config', methods=['PUT'])
+@login_required
+@limiter.limit("30 per minute")
+@csrf_protected
+def api_followups_pipeline_config_save():
+    """Persist customized Kanban stages + reply filters for the workspace.
+
+    Stage ids are preserved across edits; new stages get fresh ids. Removing a
+    stage reassigns any contacts sitting in it to the first stage so nothing is
+    orphaned.
+    """
+    from app.models import FollowupContact, Workspace
+    uid = _current_user_id()
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    if not ws:
+        return jsonify(error='No workspace'), 400
+    data = request.get_json() or {}
+    cfg = dict(ws.pipeline_config or {})
+
+    stages = data.get('stages')
+    norm_stages = None
+    if stages is not None:
+        if not isinstance(stages, list) or len(stages) < 2:
+            return jsonify(error='At least 2 stages required'), 400
+        old_ids = {s['id'] for s in ws.get_stages()}
+        max_id = max(old_ids) if old_ids else 0
+        norm_stages, used = [], set()
+        for s in stages:
+            name = (s.get('name') or '').strip()
+            if not name:
+                return jsonify(error='Every stage needs a name'), 400
+            try:
+                sid = int(s.get('id'))
+            except (TypeError, ValueError):
+                sid = None
+            if not sid or sid in used:
+                max_id += 1
+                sid = max_id
+            used.add(sid)
+            color = (s.get('color') or '#888888').strip()[:9]
+            norm_stages.append({'id': sid, 'name': name[:60], 'color': color})
+        # reassign contacts whose stage was removed
+        removed = old_ids - used
+        if removed:
+            first_id = norm_stages[0]['id']
+            FollowupContact.query.filter(
+                FollowupContact.user_id == uid,
+                FollowupContact.pipeline_stage.in_(list(removed))
+            ).update({'pipeline_stage': first_id}, synchronize_session=False)
+        cfg['stages'] = norm_stages
+
+    filters = data.get('reply_filters')
+    if filters is not None:
+        valid_ids = {s['id'] for s in (norm_stages or ws.get_stages())}
+        norm_filters, used_keys = [], set()
+        for f in (filters if isinstance(filters, list) else []):
+            label = (f.get('label') or '').strip()
+            if not label:
+                continue
+            key = (f.get('key') or '').strip() or _slug(label)
+            while key in used_keys:
+                key = key + '_x'
+            used_keys.add(key)
+            adv = f.get('auto_advance_to')
+            try:
+                adv = int(adv)
+            except (TypeError, ValueError):
+                adv = None
+            if adv is not None and adv not in valid_ids:
+                adv = None
+            norm_filters.append({'key': key[:50], 'label': label[:120], 'auto_advance_to': adv})
+        cfg['reply_filters'] = norm_filters
+
+    ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
+    db.session.commit()
+    return jsonify(ok=True, stages=ws.get_stages(), reply_filters=ws.get_reply_filters())
+
+
+@app.route('/api/replies/pipeline-tag', methods=['POST'])
+@login_required
+@limiter.limit("120 per minute")
+@csrf_protected
+def api_reply_pipeline_tag():
+    """Tag a reply with a pipeline reply-filter and (optionally) auto-advance the
+    matching follow-up contact forward to the filter's configured stage."""
+    from app.models import Reply, Workspace, FollowupContact
+    uid = _current_user_id()
+    data = request.get_json() or {}
+    msg_id = data.get('msg_id')
+    key = (data.get('filter_key') or '').strip()
+    if not msg_id:
+        return jsonify(error='msg_id required'), 400
+    reply = Reply.query.filter_by(msg_id=msg_id, user_id=uid).first()
+    if not reply:
+        return jsonify(error='Reply not found'), 404
+
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    filters = ws.get_reply_filters() if ws else []
+    fcfg = next((f for f in filters if f['key'] == key), None) if key else None
+    if key and not fcfg:
+        return jsonify(error='Unknown filter'), 400
+
+    reply.reply_filter_key = key or None
+    advanced, new_stage, stage_name = False, None, None
+    if fcfg and fcfg.get('auto_advance_to') and ws:
+        target = int(fcfg['auto_advance_to'])
+        fc = FollowupContact.query.filter(
+            FollowupContact.workspace_id == ws.id,
+            db.func.lower(FollowupContact.contact_email) == (reply.from_email or '').lower()
+        ).first()
+        if fc and target > (fc.pipeline_stage or 1):   # forward-only
+            ok, _err = _apply_pipeline_stage(fc, target, actor_user_id=uid, reason=f'reply_tag:{key}')
+            if ok:
+                advanced, new_stage = True, target
+                reply.auto_advanced = True
+                stage_name = next((s['name'] for s in ws.get_stages() if s['id'] == target), None)
+    db.session.commit()
+    return jsonify(ok=True, filter_key=reply.reply_filter_key or '',
+                   advanced=advanced, pipeline_stage=new_stage, stage_name=stage_name)
 
 
 @app.route('/api/followups/delete', methods=['POST'])

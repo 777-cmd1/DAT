@@ -3018,78 +3018,98 @@ def run_send_job(job_id, loads, cfg, templates, uid=None):
     state.update({"running":True,"done":False,"total":len(loads),"current":0,"sent":0,"errors":0,"skipped":0,"log":[],"job_id":job_id})
     with app.app_context():
         from app.models import SendJob
-        job = db.session.get(SendJob, job_id)
-        if not job:
-            state.update({"running": False, "done": True, "errors": 1})
-            return
-        job.status = 'running'
-        job.started_at = _utcnow()
-        job.finished_at = None
-        job.error_msg = None
-        db.session.commit()
-
-        _, sent_today_set = load_sent_log(uid=uid)
-        be, bd = load_stop_list(uid=uid)
-        session_sent = set()
-        for i, load in enumerate(loads):
-            state["current"] = i + 1
-            em = load['email'].lower().strip()
-            if is_blocked(load['email'], be, bd):
-                state["skipped"] += 1
-                state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"stop list"})
-                continue
-            if em in sent_today_set or em in session_sent:
-                state["skipped"] += 1
-                state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
-                continue
-            # Re-check quota at send time — the pre-flight check in /api/send can
-            # race with parallel jobs or follow-up sends consuming the same quota
-            quota_now = get_daily_quota(uid)
-            if not quota_now['unlimited'] and (quota_now['remaining'] or 0) <= 0:
-                state["skipped"] += 1
-                state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"daily quota exhausted"})
-                continue
-            tmpl = random.choice(templates); vi = templates.index(tmpl) + 1
-            body = render_template_text(tmpl, load, cfg)
-            subject = _build_subject(load)
-            ok, err = send_one_email(load['email'], subject, body, cfg, uid=uid)
-            ts = _utcnow().strftime('%H:%M:%S'); st = 'sent' if ok else 'error'
-            append_log(load, st, vi, uid=uid)
-            if ok:
-                session_sent.add(em)
-                state["sent"] += 1
-                _track_usage(uid, 'email_sent')   # ← quota tracking
-            else:
-                state["errors"] += 1
-            state["log"].append({"time":ts,"status":st,"variant":vi,"email":load["email"],"error":err or ""})
-            # Persist progress to DB every 10 emails
-            if (i + 1) % 10 == 0:
-                try:
-                    job.sent    = state["sent"]
-                    job.errors  = state["errors"]
-                    job.skipped = state["skipped"]
-                    db.session.commit()
-                except Exception as _pe:
-                    app.logger.warning(f'run_send_job: DB progress update failed: {_pe}')
-                    db.session.rollback()
-            if i < len(loads) - 1:
-                time.sleep(random.randint(cfg.get("delay_min", 20), cfg.get("delay_max", 45)))
-        state.update({"running": False, "done": True})
-        # Mark job as done in DB
         try:
-            job.status      = 'done'
-            job.sent        = state["sent"]
-            job.errors      = state["errors"]
-            job.skipped     = state["skipped"]
-            job.finished_at = _utcnow()
+            job = db.session.get(SendJob, job_id)
+            if not job:
+                state.update({"running": False, "done": True, "errors": 1})
+                return
+            job.status = 'running'
+            job.started_at = _utcnow()
+            job.finished_at = None
+            job.error_msg = None
             db.session.commit()
-        except Exception as _fe:
-            app.logger.warning(f'run_send_job: DB final update failed: {_fe}')
-            db.session.rollback()
-        audit_log('send_batch', resource_type='send', uid=uid, detail={
-            'total': state['total'], 'sent': state['sent'],
-            'errors': state['errors'], 'skipped': state['skipped'],
-        })
+
+            _, sent_today_set = load_sent_log(uid=uid)
+            be, bd = load_stop_list(uid=uid)
+            session_sent = set()
+            for i, load in enumerate(loads):
+                state["current"] = i + 1
+                em = load['email'].lower().strip()
+                if is_blocked(load['email'], be, bd):
+                    state["skipped"] += 1
+                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"stop list"})
+                    continue
+                if em in sent_today_set or em in session_sent:
+                    state["skipped"] += 1
+                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
+                    continue
+                # Re-check quota at send time — the pre-flight check in /api/send can
+                # race with parallel jobs or follow-up sends consuming the same quota
+                quota_now = get_daily_quota(uid)
+                if not quota_now['unlimited'] and (quota_now['remaining'] or 0) <= 0:
+                    state["skipped"] += 1
+                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"daily quota exhausted"})
+                    continue
+                tmpl = random.choice(templates); vi = templates.index(tmpl) + 1
+                body = render_template_text(tmpl, load, cfg)
+                subject = _build_subject(load)
+                ok, err = send_one_email(load['email'], subject, body, cfg, uid=uid)
+                ts = _utcnow().strftime('%H:%M:%S'); st = 'sent' if ok else 'error'
+                append_log(load, st, vi, uid=uid)
+                if ok:
+                    session_sent.add(em)
+                    state["sent"] += 1
+                    _track_usage(uid, 'email_sent')   # ← quota tracking
+                else:
+                    state["errors"] += 1
+                state["log"].append({"time":ts,"status":st,"variant":vi,"email":load["email"],"error":err or ""})
+                # Persist progress to DB every 10 emails
+                if (i + 1) % 10 == 0:
+                    try:
+                        job.sent    = state["sent"]
+                        job.errors  = state["errors"]
+                        job.skipped = state["skipped"]
+                        db.session.commit()
+                    except Exception as _pe:
+                        app.logger.warning(f'run_send_job: DB progress update failed: {_pe}')
+                        db.session.rollback()
+                if i < len(loads) - 1:
+                    time.sleep(random.randint(cfg.get("delay_min", 20), cfg.get("delay_max", 45)))
+            state.update({"running": False, "done": True})
+            # Mark job as done in DB
+            try:
+                job.status      = 'done'
+                job.sent        = state["sent"]
+                job.errors      = state["errors"]
+                job.skipped     = state["skipped"]
+                job.finished_at = _utcnow()
+                db.session.commit()
+            except Exception as _fe:
+                app.logger.warning(f'run_send_job: DB final update failed: {_fe}')
+                db.session.rollback()
+            audit_log('send_batch', resource_type='send', uid=uid, detail={
+                'total': state['total'], 'sent': state['sent'],
+                'errors': state['errors'], 'skipped': state['skipped'],
+            })
+        except Exception as _job_err:
+            # Never let a worker-thread crash leave the UI stuck on "sending…" with no
+            # error: log the full traceback (visible in deploy logs), surface the error
+            # on the job, and clear the in-memory running flag so the queue is freed.
+            import traceback as _tb
+            app.logger.error(
+                f'run_send_job crashed uid={uid} job={job_id}: {_job_err}\n{_tb.format_exc()}'
+            )
+            state.update({"running": False, "done": True})
+            try:
+                db.session.rollback()
+                _j = db.session.get(SendJob, job_id)
+                if _j and _j.status != 'done':
+                    _j.status      = 'error'
+                    _j.error_msg   = f'Send job crashed: {_job_err}'[:480]
+                    _j.finished_at = _utcnow()
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
 
 # ── Gmail OAuth2 Routes ───────────────────────────────────────────────────────
 
@@ -5327,6 +5347,22 @@ with app.app_context():
                     _conn.rollback()  # column already exists — ignore
     except Exception as _e:
         print(f'Migration check skipped: {_e}')
+    # Recover send jobs stranded by a restart — no worker thread survives a process
+    # restart, so any job still 'queued'/'running' at boot is dead. Mark them 'error'
+    # so users aren't blocked by the "Already running" guard after a deploy/restart.
+    try:
+        from app.models import SendJob
+        _stranded = SendJob.query.filter(SendJob.status.in_(['queued', 'running'])).all()
+        for _j in _stranded:
+            _j.status      = 'error'
+            _j.error_msg   = 'Auto-recovered: server restarted while job was in progress'
+            _j.finished_at = _utcnow()
+        if _stranded:
+            db.session.commit()
+            print(f'✓ Recovered {len(_stranded)} stranded send job(s) after restart')
+    except Exception as _e:
+        db.session.rollback()
+        print(f'Send-job recovery skipped: {_e}')
     # Extend templates.level column to VARCHAR(50) to allow custom FU template names
     try:
         with db.engine.connect() as _conn:

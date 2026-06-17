@@ -5309,6 +5309,12 @@ with app.app_context():
         ('followup_contacts', 'recurring_time',     'VARCHAR(5)'),
         ('followup_contacts', 'scheduled_once',     'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('replies',           'thread_id',           'VARCHAR(255)'),
+        # Pipeline / Kanban (Follow-up v2) — delivered inline for reliable startup creation
+        ('workspaces',        'pipeline_config',     'JSON'),
+        ('users',             'followup_view_mode',  "VARCHAR(20) DEFAULT 'table'"),
+        ('followup_contacts', 'pipeline_stage',      'INTEGER NOT NULL DEFAULT 1'),
+        ('replies',           'reply_filter_key',    'VARCHAR(50)'),
+        ('replies',           'auto_advanced',       'BOOLEAN NOT NULL DEFAULT FALSE'),
     ]
     try:
         with db.engine.connect() as _conn:

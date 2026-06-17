@@ -18,25 +18,38 @@ branch_labels = None
 depends_on = None
 
 
+def _has_column(table, column):
+    """Idempotency guard: these columns may already be delivered by the inline
+    startup migrations in app.py, so only ADD/DROP when state actually differs."""
+    insp = sa.inspect(op.get_bind())
+    return column in {c['name'] for c in insp.get_columns(table)}
+
+
 def upgrade():
-    with op.batch_alter_table('workspaces', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('pipeline_config', sa.JSON(), nullable=True))
+    if not _has_column('workspaces', 'pipeline_config'):
+        with op.batch_alter_table('workspaces', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('pipeline_config', sa.JSON(), nullable=True))
 
-    with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('followup_view_mode', sa.String(length=20),
-                                      nullable=True, server_default='table'))
+    if not _has_column('users', 'followup_view_mode'):
+        with op.batch_alter_table('users', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('followup_view_mode', sa.String(length=20),
+                                          nullable=True, server_default='table'))
 
-    with op.batch_alter_table('followup_contacts', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('pipeline_stage', sa.Integer(),
-                                      nullable=False, server_default='1'))
+    if not _has_column('followup_contacts', 'pipeline_stage'):
+        with op.batch_alter_table('followup_contacts', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('pipeline_stage', sa.Integer(),
+                                          nullable=False, server_default='1'))
 
 
 def downgrade():
-    with op.batch_alter_table('followup_contacts', schema=None) as batch_op:
-        batch_op.drop_column('pipeline_stage')
+    if _has_column('followup_contacts', 'pipeline_stage'):
+        with op.batch_alter_table('followup_contacts', schema=None) as batch_op:
+            batch_op.drop_column('pipeline_stage')
 
-    with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.drop_column('followup_view_mode')
+    if _has_column('users', 'followup_view_mode'):
+        with op.batch_alter_table('users', schema=None) as batch_op:
+            batch_op.drop_column('followup_view_mode')
 
-    with op.batch_alter_table('workspaces', schema=None) as batch_op:
-        batch_op.drop_column('pipeline_config')
+    if _has_column('workspaces', 'pipeline_config'):
+        with op.batch_alter_table('workspaces', schema=None) as batch_op:
+            batch_op.drop_column('pipeline_config')

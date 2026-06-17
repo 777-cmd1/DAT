@@ -3,6 +3,7 @@
 ## Що це
 Flask веб-застосунок для автоматизації freight email outreach.
 Версія v2 з invite-only авторизацією, мультиюзерністю, PostgreSQL.
+Production URL: **https://dat-production-c105.up.railway.app**
 
 ## Структура
 ```
@@ -10,28 +11,57 @@ app.py              — головний Flask файл (маршрути, ло�
 app/models.py       — SQLAlchemy моделі (User, Invitation, Send, Reply, FollowUp, ...)
 app/extensions.py   — db, migrate ініціалізація
 templates/
-  index.html        — весь фронтенд (vanilla JS)
+  index.html        — весь фронтенд (vanilla JS) — також містить JS-парсер parseDatText()
   admin.html        — адмін панель
   login.html        — логін
   register.html     — реєстрація по invite-токену
 migrations/         — Alembic міграції
 wsgi.py             — gunicorn entry point
+tests/test_parser.py — pytest тести для parse_dat_text()
 requirements.txt
 ```
 
 ## Деплой
-- Платформа: **Railway**
+- Платформа: **Railway**, проект **aware-joy**
 - Репо: `https://github.com/777-cmd1/DAT`
-- Команда деплою: `git push origin main` → Railway передеплоює автоматично
+- Деплой: `git push origin main` → Railway передеплоює автоматично (~1 хв)
 - БД: PostgreSQL (Railway підключає через `DATABASE_URL`)
 - Міграції: `flask db upgrade` (запускається автоматично через `releaseCommand`)
+- **GitHub App встановлено** — Claude може пушити в репо напряму через `git push origin main`
 
-## Локальний запуск
-```bash
-cd ~/Downloads/project_v2_online
-python app.py       # порт 8090
-```
-Локально використовує SQLite (`dat_mailer_dev.db`).
+## Парсинг лоудів — КЛЮЧОВА ЛОГІКА
+
+### Два формати лоудбордів
+Застосунок парсить два різних формати:
+
+**1. DAT** — простий формат (назва компанії, origin, destination, equip, дата, email)
+**2. Truckstop** — детальні картки (відрізняються структурою: містять "Days to Pay", "Additional Stops", "Estimated Fuel Cost")
+
+### Python-парсер (app.py)
+- `parse_truckstop_text(text)` — структурний парсер для Truckstop-карток
+- `parse_dat_text(text)` — головна функція; якщо бачить маркери Truckstop → делегує до `parse_truckstop_text()`
+- Детекція Truckstop: `re.search(r'(?i)\bdays to pay\b', text) and re.search(r'(?i)\b(?:additional stops|estimated fuel cost)\b', text)`
+- Результат: `{email, origin, destination, date, equip, length, weight, company, contact}`
+- `_build_subject(load)` — будує тему імейлу: `"Origin to Destination, date, equip, length"`
+- `_EQUIP_LABELS` — словник кодів: `V→Van, F→Flatbed, RGN→RGN` тощо
+
+### JS-парсер (templates/index.html, функція parseDatText)
+- **Окремий парсер у браузері** — заповнює Review Queue (UI)
+- Регекси: `_CITY_RE`, `_EQUIP_RE`, `_DATE_RE`, `_WT_RE`, `_LEN_RE`
+- `_CITY_RE = /^([A-Z][a-zA-Z\s\.]+,\s*[A-Z]{2})(?:\s+[\d,]+\s*mi\b)?(?:\s*\(\d*\))?$/`
+  - Суфікс `N mi` дозволено — Truckstop додає дистанцію до назви міста (`Laredo, TX 1 mi`)
+- `_EQUIP_RE = /\b(FSDV|FSDVR|SDL|SV|RGN|LB|MX|HS|AC|TN|PO|VM|VR|FD|SD|V|F|R)\b/g`
+  - Включає всі Truckstop-коди
+- Origin/destination: беруться передостаннє і останнє місто з блоку (`cities[length-2]`, `cities[length-1]`)
+- **Важливо**: JS-парсер показує дані у черзі, Python-парсер будує subject відправленого імейлу
+
+### Truckstop-специфічні нюанси
+- Origin-рядок може містити суфікс відстані: `"Laredo, TX 19 mi"` → origin = `"Laredo, TX"`
+- Equip-коди багатосимвольні: `FSDV` (Flatbed/Step Deck/Van), `SDL` (Step Deck/Lowboy), `SV` (Step/Van)
+- Company = рядок перед "Days to Pay ..."
+- Contact = рядок перед номером телефону (або перед email якщо нема телефону)
+- Телефони з `Ext`: `(785) 748-2700 Ext 3` — розпізнається як телефон, не контакт
+- `Days to Pay N/AEXP R` — валідний формат (N/A = не вказано)
 
 ## Environment Variables (Railway)
 | Variable | Призначення |
@@ -58,9 +88,16 @@ python app.py       # порт 8090
 ## Відомі нюанси
 - `invited_by` в `Invitation` — це UUID (`users.id`), не email. Використовувати `current_user_id()`
 - Dev SQLite не перевіряє FK constraints, PostgreSQL перевіряє — тестувати критичні речі на prod-like БД
-- `_send_invite_email()` silently fails якщо Gmail не налаштований — invite все одно зберігається в БД, посилання можна скопіювати з таблиці
+- `_send_invite_email()` silently fails якщо Gmail не налаштований — invite все одно зберігається в БД
+- Після деплою браузер може кешувати старий JS — користувачу треба Ctrl+Shift+R якщо бачить старе
 
 ## Адмін панель
 URL: `/admin`
 - Invite User → Send Invite → копіюй посилання з Copy Link
 - Управління юзерами, статистика, акаунти
+
+## Тести
+```bash
+python -m pytest tests/test_parser.py -q
+```
+Тестують `parse_dat_text()` — DAT і Truckstop формати, дедуплікацію, edge cases.

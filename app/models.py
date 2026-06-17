@@ -27,6 +27,7 @@ class User(db.Model):
     password     = db.Column(db.String(255), nullable=False)   # bcrypt hash
     role         = db.Column(db.String(20), default='user')    # 'admin' | 'user'
     invited_by   = db.Column(db.String(255))
+    followup_view_mode = db.Column(db.String(20), default='table', server_default='table')  # 'table' | 'kanban'
     created_at   = db.Column(db.DateTime, default=_utcnow)
     last_login   = db.Column(db.DateTime)
 
@@ -34,9 +35,30 @@ class User(db.Model):
         return {
             'id': self.id, 'email': self.email, 'name': self.name,
             'role': self.role, 'invited_by': self.invited_by,
+            'followup_view_mode': self.followup_view_mode or 'table',
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else None,
             'last_login': self.last_login.strftime('%Y-%m-%d %H:%M') if self.last_login else None,
         }
+
+
+# ── PIPELINE / KANBAN CONFIG DEFAULTS ────────────────────────────────────────
+# Customizable per-workspace (editing UI is phase 2); these are the fallbacks.
+PIPELINE_DEFAULT_STAGES = [
+    {"id": 1, "name": "Follow Pending",       "color": "#ff6b6b"},
+    {"id": 2, "name": "Got info (1st)",       "color": "#ffd93d"},
+    {"id": 3, "name": "Got info 2 (Repeat)",  "color": "#6bcf7f"},
+    {"id": 4, "name": "Regular info",         "color": "#4c6ef5"},
+    {"id": 5, "name": "Booked",               "color": "#9c36b5"},
+]
+
+PIPELINE_DEFAULT_REPLY_FILTERS = [
+    {"key": "can_use",       "label": "we can use you",                 "auto_advance_to": 2},
+    {"key": "no_landstar",   "label": "can not use Landstar",           "auto_advance_to": None},
+    {"key": "no_landstar_v2", "label": "no Landstar",                   "auto_advance_to": None},
+    {"key": "dnu",           "label": "DNU",                            "auto_advance_to": None},
+    {"key": "no_contact",    "label": "Please don't contact me anymore.", "auto_advance_to": None},
+    {"key": "cannot_use_ls", "label": "We cannot use landstar",         "auto_advance_to": None},
+]
 
 
 class Workspace(db.Model):
@@ -47,9 +69,22 @@ class Workspace(db.Model):
     owner_id         = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     plan             = db.Column(db.String(20), default='free')  # 'free' | 'starter' | 'pro'
     fu_auto_enabled  = db.Column(db.Boolean, default=True, nullable=False, server_default='1')
+    pipeline_config  = db.Column(db.JSON, nullable=True)   # {stages: [...], reply_filters: [...]}
     created_at       = db.Column(db.DateTime, default=_utcnow)
 
     owner = db.relationship('User', backref='owned_workspaces')
+
+    def get_stages(self):
+        """Pipeline stages for this workspace, falling back to defaults."""
+        config = self.pipeline_config or {}
+        stages = config.get('stages')
+        return stages if stages else [dict(s) for s in PIPELINE_DEFAULT_STAGES]
+
+    def get_reply_filters(self):
+        """Reply filters for this workspace, falling back to defaults."""
+        config = self.pipeline_config or {}
+        filters = config.get('reply_filters')
+        return filters if filters else [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
 
 
 class Invitation(db.Model):
@@ -256,6 +291,7 @@ class FollowupContact(db.Model):
     company_name = db.Column(db.String(255))
     state = db.Column(db.String(20), default='active', nullable=False)
     stage = db.Column(db.String(30), default='fu1_scheduled', nullable=False)
+    pipeline_stage = db.Column(db.Integer, default=1, nullable=False, server_default='1')  # Kanban stage 1-5
     is_followup_enabled = db.Column(db.Boolean, default=True, nullable=False)
     next_followup_at = db.Column(db.DateTime)
     last_followup_sent_at = db.Column(db.DateTime)
@@ -307,6 +343,7 @@ class FollowupContact(db.Model):
             'company_name': self.company_name or '',
             'state': self.state,
             'stage': self.stage,
+            'pipeline_stage': self.pipeline_stage or 1,
             'is_followup_enabled': self.is_followup_enabled,
             'next_followup_at': fmt(self.next_followup_at),
             'last_followup_sent_at': fmt(self.last_followup_sent_at),

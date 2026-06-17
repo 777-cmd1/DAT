@@ -643,6 +643,32 @@ def _record_event(contact, event_type, actor_type='user', actor_user_id=None,
     return evt
 
 
+def _apply_pipeline_stage(fc, target_stage, actor_user_id=None, reason='manual'):
+    """Move a follow-up contact to a Kanban pipeline stage (1..N).
+
+    Validates the target against the workspace's configured stages and logs a
+    'pipeline_move' FollowupEvent (so transition stats can be computed).
+    Returns (ok, error_msg). Moving to the current stage is a no-op success.
+    """
+    from app.models import Workspace
+    try:
+        target = int(target_stage)
+    except (TypeError, ValueError):
+        return False, 'Invalid stage'
+    ws = db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None
+    valid_ids = [s['id'] for s in ws.get_stages()] if ws else [1, 2, 3, 4, 5]
+    if target not in valid_ids:
+        return False, 'Invalid stage'
+    old = fc.pipeline_stage or 1
+    if target != old:
+        fc.pipeline_stage = target
+        fc.last_activity_at = _utcnow()
+        _record_event(fc, 'pipeline_move', actor_user_id=actor_user_id,
+                      from_stage=str(old), to_stage=str(target),
+                      notes=f'pipeline {old}->{target} ({reason})')
+    return True, None
+
+
 def _transition_state(contact, new_state, reason=None, actor_user_id=None):
     """Transition contact state with validation. Returns (success, error_msg)."""
     old_state = contact.state
@@ -4190,6 +4216,9 @@ def api_followups_action():
         ok, err = _transition_state(fc, 'closed', reason=reason, actor_user_id=uid)
     elif action == 'restart-fu1':
         ok, err = _restart_contact_from_fu1(fc, actor_user_id=uid)
+    elif action == 'set-pipeline-stage':
+        ok, err = _apply_pipeline_stage(fc, data.get('pipeline_stage'),
+                                        actor_user_id=uid, reason=reason or 'manual')
     else:
         return jsonify(error=f'Unknown action: {action}'), 400
 
@@ -4345,6 +4374,11 @@ def api_followups_bulk_action():
             except ValueError as e:
                 results.append({'id': cid, 'ok': False, 'error': str(e)})
 
+        elif action == 'set-pipeline-stage':
+            ok, err = _apply_pipeline_stage(fc, data.get('pipeline_stage'),
+                                            actor_user_id=uid, reason=reason or 'manual')
+            results.append({'id': cid, 'ok': ok, 'error': err})
+
         elif action == 'stop-recurring':
             fc.recurring_enabled = False
             fc.recurring_days = None
@@ -4367,6 +4401,73 @@ def api_followups_bulk_action():
     skip_count   = sum(1 for r in results if not r.get('ok') and r.get('skip'))
     failed_count = sum(1 for r in results if not r.get('ok') and not r.get('skip'))
     return jsonify(results=results, sent=ok_count, skipped=skip_count, failed=failed_count)
+
+
+# ── PIPELINE / KANBAN (shared data with the Follow-up table) ──────────────────
+
+@app.route('/api/followups/pipeline-config')
+@login_required
+def api_followups_pipeline_config():
+    """Stages + reply filters for the Kanban view, plus the user's saved view mode."""
+    from app.models import (Workspace, User as _U,
+                            PIPELINE_DEFAULT_STAGES, PIPELINE_DEFAULT_REPLY_FILTERS)
+    uid = _current_user_id()
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    user = db.session.get(_U, uid)
+    stages = ws.get_stages() if ws else [dict(s) for s in PIPELINE_DEFAULT_STAGES]
+    filters = ws.get_reply_filters() if ws else [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
+    return jsonify(stages=stages, reply_filters=filters,
+                   view_mode=(user.followup_view_mode or 'table') if user else 'table')
+
+
+@app.route('/api/followups/pipeline-stats')
+@login_required
+def api_followups_pipeline_stats():
+    """Counts per Kanban stage + transition counts (from pipeline_move events)."""
+    from app.models import FollowupContact, FollowupEvent, Workspace, PIPELINE_DEFAULT_STAGES
+    from sqlalchemy import func
+    uid = _current_user_id()
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    stages = ws.get_stages() if ws else [dict(s) for s in PIPELINE_DEFAULT_STAGES]
+
+    by_stage = {s['id']: 0 for s in stages}
+    total = 0
+    rows = db.session.query(FollowupContact.pipeline_stage, func.count(FollowupContact.id))\
+        .filter(FollowupContact.user_id == uid)\
+        .group_by(FollowupContact.pipeline_stage).all()
+    for stage_id, cnt in rows:
+        sid = stage_id or 1
+        by_stage[sid] = by_stage.get(sid, 0) + cnt
+        total += cnt
+
+    transitions = {}
+    ev_rows = db.session.query(FollowupEvent.from_stage, FollowupEvent.to_stage, func.count(FollowupEvent.id))\
+        .join(FollowupContact, FollowupContact.id == FollowupEvent.followup_contact_id)\
+        .filter(FollowupContact.user_id == uid, FollowupEvent.event_type == 'pipeline_move')\
+        .group_by(FollowupEvent.from_stage, FollowupEvent.to_stage).all()
+    for frm, to, cnt in ev_rows:
+        if frm and to:
+            transitions[f'{frm}_to_{to}'] = cnt
+
+    return jsonify(total=total, by_stage=by_stage, transitions=transitions)
+
+
+@app.route('/api/user/preferences', methods=['POST'])
+@login_required
+@csrf_protected
+def api_user_preferences():
+    """Persist per-user UI preferences (currently the Follow-up view mode)."""
+    from app.models import User as _U
+    uid = _current_user_id()
+    user = db.session.get(_U, uid)
+    if not user:
+        return jsonify(error='Not found'), 404
+    data = request.get_json() or {}
+    mode = data.get('followup_view_mode')
+    if mode in ('table', 'kanban'):
+        user.followup_view_mode = mode
+        db.session.commit()
+    return jsonify(ok=True, followup_view_mode=user.followup_view_mode or 'table')
 
 
 @app.route('/api/followups/delete', methods=['POST'])

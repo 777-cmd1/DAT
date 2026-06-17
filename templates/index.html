@@ -1653,6 +1653,42 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-progress-count { font-family:'JetBrains Mono',monospace; }
 .fu-progress-track { height:8px; background:var(--surface2); border-radius:6px; overflow:hidden; }
 .fu-progress-fill { height:100%; width:0%; background:var(--accent); border-radius:6px; transition:width .2s ease; }
+/* View toggle (Table / Kanban) */
+.fu-viewbar { display:flex; justify-content:flex-start; }
+.fu-view-toggle { display:inline-flex; gap:2px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:3px; }
+.fu-view-btn { font-size:12px; font-weight:700; padding:6px 14px; border-radius:8px; border:none; background:transparent; color:var(--text2); cursor:pointer; transition:all .15s; }
+.fu-view-btn:hover { color:var(--text); }
+.fu-view-btn.active { background:var(--accent); color:#fff; }
+/* Pipeline stats strip */
+.fu-pipeline-stats { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.fu-pstat { display:inline-flex; align-items:center; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:6px 11px; font-size:11px; }
+.fu-pstat-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.fu-pstat-label { font-weight:700; color:var(--text2); letter-spacing:.02em; }
+.fu-pstat-val { font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text); }
+.fu-pstat.total { background:var(--accent-d); border-color:var(--accent); }
+.fu-pstat.total .fu-pstat-val, .fu-pstat.total .fu-pstat-label { color:var(--accent); }
+.fu-pstat.trans { background:var(--surface2); color:var(--text3); }
+.fu-pstat.trans .fu-pstat-label { color:var(--text3); font-weight:600; }
+/* Kanban board */
+.fu-kanban-board { display:flex; gap:14px; overflow-x:auto; padding-bottom:10px; align-items:flex-start; }
+.fu-kanban-col { flex:0 0 280px; background:var(--surface); border:1px solid var(--border); border-top:3px solid var(--col,var(--accent)); border-radius:12px; padding:10px; transition:background .15s, box-shadow .15s; max-height:calc(100vh - 320px); display:flex; flex-direction:column; }
+.fu-kanban-col.drop-target { background:rgba(139,124,248,.08); box-shadow:0 0 0 2px rgba(139,124,248,.3) inset; }
+.fu-kanban-col-head { display:flex; align-items:center; gap:7px; margin-bottom:10px; padding:0 2px; }
+.fu-kanban-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.fu-kanban-col-name { font-size:12px; font-weight:800; color:var(--text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fu-kanban-col-count { font-size:11px; font-weight:800; font-family:'JetBrains Mono',monospace; color:var(--text3); background:var(--surface2); border-radius:20px; padding:1px 8px; }
+.fu-kanban-cards { display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:60px; }
+.fu-kanban-empty { font-size:11px; color:var(--text3); text-align:center; padding:14px 0; opacity:.5; }
+.fu-kanban-card { background:var(--bg); border:1px solid var(--border); border-radius:9px; padding:10px; cursor:grab; transition:border-color .15s, box-shadow .15s, opacity .15s; position:relative; }
+.fu-kanban-card:hover { border-color:var(--border-h); box-shadow:var(--shadow); }
+.fu-kanban-card:active { cursor:grabbing; }
+.fu-kanban-card.dragging { opacity:.45; }
+.fu-kanban-card-title { font-size:12px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:18px; }
+.fu-kanban-card-email { font-size:10px; color:var(--text3); font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.fu-kanban-card-meta { display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:7px; }
+.fu-kanban-card-foot { font-size:10px; color:var(--text3); margin-top:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fu-kanban-card-menu { position:absolute; top:6px; right:6px; border:none; background:transparent; color:var(--text3); font-size:14px; line-height:1; cursor:pointer; padding:2px 4px; border-radius:4px; }
+.fu-kanban-card-menu:hover { background:var(--surface2); color:var(--text); }
 
 @media (max-width:1100px) {
   .fu-table { min-width:980px; }
@@ -2773,9 +2809,15 @@ html:not([data-theme="dark"]) .send-cta-bar {
 
       <div id="fuContactsTab">
         <div class="fu-queue-shell">
+          <div class="fu-viewbar">
+            <div class="fu-view-toggle">
+              <button class="fu-view-btn active" id="fuViewTable" onclick="setFuViewMode('table')" title="Table view">☰ Table</button>
+              <button class="fu-view-btn" id="fuViewKanban" onclick="setFuViewMode('kanban')" title="Kanban pipeline view">🗂 Kanban</button>
+            </div>
+          </div>
           <div class="fu-toolbar">
             <div class="fu-toolbar-main">
-              <input class="fu-search fu-search-wide" id="fuSearch" placeholder="Search company, contact, or email..." oninput="renderFuContacts(); renderFuSelection()">
+              <input class="fu-search fu-search-wide" id="fuSearch" placeholder="Search company, contact, or email..." oninput="renderFuCurrentView(); renderFuSelection()">
               <div class="fu-segment" id="fuUrgencySegment">
                 <button class="fu-segment-btn active" id="fuf-special-all" onclick="setFuSpecialFilter('')">All</button>
                 <button class="fu-segment-btn" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')">Overdue <span id="fuOverdueCount"></span></button>
@@ -2862,6 +2904,12 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </table>
           </div>
           <div id="fuTableEmpty" class="fu-empty" style="display:none"></div>
+
+          <!-- KANBAN VIEW (shares fuContacts data with the table) -->
+          <div id="fuKanbanView" style="display:none">
+            <div class="fu-pipeline-stats" id="fuPipelineStats"></div>
+            <div class="fu-kanban-board" id="fuKanbanBoard"></div>
+          </div>
         </div>
       </div>
 
@@ -5488,6 +5536,13 @@ let fuSentFilter = '';            // '' | 'unsent_today' | 'today' | 'yesterday'
 let fuSortKey = '';               // '' = default urgency sort | 'next_followup_at' | 'last_activity_at'
 let fuSortDir = 'desc';           // 'asc' | 'desc'
 let _fuInflight = new Set();      // guards against double-click duplicate sends
+// ── Kanban / pipeline (shares fuContacts with the table) ──
+let fuViewMode = 'table';         // 'table' | 'kanban'
+let pipelineStages = [];          // [{id,name,color}, ...]
+let pipelineReplyFilters = [];
+let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
+let _fuPipelineConfigLoaded = false;
+let _fuDragContactId = null;
 
 function buildFuFilterParams() {
   const params = new URLSearchParams();
@@ -5536,7 +5591,7 @@ function getVisibleFuContacts() {
 
 function setFuSentFilter(v) {
   fuSentFilter = v;
-  renderFuContacts();
+  renderFuCurrentView();
   renderFuSelection();
 }
 
@@ -5615,6 +5670,7 @@ function renderFuSelection() {
   const allBtn = document.getElementById('fuSelectAllFiltered');
   const master = document.getElementById('fuMasterCheckbox');
   if (!bar) return;
+  if (fuViewMode === 'kanban') { bar.style.display = 'none'; return; }  // bulk bar is table-only
   const n = selectedFuIds.size;
   bar.style.display = n > 0 ? '' : 'none';
   if (countEl) countEl.textContent = n + ' selected';
@@ -5650,6 +5706,7 @@ function renderFuSelection() {
 
 // ── Core load/render ──────────────────────────────────────────────────────────
 async function loadFollowups() {
+  if (!_fuPipelineConfigLoaded) await loadPipelineConfig();   // sets view mode + stages once
   try {
     const res = await fetch('/api/followups?' + buildFuFilterParams().toString());
     const data = await res.json();
@@ -5658,7 +5715,8 @@ async function loadFollowups() {
   } catch(e) { fuContacts = []; fuCounts = {}; }
   updateFuBadge();
   renderFuStatsBar();
-  renderFuContacts();
+  if (fuViewMode === 'kanban') await loadPipelineStats();
+  renderFuCurrentView();
 }
 
 function updateFuBadge() {
@@ -5953,6 +6011,183 @@ function renderFuContacts() {
     </tr>`;
   }).join('');
   renderFuSelection();
+}
+
+// ── Kanban / pipeline view ──────────────────────────────────────────────────────
+async function loadPipelineConfig() {
+  try {
+    const res = await fetch('/api/followups/pipeline-config');
+    const data = await res.json();
+    pipelineStages = data.stages || [];
+    pipelineReplyFilters = data.reply_filters || [];
+    // Server preference is authoritative; localStorage is only an instant fallback.
+    fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
+  } catch(e) {
+    pipelineStages = [];
+    fuViewMode = localStorage.getItem('followup_view_mode') || 'table';
+  }
+  _fuPipelineConfigLoaded = true;
+  syncFuViewToggle();
+}
+
+function syncFuViewToggle() {
+  document.getElementById('fuViewTable')?.classList.toggle('active', fuViewMode === 'table');
+  document.getElementById('fuViewKanban')?.classList.toggle('active', fuViewMode === 'kanban');
+  applyFuViewVisibility();
+}
+
+function applyFuViewVisibility() {
+  const kanban = fuViewMode === 'kanban';
+  const kanbanView = document.getElementById('fuKanbanView');
+  const tableWrap  = document.getElementById('fuTableWrap');
+  const tableEmpty = document.getElementById('fuTableEmpty');
+  const bulkBar    = document.getElementById('fuBulkBar');
+  if (kanbanView) kanbanView.style.display = kanban ? '' : 'none';
+  if (tableWrap)  tableWrap.style.display  = kanban ? 'none' : '';
+  if (kanban && tableEmpty) tableEmpty.style.display = 'none';
+  if (kanban && bulkBar)    bulkBar.style.display = 'none';
+}
+
+function renderFuCurrentView() {
+  if (fuViewMode === 'kanban') renderFuKanban();
+  else renderFuContacts();
+}
+
+async function setFuViewMode(mode, persist = true) {
+  fuViewMode = (mode === 'kanban') ? 'kanban' : 'table';
+  localStorage.setItem('followup_view_mode', fuViewMode);
+  syncFuViewToggle();
+  if (fuViewMode === 'kanban') await loadPipelineStats();
+  renderFuCurrentView();
+  if (persist) {
+    try {
+      await fetch('/api/user/preferences', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ followup_view_mode: fuViewMode })
+      });
+    } catch(e) { /* preference is best-effort */ }
+  }
+}
+
+async function loadPipelineStats() {
+  try {
+    const res = await fetch('/api/followups/pipeline-stats');
+    pipelineStats = await res.json();
+  } catch(e) { pipelineStats = { total: 0, by_stage: {}, transitions: {} }; }
+}
+
+function renderPipelineStats() {
+  const el = document.getElementById('fuPipelineStats');
+  if (!el) return;
+  const bs = pipelineStats.by_stage || {};
+  const tr = pipelineStats.transitions || {};
+  let html = `<div class="fu-pstat total"><span class="fu-pstat-label">Total</span><span class="fu-pstat-val">${pipelineStats.total || 0}</span></div>`;
+  html += pipelineStages.map(s => {
+    const cnt = bs[s.id] ?? bs[String(s.id)] ?? 0;
+    return `<div class="fu-pstat"><span class="fu-pstat-dot" style="background:${s.color}"></span><span class="fu-pstat-label">${esc(s.name)}</span><span class="fu-pstat-val">${cnt}</span></div>`;
+  }).join('');
+  for (let i = 0; i < pipelineStages.length - 1; i++) {
+    const a = pipelineStages[i].id, b = pipelineStages[i+1].id;
+    const cnt = tr[`${a}_to_${b}`] || 0;
+    html += `<div class="fu-pstat trans"><span class="fu-pstat-label">${a}→${b}</span><span class="fu-pstat-val">${cnt}</span></div>`;
+  }
+  el.innerHTML = html;
+}
+
+function fuKanbanCard(c) {
+  const company = esc(c.company_name || c.contact_name || c.contact_email.split('@')[0]);
+  const email   = esc(c.contact_email);
+  const lastAct = formatFuRelative(c.last_activity_at);
+  const sti     = getFuStateInfo(c.state);
+  const sentRec = fuSentRecency(c.last_followup_sent_at);
+  const sentBadge = sentRec === 'today'
+    ? `<span class="fu-sent-badge today">🔵 today</span>`
+    : sentRec === 'yesterday' ? `<span class="fu-sent-badge yesterday">🟡 yest</span>` : '';
+  const route = c.current_route ? ' · ' + esc(c.current_route) : '';
+  return `<div class="fu-kanban-card" draggable="true" data-id="${c.id}"
+       ondragstart="fuKanbanDragStart(event,'${c.id}')" ondragend="fuKanbanDragEnd(event)">
+    <button class="fu-kanban-card-menu" onclick="event.stopPropagation();toggleFuDropdown(event,'${c.id}')" title="Actions">⋯</button>
+    <div class="fu-kanban-card-title">${company}</div>
+    <div class="fu-kanban-card-email">${email}</div>
+    <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
+    <div class="fu-kanban-card-foot">⏰ ${lastAct}${route}</div>
+  </div>`;
+}
+
+function renderFuKanban() {
+  const board = document.getElementById('fuKanbanBoard');
+  if (!board) return;
+  renderPipelineStats();
+  const list = getVisibleFuContacts();
+  if (!pipelineStages.length) {
+    board.innerHTML = `<div class="fu-empty" style="padding:30px">Pipeline not configured.</div>`;
+    return;
+  }
+  board.innerHTML = pipelineStages.map(stage => {
+    const cards = list.filter(c => (c.pipeline_stage || 1) === stage.id);
+    return `<div class="fu-kanban-col" data-stage="${stage.id}" style="--col:${stage.color}"
+         ondragover="fuKanbanDragOver(event)" ondragleave="fuKanbanDragLeave(event)" ondrop="fuKanbanDrop(event,${stage.id})">
+      <div class="fu-kanban-col-head">
+        <span class="fu-kanban-dot" style="background:${stage.color}"></span>
+        <span class="fu-kanban-col-name">${esc(stage.name)}</span>
+        <span class="fu-kanban-col-count">${cards.length}</span>
+      </div>
+      <div class="fu-kanban-cards">
+        ${cards.map(fuKanbanCard).join('') || '<div class="fu-kanban-empty">No contacts</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function fuKanbanDragStart(e, id) {
+  _fuDragContactId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', id); } catch(_) {}
+  e.currentTarget.classList.add('dragging');
+}
+function fuKanbanDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.fu-kanban-col.drop-target').forEach(el => el.classList.remove('drop-target'));
+}
+function fuKanbanDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drop-target');
+}
+function fuKanbanDragLeave(e) {
+  e.currentTarget.classList.remove('drop-target');
+}
+async function fuKanbanDrop(e, stageId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drop-target');
+  const id = _fuDragContactId || (e.dataTransfer ? e.dataTransfer.getData('text/plain') : '');
+  _fuDragContactId = null;
+  if (!id) return;
+  const contact = fuContacts.find(c => c.id === id);
+  if (!contact || (contact.pipeline_stage || 1) === stageId) return;   // no-op
+  const prevStage = contact.pipeline_stage || 1;
+  contact.pipeline_stage = stageId;                                     // optimistic
+  renderFuKanban();
+  try {
+    const res = await fetch('/api/followups/action', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id, action:'set-pipeline-stage', pipeline_stage: stageId })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      contact.pipeline_stage = prevStage;                              // rollback
+      renderFuKanban();
+      toast('Error: ' + (data.error || 'move failed'), true);
+      return;
+    }
+    toast('Moved to ' + (pipelineStages.find(s => s.id === stageId)?.name || ('stage ' + stageId)));
+    await loadPipelineStats();
+    renderPipelineStats();
+  } catch(err) {
+    contact.pipeline_stage = prevStage;
+    renderFuKanban();
+    toast('Error: ' + err.message, true);
+  }
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────

@@ -261,3 +261,36 @@ def test_replies_payload_includes_suggested_filters(app, db, client):
     flat = [r for grp in data['items'] for r in grp]
     rep = next(r for r in flat if r['msg_id'] == 'S1')
     assert 'can_use' in [s['key'] for s in rep['suggested_filters']]
+
+
+# ── Phase 3: Follow-up last-reply-filter mapping + quick-filter counts ────────
+
+def test_followups_list_includes_last_reply_filter(app, db, client):
+    import datetime as _dt
+    from app.models import FollowupContact, Reply
+    user, ws = _make_user_and_login(db, client)
+    db.session.add(FollowupContact(user_id=user.id, workspace_id=ws.id,
+                                   contact_email='joe@x.com', state='active', stage='fu1_scheduled'))
+    # older reply tagged can_use, newer tagged dnu → latest tagged should win
+    db.session.add(Reply(user_id=user.id, workspace_id=ws.id, msg_id='r1', from_email='joe@x.com',
+                         reply_filter_key='can_use', received_at=_dt.datetime(2026, 1, 1)))
+    db.session.add(Reply(user_id=user.id, workspace_id=ws.id, msg_id='r2', from_email='joe@x.com',
+                         reply_filter_key='dnu', received_at=_dt.datetime(2026, 2, 1)))
+    db.session.commit()
+    data = client.get('/api/followups').get_json()
+    c = next(x for x in data['contacts'] if x['contact_email'] == 'joe@x.com')
+    assert c['last_reply_filter'] == 'dnu'
+
+
+def test_pipeline_stats_by_reply_filter(app, db, client):
+    from app.models import FollowupContact, Reply
+    user, ws = _make_user_and_login(db, client)
+    for em, key in [('a@x.com', 'dnu'), ('b@x.com', 'dnu'), ('c@x.com', 'can_use')]:
+        db.session.add(FollowupContact(user_id=user.id, workspace_id=ws.id, contact_email=em,
+                                       state='active', stage='fu1_scheduled'))
+        db.session.add(Reply(user_id=user.id, workspace_id=ws.id, msg_id='m_' + em,
+                             from_email=em, reply_filter_key=key))
+    db.session.commit()
+    stats = client.get('/api/followups/pipeline-stats').get_json()
+    assert stats['by_reply_filter'].get('dnu') == 2
+    assert stats['by_reply_filter'].get('can_use') == 1

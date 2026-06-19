@@ -1549,6 +1549,13 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-tabs-compact { margin-bottom:0; }
 .fu-tabs-compact .fu-tab { padding:7px 14px; font-weight:700; }
 .fu-tabs-compact .fu-tab.active { background:var(--accent); color:#fff; box-shadow:none; }
+.fu-quick-filters { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.fu-qf { font-size:11px; font-weight:600; padding:5px 11px; border-radius:16px; border:1px solid var(--border); background:var(--surface); color:var(--text3); cursor:pointer; font-family:inherit; transition:filter .15s; }
+.fu-qf:hover { filter:brightness(1.08); }
+.fu-qf.active { background:var(--bg); color:var(--text); border-color:var(--accent); }
+.fu-qf-count { opacity:.7; font-weight:700; margin-left:3px; }
+.fu-contact-rf { margin-top:4px; }
+.fu-rf-badge { display:inline-block; font-size:10px; font-weight:600; padding:2px 7px; border-radius:11px; border:1px solid; white-space:nowrap; line-height:1.5; }
 .fu-queue-shell { display:flex; flex-direction:column; gap:14px; }
 .fu-toolbar {
   display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;
@@ -2914,6 +2921,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
             <div class="fu-progress-track"><div class="fu-progress-fill" id="fuProgressFill"></div></div>
           </div>
+
+          <div class="fu-quick-filters" id="fuQuickFilters" style="display:none"></div>
 
           <div class="fu-table-wrap" id="fuTableWrap">
             <table class="fu-table">
@@ -5624,6 +5633,7 @@ let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSp
 let _fuDropdownContactId = null;
 let selectedFuIds = new Set();
 let fuSentFilter = '';            // '' | 'unsent_today' | 'today' | 'yesterday'  (client-side)
+let fuReplyFilterKey = '';        // '' = all | reply-filter key (client-side quick filter)
 let fuSortKey = '';               // '' = default urgency sort | 'next_followup_at' | 'last_activity_at'
 let fuSortDir = 'desc';           // 'asc' | 'desc'
 let _fuInflight = new Set();      // guards against double-click duplicate sends
@@ -5674,7 +5684,46 @@ function fuMatchesFilters(c) {
     if (fuSentFilter === 'yesterday' && r !== 'yesterday') return false;
     if (fuSentFilter === 'unsent_today' && r === 'today') return false;
   }
+  if (fuReplyFilterKey && (c.last_reply_filter || '') !== fuReplyFilterKey) return false;
   return true;
+}
+
+// Reply-filter badge (color/emoji/label) for a contact's last tagged reply.
+function _replyFilterMeta(key) {
+  return (pipelineReplyFilters || []).find(f => f.key === key) || null;
+}
+function fuReplyFilterBadge(key, compact) {
+  const f = key && _replyFilterMeta(key);
+  if (!f) return '';
+  const c = f.color || '#888';
+  return `<span class="fu-rf-badge" style="background:${esc(c)}1f;border-color:${esc(c)};color:${esc(c)}" ` +
+    `title="Last reply: ${esc(f.label)}">${esc(f.emoji || '🏷️')}${compact ? '' : ' ' + esc(f.label)}</span>`;
+}
+
+// Quick-filter bar — colored buttons per reply filter, counts from loaded contacts.
+function renderFuQuickFilters() {
+  const box = document.getElementById('fuQuickFilters');
+  if (!box) return;
+  const filters = pipelineReplyFilters || [];
+  if (!filters.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = '';
+  const counts = {};
+  (fuContacts || []).forEach(c => { const k = c.last_reply_filter || ''; if (k) counts[k] = (counts[k] || 0) + 1; });
+  let html = `<button class="fu-qf ${fuReplyFilterKey === '' ? 'active' : ''}" onclick="setFuReplyFilter('')">All <span class="fu-qf-count">${(fuContacts || []).length}</span></button>`;
+  filters.forEach(f => {
+    const c = f.color || '#888';
+    const active = fuReplyFilterKey === f.key;
+    const style = active ? `background:${esc(c)};border-color:${esc(c)};color:#fff`
+                         : `background:${esc(c)}1a;border-color:${esc(c)};color:${esc(c)}`;
+    html += `<button class="fu-qf" style="${style}" onclick="setFuReplyFilter('${esc(f.key)}')">` +
+      `${esc(f.emoji || '🏷️')} ${esc(f.label)} <span class="fu-qf-count">${counts[f.key] || 0}</span></button>`;
+  });
+  box.innerHTML = html;
+}
+function setFuReplyFilter(key) {
+  fuReplyFilterKey = key;
+  renderFuCurrentView();
+  renderFuSelection();
 }
 
 function getVisibleFuContacts() {
@@ -5881,6 +5930,7 @@ function resetFuFilters() {
   fuStateFilter = '';
   fuSpecialFilter = '';
   fuSentFilter = '';
+  fuReplyFilterKey = '';
   fuSortKey = '';
   fuSortDir = 'desc';
   const search = document.getElementById('fuSearch');
@@ -6069,6 +6119,7 @@ function renderFuContacts() {
       <td class="fu-contact-cell">
         <div class="fu-contact-primary">${company}</div>
         <div class="fu-contact-secondary">${email}</div>
+        ${c.last_reply_filter ? `<div class="fu-contact-rf">${fuReplyFilterBadge(c.last_reply_filter)}</div>` : ''}
       </td>
       <td>
         <div class="fu-meta-stack">
@@ -6142,6 +6193,7 @@ function applyFuViewVisibility() {
 }
 
 function renderFuCurrentView() {
+  renderFuQuickFilters();
   if (fuViewMode === 'kanban') renderFuKanban();
   else renderFuContacts();
 }
@@ -6202,7 +6254,7 @@ function fuKanbanCard(c) {
     <button class="fu-kanban-card-menu" onclick="event.stopPropagation();toggleFuDropdown(event,'${c.id}')" title="Actions">⋯</button>
     <div class="fu-kanban-card-title">${company}</div>
     <div class="fu-kanban-card-email">${email}</div>
-    <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
+    <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}${fuReplyFilterBadge(c.last_reply_filter, true)}</div>
     <div class="fu-kanban-card-foot">⏰ ${lastAct}${route}</div>
   </div>`;
 }

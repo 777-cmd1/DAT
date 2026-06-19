@@ -686,6 +686,29 @@ def detect_reply_filters(text, ws):
     return _match_reply_filters(text, ws.get_reply_filters(), ws.get_filter_keywords())
 
 
+def _latest_reply_filter_map(uid, emails=None):
+    """Map {lower(email): latest non-empty reply_filter_key} for a user's replies.
+    One query (no N+1). `emails` (lowercased) optionally restricts the scan."""
+    from app.models import Reply
+    from sqlalchemy import func as _f
+    q = db.session.query(Reply.from_email, Reply.reply_filter_key).filter(
+        Reply.user_id == uid,
+        Reply.reply_filter_key.isnot(None),
+        Reply.reply_filter_key != '',
+    )
+    if emails is not None:
+        emails = list(emails)
+        if not emails:
+            return {}
+        q = q.filter(_f.lower(Reply.from_email).in_(emails))
+    out = {}
+    for em, key in q.order_by(Reply.received_at.desc()).all():
+        k = (em or '').lower()
+        if k not in out:          # first seen = latest (desc order)
+            out[k] = key
+    return out
+
+
 def _apply_pipeline_stage(fc, target_stage, actor_user_id=None, reason='manual'):
     """Move a follow-up contact to a Kanban pipeline stage (1..N).
 
@@ -4028,7 +4051,13 @@ def api_followups_list():
         'due_today': count_q.due_today,
         'scheduled': count_q.scheduled,
     }
-    return jsonify(contacts=[c.to_dict() for c in contacts], counts=counts)
+    rmap = _latest_reply_filter_map(uid, {(c.contact_email or '').lower() for c in contacts})
+    contacts_out = []
+    for c in contacts:
+        d = c.to_dict()
+        d['last_reply_filter'] = rmap.get((c.contact_email or '').lower(), '')
+        contacts_out.append(d)
+    return jsonify(contacts=contacts_out, counts=counts)
 
 
 @app.route('/api/followups/ids')
@@ -4526,7 +4555,16 @@ def api_followups_pipeline_stats():
         if frm and to:
             transitions[f'{frm}_to_{to}'] = cnt
 
-    return jsonify(total=total, by_stage=by_stage, transitions=transitions)
+    # contacts grouped by their latest tagged reply filter (for quick-filter counts)
+    contact_emails = {e.lower() for (e,) in
+                      db.session.query(FollowupContact.contact_email)
+                      .filter(FollowupContact.user_id == uid).all() if e}
+    by_reply_filter = {}
+    for _em, key in _latest_reply_filter_map(uid, contact_emails).items():
+        by_reply_filter[key] = by_reply_filter.get(key, 0) + 1
+
+    return jsonify(total=total, by_stage=by_stage, transitions=transitions,
+                   by_reply_filter=by_reply_filter)
 
 
 @app.route('/api/user/preferences', methods=['POST'])

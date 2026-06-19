@@ -5671,7 +5671,7 @@ function fuSentRecency(iso) {
 
 // Client-side filters (search box + sent-status dropdown) applied on top of the
 // server-side state/stage/special filters.
-function fuMatchesFilters(c) {
+function fuMatchesFilters(c, ignoreReplyFilter) {
   const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
   if (search && !(
     (c.contact_email||'').toLowerCase().includes(search) ||
@@ -5684,7 +5684,7 @@ function fuMatchesFilters(c) {
     if (fuSentFilter === 'yesterday' && r !== 'yesterday') return false;
     if (fuSentFilter === 'unsent_today' && r === 'today') return false;
   }
-  if (fuReplyFilterKey && (c.last_reply_filter || '') !== fuReplyFilterKey) return false;
+  if (!ignoreReplyFilter && fuReplyFilterKey && (c.last_reply_filter || '') !== fuReplyFilterKey) return false;
   return true;
 }
 
@@ -5705,11 +5705,17 @@ function renderFuQuickFilters() {
   const box = document.getElementById('fuQuickFilters');
   if (!box) return;
   const filters = pipelineReplyFilters || [];
-  if (!filters.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  if (!filters.length) {
+    fuReplyFilterKey = '';          // avoid a stale filter with no visible control to clear it
+    box.innerHTML = ''; box.style.display = 'none'; return;
+  }
   box.style.display = '';
+  // Count over contacts matching the other client filters (search/sent) but NOT the
+  // reply-filter itself, so each chip shows how many it *would* match.
+  const base = (fuContacts || []).filter(c => fuMatchesFilters(c, true));
   const counts = {};
-  (fuContacts || []).forEach(c => { const k = c.last_reply_filter || ''; if (k) counts[k] = (counts[k] || 0) + 1; });
-  let html = `<button class="fu-qf ${fuReplyFilterKey === '' ? 'active' : ''}" onclick="setFuReplyFilter('')">All <span class="fu-qf-count">${(fuContacts || []).length}</span></button>`;
+  base.forEach(c => { const k = c.last_reply_filter || ''; if (k) counts[k] = (counts[k] || 0) + 1; });
+  let html = `<button class="fu-qf ${fuReplyFilterKey === '' ? 'active' : ''}" onclick="setFuReplyFilter('')">All <span class="fu-qf-count">${base.length}</span></button>`;
   filters.forEach(f => {
     const c = f.color || '#888';
     const active = fuReplyFilterKey === f.key;
@@ -6439,7 +6445,12 @@ async function tagReplyPipeline(msgId, key, selectEl) {
     // reflect locally so chips/swatch refresh without a server round-trip
     const rep = (allReplies || []).find(x => x.msg_id === msgId);
     if (rep) rep.reply_filter_key = key || '';
-    renderReplies();
+    // Re-render only the affected contact card (not the whole list) so other cards'
+    // expanded bodies and the scroll position are preserved.
+    const grp = (replyGroups || []).find(g => g.some(r => r.msg_id === msgId));
+    const cardEl = grp && document.getElementById('tqc_' + (grp[0].email || '').replace(/[^a-zA-Z0-9]/g, '_'));
+    if (cardEl) cardEl.outerHTML = tqCard(grp);
+    else renderReplies();
     if (data.advanced) toast('Tagged & moved to ' + (data.stage_name || ('stage ' + data.pipeline_stage)));
     else toast(key ? 'Reply tagged' : 'Tag cleared');
     return true;

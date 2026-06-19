@@ -650,12 +650,17 @@ def _slug(text):
     return s or 'filter'
 
 
-_HEX_COLOR_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
+_HEX_COLOR_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
 
 def _norm_hex_color(c, fallback='#888888'):
-    """Validate a hex color (#rgb / #rrggbb / #rrggbbaa); fall back if malformed."""
+    """Validate a hex color and normalize to 6-digit #rrggbb, so the UI's alpha-suffix
+    tint (e.g. `${color}1f`) always yields a valid 8-digit color; fall back if malformed."""
     c = (c or '').strip()
-    return c if _HEX_COLOR_RE.match(c) else fallback
+    if not _HEX_COLOR_RE.match(c):
+        return fallback
+    if len(c) == 4:                       # #rgb → #rrggbb
+        c = '#' + ''.join(ch * 2 for ch in c[1:])
+    return c
 
 
 def _match_reply_filters(text, filters, keywords):
@@ -702,9 +707,11 @@ def _latest_reply_filter_map(uid, emails=None):
             return {}
         q = q.filter(_f.lower(Reply.from_email).in_(emails))
     out = {}
-    for em, key in q.order_by(Reply.received_at.desc()).all():
+    # nulls-last + desc so a real timestamp always beats a NULL received_at
+    # (Postgres orders NULLs first on DESC otherwise, picking a stale tag).
+    for em, key in q.order_by(Reply.received_at.is_(None), Reply.received_at.desc()).all():
         k = (em or '').lower()
-        if k not in out:          # first seen = latest (desc order)
+        if k not in out:          # first seen = latest
             out[k] = key
     return out
 
@@ -4555,16 +4562,7 @@ def api_followups_pipeline_stats():
         if frm and to:
             transitions[f'{frm}_to_{to}'] = cnt
 
-    # contacts grouped by their latest tagged reply filter (for quick-filter counts)
-    contact_emails = {e.lower() for (e,) in
-                      db.session.query(FollowupContact.contact_email)
-                      .filter(FollowupContact.user_id == uid).all() if e}
-    by_reply_filter = {}
-    for _em, key in _latest_reply_filter_map(uid, contact_emails).items():
-        by_reply_filter[key] = by_reply_filter.get(key, 0) + 1
-
-    return jsonify(total=total, by_stage=by_stage, transitions=transitions,
-                   by_reply_filter=by_reply_filter)
+    return jsonify(total=total, by_stage=by_stage, transitions=transitions)
 
 
 @app.route('/api/user/preferences', methods=['POST'])
@@ -4680,6 +4678,8 @@ def api_followups_pipeline_config_save():
         for d in PIPELINE_DEFAULT_REPLY_FILTERS:
             if d['key'] not in present:
                 nf = dict(d); nf['order'] = len(norm_filters) + 1
+                if nf.get('auto_advance_to') not in valid_ids:   # stage may have been removed
+                    nf['auto_advance_to'] = None
                 norm_filters.append(nf)
                 norm_kw.setdefault(d['key'], dict(PIPELINE_DEFAULT_FILTER_KEYWORDS.get(
                     d['key'], {'keywords': [], 'confidence': 0.8})))

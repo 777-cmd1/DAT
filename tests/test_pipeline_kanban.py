@@ -296,15 +296,15 @@ def test_followups_list_includes_last_reply_filter(app, db, client):
     assert c['last_reply_filter'] == 'dnu'
 
 
-def test_pipeline_stats_by_reply_filter(app, db, client):
-    from app.models import FollowupContact, Reply
-    user, ws = _make_user_and_login(db, client)
-    for em, key in [('a@x.com', 'dnu'), ('b@x.com', 'dnu'), ('c@x.com', 'can_use')]:
-        db.session.add(FollowupContact(user_id=user.id, workspace_id=ws.id, contact_email=em,
-                                       state='active', stage='fu1_scheduled'))
-        db.session.add(Reply(user_id=user.id, workspace_id=ws.id, msg_id='m_' + em,
-                             from_email=em, reply_filter_key=key))
-    db.session.commit()
-    stats = client.get('/api/followups/pipeline-stats').get_json()
-    assert stats['by_reply_filter'].get('dnu') == 2
-    assert stats['by_reply_filter'].get('can_use') == 1
+def test_removed_stage_clears_readded_builtin_auto_advance(app, db, client):
+    # shrink the pipeline so stage 2 (can_use's default auto-advance target) is gone,
+    # and omit built-ins from the PUT — the re-added built-in must not keep a dangling target
+    _make_user_and_login(db, client)
+    r = client.put('/api/followups/pipeline-config', json={
+        'stages': [{'id': 1, 'name': 'A', 'color': '#111111'},
+                   {'id': 9, 'name': 'B', 'color': '#222222'}],
+        'reply_filters': [{'label': 'Only Custom', 'color': '#00CED1'}],
+        '_csrf': 'test-csrf-token'})
+    assert r.status_code == 200, r.get_json()
+    can_use = next(f for f in r.get_json()['reply_filters'] if f['key'] == 'can_use')
+    assert can_use['auto_advance_to'] is None   # 2 no longer a valid stage

@@ -650,6 +650,14 @@ def _slug(text):
     return s or 'filter'
 
 
+_HEX_COLOR_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
+
+def _norm_hex_color(c, fallback='#888888'):
+    """Validate a hex color (#rgb / #rrggbb / #rrggbbaa); fall back if malformed."""
+    c = (c or '').strip()
+    return c if _HEX_COLOR_RE.match(c) else fallback
+
+
 def _apply_pipeline_stage(fc, target_stage, actor_user_id=None, reason='manual'):
     """Move a follow-up contact to a Kanban pipeline stage (1..N).
 
@@ -4441,13 +4449,15 @@ def api_followups_bulk_action():
 def api_followups_pipeline_config():
     """Stages + reply filters for the Kanban view, plus the user's saved view mode."""
     from app.models import (Workspace, User as _U,
-                            PIPELINE_DEFAULT_STAGES, PIPELINE_DEFAULT_REPLY_FILTERS)
+                            PIPELINE_DEFAULT_STAGES, PIPELINE_DEFAULT_REPLY_FILTERS,
+                            PIPELINE_DEFAULT_FILTER_KEYWORDS)
     uid = _current_user_id()
     ws = Workspace.query.filter_by(owner_id=uid).first()
     user = db.session.get(_U, uid)
     stages = ws.get_stages() if ws else [dict(s) for s in PIPELINE_DEFAULT_STAGES]
     filters = ws.get_reply_filters() if ws else [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
-    return jsonify(stages=stages, reply_filters=filters,
+    keywords = ws.get_filter_keywords() if ws else {k: dict(v) for k, v in PIPELINE_DEFAULT_FILTER_KEYWORDS.items()}
+    return jsonify(stages=stages, reply_filters=filters, filter_keywords=keywords,
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -4512,7 +4522,8 @@ def api_followups_pipeline_config_save():
     stage reassigns any contacts sitting in it to the first stage so nothing is
     orphaned.
     """
-    from app.models import FollowupContact, Workspace
+    from app.models import (FollowupContact, Workspace, PIPELINE_DEFAULT_REPLY_FILTERS,
+                            PIPELINE_DEFAULT_FILTER_KEYWORDS, PIPELINE_BUILTIN_FILTER_KEYS)
     uid = _current_user_id()
     ws = Workspace.query.filter_by(owner_id=uid).first()
     if not ws:
@@ -4555,8 +4566,9 @@ def api_followups_pipeline_config_save():
     filters = data.get('reply_filters')
     if filters is not None:
         valid_ids = {s['id'] for s in (norm_stages or ws.get_stages())}
-        norm_filters, used_keys = [], set()
-        for f in (filters if isinstance(filters, list) else []):
+        existing_kw = ws.get_filter_keywords()
+        norm_filters, norm_kw, used_keys = [], {}, set()
+        for i, f in enumerate(filters if isinstance(filters, list) else []):
             label = (f.get('label') or '').strip()
             if not label:
                 continue
@@ -4571,12 +4583,37 @@ def api_followups_pipeline_config_save():
                 adv = None
             if adv is not None and adv not in valid_ids:
                 adv = None
-            norm_filters.append({'key': key[:50], 'label': label[:120], 'auto_advance_to': adv})
+            key = key[:50]
+            norm_filters.append({
+                'key': key, 'label': label[:120], 'auto_advance_to': adv,
+                'color': _norm_hex_color(f.get('color')),
+                'emoji': (f.get('emoji') or '').strip()[:8],
+                'is_custom': key not in PIPELINE_BUILTIN_FILTER_KEYS,   # authoritative by key
+                'order': i + 1,
+            })
+            # keywords travel with each filter so brand-new (server-keyed) filters keep theirs
+            words = [str(w).strip().lower() for w in (f.get('keywords') or []) if str(w).strip()][:50]
+            try:
+                conf = float(f.get('confidence', (existing_kw.get(key) or {}).get('confidence', 0.8)))
+            except (TypeError, ValueError):
+                conf = 0.8
+            norm_kw[key] = {'keywords': words, 'confidence': min(1.0, max(0.0, conf))}
+        # built-in filters can't be deleted — re-add any the client omitted (with their defaults)
+        present = {f['key'] for f in norm_filters}
+        for d in PIPELINE_DEFAULT_REPLY_FILTERS:
+            if d['key'] not in present:
+                nf = dict(d); nf['order'] = len(norm_filters) + 1
+                norm_filters.append(nf)
+                norm_kw.setdefault(d['key'], dict(PIPELINE_DEFAULT_FILTER_KEYWORDS.get(
+                    d['key'], {'keywords': [], 'confidence': 0.8})))
         cfg['reply_filters'] = norm_filters
+        cfg['filter_keywords'] = norm_kw
 
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
     db.session.commit()
-    return jsonify(ok=True, stages=ws.get_stages(), reply_filters=ws.get_reply_filters())
+    return jsonify(ok=True, stages=ws.get_stages(),
+                   reply_filters=ws.get_reply_filters(),
+                   filter_keywords=ws.get_filter_keywords())
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])

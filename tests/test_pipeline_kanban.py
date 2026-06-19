@@ -174,3 +174,62 @@ def test_user_view_mode_preference_persists(app, db, client):
     r = client.post('/api/user/preferences',
                     json={'followup_view_mode': 'bogus', '_csrf': 'test-csrf-token'})
     assert r.get_json()['followup_view_mode'] == 'kanban'
+
+
+# ── Phase 1: custom reply filters (color / emoji / is_custom / keywords) ──────
+
+def test_config_returns_filter_metadata_and_keywords(app, db, client):
+    _make_user_and_login(db, client)
+    data = client.get('/api/followups/pipeline-config').get_json()
+    can_use = next(f for f in data['reply_filters'] if f['key'] == 'can_use')
+    assert can_use['color'] == '#4c6ef5'
+    assert can_use['emoji'] == '✅'
+    assert can_use['is_custom'] is False
+    # keyword sets are exposed for auto-detection
+    assert 'filter_keywords' in data
+    assert 'we can use you' in data['filter_keywords']['can_use']['keywords']
+
+
+def test_put_persists_custom_filter_color_emoji_keywords(app, db, client):
+    _make_user_and_login(db, client)
+    r = client.put('/api/followups/pipeline-config', json={
+        'reply_filters': [
+            {'key': 'can_use', 'label': 'we can use you', 'color': '#123456',
+             'emoji': '👍', 'auto_advance_to': 2},
+            {'label': 'My Custom Filter', 'color': '#FF1493', 'emoji': '🔴',
+             'keywords': ['Custom Phrase', 'my words']},
+        ],
+        '_csrf': 'test-csrf-token'})
+    assert r.status_code == 200, r.get_json()
+    cfg = r.get_json()
+
+    # built-in edited: color/emoji saved, still is_custom False
+    can_use = next(f for f in cfg['reply_filters'] if f['key'] == 'can_use')
+    assert can_use['color'] == '#123456' and can_use['emoji'] == '👍'
+    assert can_use['is_custom'] is False
+
+    # custom filter slugged, marked custom, color/emoji kept
+    custom = next(f for f in cfg['reply_filters'] if f['key'] == 'my_custom_filter')
+    assert custom['is_custom'] is True
+    assert custom['color'] == '#FF1493' and custom['emoji'] == '🔴'
+    # keywords travelled with the filter and are lowercased
+    assert cfg['filter_keywords']['my_custom_filter']['keywords'] == ['custom phrase', 'my words']
+
+    # malformed color falls back rather than persisting garbage
+    r = client.put('/api/followups/pipeline-config', json={
+        'reply_filters': [{'key': 'dnu', 'label': 'DNU', 'color': 'red; drop'}],
+        '_csrf': 'test-csrf-token'})
+    dnu = next(f for f in r.get_json()['reply_filters'] if f['key'] == 'dnu')
+    assert dnu['color'] == '#888888'
+
+
+def test_builtin_filters_cannot_be_deleted(app, db, client):
+    _make_user_and_login(db, client)
+    # submit ONLY a custom filter — every built-in must be re-added by the server
+    r = client.put('/api/followups/pipeline-config', json={
+        'reply_filters': [{'label': 'Only Custom', 'color': '#00CED1'}],
+        '_csrf': 'test-csrf-token'})
+    keys = {f['key'] for f in r.get_json()['reply_filters']}
+    from app.models import PIPELINE_BUILTIN_FILTER_KEYS
+    assert PIPELINE_BUILTIN_FILTER_KEYS.issubset(keys)
+    assert 'only_custom' in keys

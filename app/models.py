@@ -52,13 +52,44 @@ PIPELINE_DEFAULT_STAGES = [
 ]
 
 PIPELINE_DEFAULT_REPLY_FILTERS = [
-    {"key": "can_use",       "label": "we can use you",                 "auto_advance_to": 2},
-    {"key": "no_landstar",   "label": "can not use Landstar",           "auto_advance_to": None},
-    {"key": "no_landstar_v2", "label": "no Landstar",                   "auto_advance_to": None},
-    {"key": "dnu",           "label": "DNU",                            "auto_advance_to": None},
-    {"key": "no_contact",    "label": "Please don't contact me anymore.", "auto_advance_to": None},
-    {"key": "cannot_use_ls", "label": "We cannot use landstar",         "auto_advance_to": None},
+    {"key": "can_use",        "label": "we can use you",                  "color": "#4c6ef5", "emoji": "✅", "auto_advance_to": 2,    "order": 1, "is_custom": False},
+    {"key": "no_landstar",    "label": "can not use Landstar",            "color": "#9c36b5", "emoji": "🚚", "auto_advance_to": None, "order": 2, "is_custom": False},
+    {"key": "no_landstar_v2", "label": "no Landstar",                     "color": "#7048e8", "emoji": "🚚", "auto_advance_to": None, "order": 3, "is_custom": False},
+    {"key": "dnu",            "label": "DNU",                             "color": "#ff6b6b", "emoji": "🚫", "auto_advance_to": None, "order": 4, "is_custom": False},
+    {"key": "no_contact",     "label": "Please don't contact me anymore.","color": "#fa5252", "emoji": "🛑", "auto_advance_to": None, "order": 5, "is_custom": False},
+    {"key": "cannot_use_ls",  "label": "We cannot use landstar",          "color": "#e8590c", "emoji": "🚚", "auto_advance_to": None, "order": 6, "is_custom": False},
 ]
+
+# Keyword sets for auto-detection (matched case-insensitively over subject+body).
+PIPELINE_DEFAULT_FILTER_KEYWORDS = {
+    "can_use":        {"keywords": ["we can use you", "can use you", "we can use"],                 "confidence": 0.85},
+    "no_landstar":    {"keywords": ["can not use landstar", "cannot use landstar", "can't use landstar"], "confidence": 0.9},
+    "no_landstar_v2": {"keywords": ["no landstar"],                                                 "confidence": 0.8},
+    "dnu":            {"keywords": ["dnu", "do not use", "do not contact"],                         "confidence": 0.95},
+    "no_contact":     {"keywords": ["don't contact me", "do not contact me", "stop contacting", "remove me"], "confidence": 0.9},
+    "cannot_use_ls":  {"keywords": ["we cannot use landstar", "cannot use ls"],                     "confidence": 0.9},
+}
+
+# Built-in keys are editable (color/emoji/label/keywords/auto-advance) but never deletable.
+PIPELINE_BUILTIN_FILTER_KEYS = {f["key"] for f in PIPELINE_DEFAULT_REPLY_FILTERS}
+
+# Fallback palette for custom filters saved before colors existed (deterministic by position).
+_FILTER_PALETTE = ["#FF1493", "#00CED1", "#FF8C00", "#8A2BE2", "#20B2AA", "#DC143C", "#1E90FF", "#32CD32"]
+
+
+def _enrich_reply_filter(f, idx):
+    """Backfill missing color/emoji/is_custom/order on a stored filter (non-destructive).
+    is_custom is authoritative from the key so built-ins can't masquerade as custom."""
+    out = dict(f)
+    key = out.get("key", "")
+    default = next((d for d in PIPELINE_DEFAULT_REPLY_FILTERS if d["key"] == key), None)
+    out["is_custom"] = key not in PIPELINE_BUILTIN_FILTER_KEYS
+    if not out.get("color"):
+        out["color"] = (default or {}).get("color") or _FILTER_PALETTE[idx % len(_FILTER_PALETTE)]
+    if not out.get("emoji"):
+        out["emoji"] = (default or {}).get("emoji", "🏷️")
+    out.setdefault("order", (default or {}).get("order", idx + 1))
+    return out
 
 
 class Workspace(db.Model):
@@ -81,10 +112,24 @@ class Workspace(db.Model):
         return stages if stages else [dict(s) for s in PIPELINE_DEFAULT_STAGES]
 
     def get_reply_filters(self):
-        """Reply filters for this workspace, falling back to defaults."""
+        """Reply filters for this workspace, falling back to defaults.
+        Stored filters are enriched with color/emoji/is_custom so older configs
+        (saved before colors existed) render correctly without a data migration."""
         config = self.pipeline_config or {}
         filters = config.get('reply_filters')
-        return filters if filters else [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
+        if not filters:
+            return [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
+        return [_enrich_reply_filter(f, i) for i, f in enumerate(filters)]
+
+    def get_filter_keywords(self):
+        """Auto-detection keyword sets, merged: defaults for built-ins overlaid by
+        any stored (custom or overridden) entries."""
+        config = self.pipeline_config or {}
+        merged = {k: dict(v) for k, v in PIPELINE_DEFAULT_FILTER_KEYWORDS.items()}
+        for k, v in (config.get('filter_keywords') or {}).items():
+            if isinstance(v, dict):
+                merged[k] = v
+        return merged
 
 
 class Invitation(db.Model):

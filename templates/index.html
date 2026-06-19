@@ -1698,6 +1698,14 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .pl-row input[type=color] { width:36px; height:34px; padding:2px; border:1px solid var(--border); border-radius:7px; background:var(--surface2); cursor:pointer; flex:0 0 auto; }
 .pl-frow select.pl-filter-adv { width:auto; flex:0 0 auto; min-width:160px; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:7px 8px; font-size:12px; color:var(--text); font-family:inherit; }
 .pl-row input:focus, .pl-frow input:focus, .pl-frow select:focus { outline:none; border-color:var(--accent); }
+.pl-frow { flex-wrap:wrap; }
+.pl-frow input.pl-filter-color { flex:0 0 auto; width:38px; height:34px; padding:2px; cursor:pointer; background:var(--surface2); border:1px solid var(--border); border-radius:7px; }
+.pl-frow input.pl-filter-emoji { flex:0 0 auto; width:46px; text-align:center; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:7px 4px; font-size:13px; color:var(--text); }
+.pl-frow input.pl-filter-kw { flex:1 1 100%; background:var(--surface); border:1px dashed var(--border); border-radius:7px; padding:6px 10px; font-size:12px; color:var(--text2); font-family:inherit; }
+.pl-badge { flex:0 0 auto; font-size:9px; font-weight:700; letter-spacing:.04em; padding:3px 6px; border-radius:5px; }
+.pl-badge-custom { background:rgba(76,108,245,.16); color:#4c6cf5; }
+.pl-badge-builtin { background:var(--surface2); color:var(--text3); }
+.pl-row-del-spacer { flex:0 0 auto; width:28px; text-align:center; opacity:.5; font-size:12px; cursor:help; }
 .pl-row-del { border:none; background:var(--surface2); color:var(--text3); width:30px; height:30px; border-radius:7px; cursor:pointer; font-size:13px; flex-shrink:0; }
 .pl-row-del:hover { background:var(--red-dim); color:var(--red); }
 /* Reply-filter tag select on triage cards */
@@ -3527,9 +3535,9 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <div id="pipelineStagesEditor" class="pl-cfg-list"></div>
           <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineStageRow()">+ Add Stage</button>
 
-          <div class="pl-cfg-subhead" style="margin-top:18px">Reply filters <span class="pl-cfg-hint">tag a reply → optional auto-advance</span></div>
+          <div class="pl-cfg-subhead" style="margin-top:18px">Reply filters <span class="pl-cfg-hint">color · emoji · label · auto-advance · auto-detect keywords. Built-in filters can't be deleted.</span></div>
           <div id="pipelineFiltersEditor" class="pl-cfg-list"></div>
-          <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineFilterRow()">+ Add Filter</button>
+          <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineFilterRow()">+ Add Custom Filter</button>
 
           <div style="margin-top:16px">
             <button class="btn btn-primary" onclick="savePipelineConfig()">Save Pipeline Config</button>
@@ -5593,7 +5601,8 @@ let _fuInflight = new Set();      // guards against double-click duplicate sends
 // ── Kanban / pipeline (shares fuContacts with the table) ──
 let fuViewMode = 'table';         // 'table' | 'kanban'
 let pipelineStages = [];          // [{id,name,color}, ...]
-let pipelineReplyFilters = [];
+let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_advance_to}, ...]
+let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -6074,6 +6083,7 @@ async function loadPipelineConfig() {
     const data = await res.json();
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
+    pipelineFilterKeywords = data.filter_keywords || {};
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -6270,14 +6280,27 @@ function addPipelineStageRow(stage) {
 function addPipelineFilterRow(filter) {
   const box = document.getElementById('pipelineFiltersEditor');
   if (!box) return;
-  const f = filter || { key: '', label: '', auto_advance_to: null };
+  const f = filter || { key: '', label: '', auto_advance_to: null, color: '#FF1493', emoji: '🏷️', is_custom: true };
+  // New rows (no filter arg) are always custom; loaded rows trust the server's is_custom.
+  const isCustom = filter ? !!f.is_custom : true;
   const row = document.createElement('div');
   row.className = 'pl-frow';
   if (f.key) row.dataset.key = f.key;
+  row.dataset.custom = isCustom ? '1' : '0';
+  const kws = (pipelineFilterKeywords[f.key]?.keywords || []).join(', ');
+  const badge = isCustom
+    ? '<span class="pl-badge pl-badge-custom">CUSTOM</span>'
+    : '<span class="pl-badge pl-badge-builtin">BUILT-IN</span>';
+  const delBtn = isCustom
+    ? `<button class="pl-row-del" title="Remove filter" onclick="this.closest('.pl-frow').remove()">✕</button>`
+    : '<span class="pl-row-del-spacer" title="Built-in filters can\'t be deleted">🔒</span>';
   row.innerHTML =
+    `<input class="pl-filter-color" type="color" value="${esc(f.color || '#FF1493')}" title="Filter color">` +
+    `<input class="pl-filter-emoji" value="${esc(f.emoji || '')}" placeholder="🏷️" maxlength="4" title="Emoji">` +
     `<input class="pl-filter-label" value="${esc(f.label)}" placeholder="Reply text / label" maxlength="120">` +
     `<select class="pl-filter-adv">${_plStageOptionsHtml(f.auto_advance_to)}</select>` +
-    `<button class="pl-row-del" title="Remove filter" onclick="this.closest('.pl-frow').remove()">✕</button>`;
+    badge + delBtn +
+    `<input class="pl-filter-kw" value="${esc(kws)}" placeholder="auto-detect keywords, comma-separated" title="Keywords for auto-detection">`;
   box.appendChild(row);
 }
 
@@ -6300,7 +6323,10 @@ async function savePipelineConfig() {
   const reply_filters = [...document.querySelectorAll('#pipelineFiltersEditor .pl-frow')].map(r => ({
     key: r.dataset.key || '',
     label: r.querySelector('.pl-filter-label').value.trim(),
+    color: r.querySelector('.pl-filter-color').value,
+    emoji: r.querySelector('.pl-filter-emoji').value.trim(),
     auto_advance_to: r.querySelector('.pl-filter-adv').value ? parseInt(r.querySelector('.pl-filter-adv').value) : null,
+    keywords: r.querySelector('.pl-filter-kw').value.split(',').map(s => s.trim()).filter(Boolean),
   })).filter(f => f.label);
   try {
     const res = await fetch('/api/followups/pipeline-config', {
@@ -6311,6 +6337,7 @@ async function savePipelineConfig() {
     if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
+    pipelineFilterKeywords = data.filter_keywords || {};
     renderPipelineConfigEditor();
     toast('Pipeline config saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {

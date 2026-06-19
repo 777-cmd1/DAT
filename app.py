@@ -658,6 +658,34 @@ def _norm_hex_color(c, fallback='#888888'):
     return c if _HEX_COLOR_RE.match(c) else fallback
 
 
+def _match_reply_filters(text, filters, keywords):
+    """Reply-filters whose keywords appear in text (case-insensitive substring),
+    sorted by confidence desc. Pure: filters/keywords are passed in so callers can
+    load workspace config once per request."""
+    t = (text or '').lower()
+    if not t.strip():
+        return []
+    out = []
+    for f in filters or []:
+        kw = (keywords or {}).get(f.get('key'), {}) or {}
+        words = kw.get('keywords') or []
+        if any(w and str(w).lower() in t for w in words):
+            out.append({
+                'key': f.get('key'), 'label': f.get('label', ''),
+                'color': f.get('color') or '#888888', 'emoji': f.get('emoji') or '🏷️',
+                'confidence': kw.get('confidence', 0.8),
+            })
+    out.sort(key=lambda x: x['confidence'], reverse=True)
+    return out
+
+
+def detect_reply_filters(text, ws):
+    """Auto-detect reply-filters for a piece of text within a workspace."""
+    if not ws:
+        return []
+    return _match_reply_filters(text, ws.get_reply_filters(), ws.get_filter_keywords())
+
+
 def _apply_pipeline_stage(fc, target_stage, actor_user_id=None, reason='manual'):
     """Move a follow-up contact to a Kanban pipeline stage (1..N).
 
@@ -2111,6 +2139,12 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
         func.lower(Reply.from_email).in_(email_keys)
     ).order_by(func.lower(Reply.from_email), Reply.received_at.desc()).all()
 
+    # Workspace reply-filter config loaded once → auto-detect suggestions per reply.
+    from app.models import Workspace as _WS
+    _ws = _WS.query.filter_by(owner_id=uid).first()
+    _flt = _ws.get_reply_filters() if _ws else []
+    _kw = _ws.get_filter_keywords() if _ws else {}
+
     grouped = {}
     for row in msg_rows:
         key = (row.from_email or '').lower()
@@ -2124,6 +2158,8 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
             'route': row.route,
             'status': row.status,
             'reply_filter_key': row.reply_filter_key or '',
+            'suggested_filters': _match_reply_filters(
+                (row.subject or '') + ' ' + (row.body or ''), _flt, _kw),
             'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
         })
 

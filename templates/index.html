@@ -1709,10 +1709,18 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .pl-row-del { border:none; background:var(--surface2); color:var(--text3); width:30px; height:30px; border-radius:7px; cursor:pointer; font-size:13px; flex-shrink:0; }
 .pl-row-del:hover { background:var(--red-dim); color:var(--red); }
 /* Reply-filter tag select on triage cards */
-.tq-pl-tag { margin-top:7px; }
+.tq-pl-tag { margin-top:7px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .tq-pl-tag select { font-size:11px; padding:3px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-family:inherit; max-width:100%; }
 .tq-pl-tag select:focus { outline:none; border-color:var(--accent); }
 .tq-pl-tag.tagged select { border-color:var(--accent); color:var(--accent); }
+.tq-pl-swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; box-shadow:0 0 0 1px var(--border); }
+.tq-pl-new { font-size:11px; padding:3px 7px; border-radius:6px; border:1px dashed var(--border); background:transparent; color:var(--text3); cursor:pointer; font-family:inherit; }
+.tq-pl-new:hover { border-color:var(--accent); color:var(--accent); }
+.tq-suggest { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:7px; }
+.tq-suggest-lbl { font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); }
+.tq-chip { font-size:10px; font-weight:600; padding:3px 7px; border-radius:11px; border:1px solid; cursor:pointer; font-family:inherit; line-height:1.4; }
+.tq-chip:hover { filter:brightness(1.1); }
+.tq-chip-pct { opacity:.7; font-weight:700; margin-left:2px; }
 
 @media (max-width:1100px) {
   .fu-table { min-width:980px; }
@@ -5347,17 +5355,38 @@ function tqStatePill(state) {
   return '<span class="tq-state-pill ' + state + '">' + (labels[state] || state.toUpperCase()) + '</span>';
 }
 
-// Reply-filter tag selector (pipeline) for a triage card
+// Reply-filter tag selector (pipeline) for a triage card:
+// auto-detected suggestion chips + colored select + swatch + inline "New filter".
 function tqPipelineTag(reply) {
   if (!pipelineReplyFilters || !pipelineReplyFilters.length) return '';
   const cur = reply.reply_filter_key || '';
   const msgId = esc((reply.msg_id || '').replace(/'/g, "\\'"));
+  const curF = (pipelineReplyFilters || []).find(f => f.key === cur) || null;
+
+  // Auto-detected suggestions (computed server-side), excluding the current tag.
+  const sugg = (reply.suggested_filters || []).filter(s => s.key !== cur);
+  let chips = '';
+  if (sugg.length) {
+    chips = '<div class="tq-suggest"><span class="tq-suggest-lbl">Auto-detected</span>' +
+      sugg.slice(0, 4).map(s =>
+        `<button class="tq-chip" style="background:${esc(s.color)}1f;border-color:${esc(s.color)};color:${esc(s.color)}" ` +
+        `onclick="event.stopPropagation();tqApplyFilter('${msgId}','${esc(s.key)}')" title="Apply ${esc(s.label)}">` +
+        `${esc(s.emoji || '🏷️')} ${esc(s.label)} <span class="tq-chip-pct">${Math.round((s.confidence || 0) * 100)}%</span></button>`
+      ).join('') + '</div>';
+  }
+
   let opts = '<option value="">＋ Tag reply…</option>';
   pipelineReplyFilters.forEach(f => {
-    opts += `<option value="${esc(f.key)}" ${f.key === cur ? 'selected' : ''}>${esc(f.label)}${f.auto_advance_to ? ' ↦' : ''}</option>`;
+    opts += `<option value="${esc(f.key)}" ${f.key === cur ? 'selected' : ''}>${esc(f.emoji || '🏷️')} ${esc(f.label)}${f.auto_advance_to ? ' ↦' : ''}</option>`;
   });
-  return `<div class="tq-pl-tag ${cur ? 'tagged' : ''}" onclick="event.stopPropagation()">` +
-    `<select onchange="tagReplyPipeline('${msgId}', this.value, this)">${opts}</select></div>`;
+  const swatch = curF ? `<span class="tq-pl-swatch" style="background:${esc(curF.color || '#888')}"></span>` : '';
+
+  return chips +
+    `<div class="tq-pl-tag ${cur ? 'tagged' : ''}" onclick="event.stopPropagation()">` +
+      swatch +
+      `<select onchange="tagReplyPipeline('${msgId}', this.value, this)">${opts}</select>` +
+      `<button class="tq-pl-new" onclick="event.stopPropagation();tqNewFilterFor('${msgId}')" title="Create a new filter for this reply">＋ New</button>` +
+    `</div>`;
 }
 
 // Full triage card — 2-column layout
@@ -6354,11 +6383,83 @@ async function tagReplyPipeline(msgId, key, selectEl) {
       body: JSON.stringify({ msg_id: msgId, filter_key: key })
     });
     const data = await res.json();
-    if (!res.ok) { toast('Error: ' + (data.error || 'tag failed'), true); return; }
-    if (selectEl) selectEl.parentElement.classList.toggle('tagged', !!key);
+    if (!res.ok) { toast('Error: ' + (data.error || 'tag failed'), true); return false; }
+    // reflect locally so chips/swatch refresh without a server round-trip
+    const rep = (allReplies || []).find(x => x.msg_id === msgId);
+    if (rep) rep.reply_filter_key = key || '';
+    renderReplies();
     if (data.advanced) toast('Tagged & moved to ' + (data.stage_name || ('stage ' + data.pipeline_stage)));
     else toast(key ? 'Reply tagged' : 'Tag cleared');
-  } catch(e) { toast('Error: ' + e.message, true); }
+    return true;
+  } catch(e) { toast('Error: ' + e.message, true); return false; }
+}
+
+// Apply a suggested/selected filter to a reply (used by auto-detect chips).
+async function tqApplyFilter(msgId, key) {
+  await tagReplyPipeline(msgId, key, null);
+}
+
+// Inline "create a filter for this reply": reuses the existing pipeline-config PUT
+// (no new endpoint) — sends the full filter list plus the new one, returns its key.
+async function createReplyFilterInline(label, color, emoji) {
+  const beforeKeys = new Set((pipelineReplyFilters || []).map(f => f.key));
+  const reply_filters = (pipelineReplyFilters || []).map(f => ({
+    key: f.key, label: f.label, color: f.color, emoji: f.emoji,
+    auto_advance_to: f.auto_advance_to,
+    keywords: (pipelineFilterKeywords[f.key]?.keywords) || [],
+  }));
+  reply_filters.push({ key: '', label, color, emoji: emoji || '🏷️', auto_advance_to: null, keywords: [] });
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ reply_filters })
+    });
+    const data = await res.json();
+    if (!res.ok) { toast('Error: ' + (data.error || 'create failed'), true); return null; }
+    pipelineReplyFilters = data.reply_filters || [];
+    pipelineFilterKeywords = data.filter_keywords || {};
+    const created = pipelineReplyFilters.find(f => !beforeKeys.has(f.key));
+    return created ? created.key : null;
+  } catch(e) { toast('Error: ' + e.message, true); return null; }
+}
+
+async function tqNewFilterFor(msgId) {
+  const r = await promptNewFilter();
+  if (!r) return;
+  const key = await createReplyFilterInline(r.label, r.color, r.emoji);
+  if (key) await tqApplyFilter(msgId, key);
+}
+
+// Small self-contained modal: name + color + emoji → {label,color,emoji} | null.
+function promptNewFilter() {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+    ov.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;width:300px;box-shadow:0 20px 50px rgba(0,0,0,.45)">' +
+        '<div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:12px">New reply filter</div>' +
+        '<input id="_nfName" placeholder="Filter name" maxlength="120" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--text);margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+          '<label style="font-size:12px;color:var(--text2)">Color</label>' +
+          '<input id="_nfColor" type="color" value="#FF1493" style="width:46px;height:34px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;padding:2px">' +
+          '<input id="_nfEmoji" placeholder="🏷️" maxlength="4" style="width:52px;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 4px;font-size:13px;color:var(--text)">' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button id="_nfOk" class="btn btn-primary" style="flex:1">Create</button>' +
+          '<button id="_nfCancel" class="btn btn-secondary" style="flex:1">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    const close = v => { ov.remove(); resolve(v); };
+    ov.querySelector('#_nfOk').onclick = () => {
+      const label = ov.querySelector('#_nfName').value.trim();
+      if (!label) { ov.querySelector('#_nfName').focus(); return; }
+      close({ label, color: ov.querySelector('#_nfColor').value, emoji: ov.querySelector('#_nfEmoji').value.trim() });
+    };
+    ov.querySelector('#_nfCancel').onclick = () => close(null);
+    ov.addEventListener('click', e => { if (e.target === ov) close(null); });
+    setTimeout(() => ov.querySelector('#_nfName').focus(), 30);
+  });
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────

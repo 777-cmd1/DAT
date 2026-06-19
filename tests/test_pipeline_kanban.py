@@ -233,3 +233,31 @@ def test_builtin_filters_cannot_be_deleted(app, db, client):
     from app.models import PIPELINE_BUILTIN_FILTER_KEYS
     assert PIPELINE_BUILTIN_FILTER_KEYS.issubset(keys)
     assert 'only_custom' in keys
+
+
+# ── Phase 2: reply auto-detection ────────────────────────────────────────────
+
+def test_detect_reply_filters_helper(app, db, client):
+    user, ws = _make_user_and_login(db, client)
+    with app.app_context():
+        from app.models import Workspace
+        wsx = db.session.get(Workspace, ws.id)
+        hits = _app.detect_reply_filters('Sorry, we can not use Landstar here', wsx)
+        h = next(h for h in hits if h['key'] == 'no_landstar')
+        assert h['color'] and h['emoji'] and 0 < h['confidence'] <= 1
+        # no keyword present → no suggestions
+        assert _app.detect_reply_filters('hello there, thanks', wsx) == []
+
+
+def test_replies_payload_includes_suggested_filters(app, db, client):
+    from app.models import Reply
+    user, ws = _make_user_and_login(db, client)
+    db.session.add(Reply(user_id=user.id, workspace_id=ws.id, msg_id='S1',
+                         from_email='john@x.com', from_name='John',
+                         subject='Re: load', body='We can use you on this lane',
+                         status='new'))
+    db.session.commit()
+    data = client.get('/api/replies?view=all').get_json()
+    flat = [r for grp in data['items'] for r in grp]
+    rep = next(r for r in flat if r['msg_id'] == 'S1')
+    assert 'can_use' in [s['key'] for s in rep['suggested_filters']]

@@ -235,6 +235,20 @@ def test_builtin_filters_cannot_be_deleted(app, db, client):
     assert 'only_custom' in keys
 
 
+def test_filter_key_is_always_slugged(app, db, client):
+    import re
+    _make_user_and_login(db, client)
+    r = client.put('/api/followups/pipeline-config', json={
+        'reply_filters': [
+            {'key': "a');alert(1);//", 'label': 'Bad'},   # injection attempt
+            {'key': 'can_use', 'label': 'we can use you'},  # built-in stays as-is
+        ], '_csrf': 'test-csrf-token'})
+    keys = {f['key'] for f in r.get_json()['reply_filters']}
+    assert "a');alert(1);//" not in keys
+    assert all(re.match(r'^[a-z0-9_]+$', k) for k in keys)  # every key is a safe slug
+    assert 'can_use' in keys                                 # built-in key idempotent
+
+
 # ── Phase 2: reply auto-detection ────────────────────────────────────────────
 
 def test_detect_reply_filters_helper(app, db, client):

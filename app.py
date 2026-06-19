@@ -4646,7 +4646,10 @@ def api_followups_pipeline_config_save():
             label = (f.get('label') or '').strip()
             if not label:
                 continue
-            key = (f.get('key') or '').strip() or _slug(label)
+            # Always slug the key (even client-supplied ones) so it stays a safe
+            # [a-z0-9_] token — built-in keys are already slugs (idempotent). This
+            # prevents the key from breaking out of single-quoted onclick handlers.
+            key = _slug((f.get('key') or '').strip() or label)
             while key in used_keys:
                 key = key + '_x'
             used_keys.add(key)

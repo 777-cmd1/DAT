@@ -51,13 +51,28 @@ PIPELINE_DEFAULT_STAGES = [
     {"id": 5, "name": "Booked",               "color": "#9c36b5"},
 ]
 
+# Triage categories drive the semi-automatic reply queue: each category maps to a
+# recommended action (negative/auto_reply → ignore; gave_info/rate_request → follow-up
+# + advance to the filter's auto_advance_to stage).
+TRIAGE_CATEGORIES = ('negative', 'gave_info', 'rate_request', 'auto_reply')
+TRIAGE_MODES = ('off', 'suggest', 'auto')
+TRIAGE_DEFAULT_MODES = {
+    'negative':     'auto',
+    'gave_info':    'auto',
+    'rate_request': 'auto',
+    'auto_reply':   'auto',
+}
+
 PIPELINE_DEFAULT_REPLY_FILTERS = [
-    {"key": "can_use",        "label": "we can use you",                  "color": "#4c6ef5", "emoji": "✅", "auto_advance_to": 2,    "order": 1, "is_custom": False},
-    {"key": "no_landstar",    "label": "can not use Landstar",            "color": "#9c36b5", "emoji": "🚚", "auto_advance_to": None, "order": 2, "is_custom": False},
-    {"key": "no_landstar_v2", "label": "no Landstar",                     "color": "#7048e8", "emoji": "🚚", "auto_advance_to": None, "order": 3, "is_custom": False},
-    {"key": "dnu",            "label": "DNU",                             "color": "#ff6b6b", "emoji": "🚫", "auto_advance_to": None, "order": 4, "is_custom": False},
-    {"key": "no_contact",     "label": "Please don't contact me anymore.","color": "#fa5252", "emoji": "🛑", "auto_advance_to": None, "order": 5, "is_custom": False},
-    {"key": "cannot_use_ls",  "label": "We cannot use landstar",          "color": "#e8590c", "emoji": "🚚", "auto_advance_to": None, "order": 6, "is_custom": False},
+    {"key": "can_use",        "label": "we can use you",                  "color": "#4c6ef5", "emoji": "✅", "auto_advance_to": 2,    "order": 1, "is_custom": False, "category": "gave_info"},
+    {"key": "no_landstar",    "label": "can not use Landstar",            "color": "#9c36b5", "emoji": "🚚", "auto_advance_to": None, "order": 2, "is_custom": False, "category": "negative"},
+    {"key": "no_landstar_v2", "label": "no Landstar",                     "color": "#7048e8", "emoji": "🚚", "auto_advance_to": None, "order": 3, "is_custom": False, "category": "negative"},
+    {"key": "dnu",            "label": "DNU",                             "color": "#ff6b6b", "emoji": "🚫", "auto_advance_to": None, "order": 4, "is_custom": False, "category": "negative"},
+    {"key": "no_contact",     "label": "Please don't contact me anymore.","color": "#fa5252", "emoji": "🛑", "auto_advance_to": None, "order": 5, "is_custom": False, "category": "negative"},
+    {"key": "cannot_use_ls",  "label": "We cannot use landstar",          "color": "#e8590c", "emoji": "🚚", "auto_advance_to": None, "order": 6, "is_custom": False, "category": "negative"},
+    {"key": "rate_request",   "label": "Rate request",                    "color": "#f59f00", "emoji": "💰", "auto_advance_to": 2,    "order": 7, "is_custom": False, "category": "rate_request"},
+    {"key": "gave_info",      "label": "Gave info",                       "color": "#37b24c", "emoji": "📦", "auto_advance_to": 2,    "order": 8, "is_custom": False, "category": "gave_info"},
+    {"key": "auto_reply",     "label": "Auto-reply / OOO",                "color": "#868e96", "emoji": "🤖", "auto_advance_to": None, "order": 9, "is_custom": False, "category": "auto_reply"},
 ]
 
 # Keyword sets for auto-detection (matched case-insensitively over subject+body).
@@ -66,8 +81,19 @@ PIPELINE_DEFAULT_FILTER_KEYWORDS = {
     "no_landstar":    {"keywords": ["can not use landstar", "cannot use landstar", "can't use landstar"], "confidence": 0.9},
     "no_landstar_v2": {"keywords": ["no landstar"],                                                 "confidence": 0.8},
     "dnu":            {"keywords": ["dnu", "do not use", "do not contact"],                         "confidence": 0.95},
-    "no_contact":     {"keywords": ["don't contact me", "do not contact me", "stop contacting", "remove me"], "confidence": 0.9},
+    "no_contact":     {"keywords": ["don't contact me", "do not contact me", "stop contacting", "remove me", "unsubscribe", "take me off"], "confidence": 0.9},
     "cannot_use_ls":  {"keywords": ["we cannot use landstar", "cannot use ls"],                     "confidence": 0.9},
+    "rate_request":   {"keywords": ["what's your rate", "whats your rate", "what is your rate",
+                                    "your rate", "what rate", "send me your rate", "send rate",
+                                    "best rate", "best you can do", "what are you paying",
+                                    "how much are you paying", "what does it pay"],                 "confidence": 0.8},
+    "gave_info":      {"keywords": ["we have loads", "load available", "still available",
+                                    "still open", "still have", "we can move"],                     "confidence": 0.75},
+    "auto_reply":     {"keywords": ["out of office", "out of the office", "automatic reply",
+                                    "auto-reply", "auto reply", "autoreply", "no longer with",
+                                    "on vacation", "on holiday", "maternity leave",
+                                    "undeliverable", "delivery status notification",
+                                    "away from the office"],                                        "confidence": 0.9},
 }
 
 # Built-in keys are editable (color/emoji/label/keywords/auto-advance) but never deletable.
@@ -89,6 +115,8 @@ def _enrich_reply_filter(f, idx):
     if not out.get("emoji"):
         out["emoji"] = (default or {}).get("emoji", "🏷️")
     out.setdefault("order", (default or {}).get("order", idx + 1))
+    if not out.get("category"):
+        out["category"] = (default or {}).get("category")
     return out
 
 
@@ -114,12 +142,17 @@ class Workspace(db.Model):
     def get_reply_filters(self):
         """Reply filters for this workspace, falling back to defaults.
         Stored filters are enriched with color/emoji/is_custom so older configs
-        (saved before colors existed) render correctly without a data migration."""
+        (saved before colors existed) render correctly without a data migration.
+        Built-ins missing from a stored config (added in later releases) are
+        appended — they are never deletable, so absence means "older config"."""
         config = self.pipeline_config or {}
         filters = config.get('reply_filters')
         if not filters:
             return [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
-        return [_enrich_reply_filter(f, i) for i, f in enumerate(filters)]
+        out = [_enrich_reply_filter(f, i) for i, f in enumerate(filters)]
+        have = {f.get('key') for f in out}
+        out.extend(dict(d) for d in PIPELINE_DEFAULT_REPLY_FILTERS if d['key'] not in have)
+        return out
 
     def get_filter_keywords(self):
         """Auto-detection keyword sets, merged: defaults for built-ins overlaid by
@@ -130,6 +163,16 @@ class Workspace(db.Model):
             if isinstance(v, dict):
                 merged[k] = v
         return merged
+
+    def get_triage_modes(self):
+        """Per-category automation mode ('off'|'suggest'|'auto'), stored overrides
+        overlaid on defaults; malformed values fall back to the default."""
+        config = self.pipeline_config or {}
+        modes = dict(TRIAGE_DEFAULT_MODES)
+        for k, v in (config.get('triage_modes') or {}).items():
+            if k in TRIAGE_DEFAULT_MODES and v in TRIAGE_MODES:
+                modes[k] = v
+        return modes
 
 
 class Invitation(db.Model):
@@ -248,8 +291,13 @@ class Reply(db.Model):
     status       = db.Column(db.String(30), default='new')  # 'new' | 'interested' | 'not_interested'
     reply_filter_key = db.Column(db.String(50), nullable=True)   # pipeline reply-filter tag
     auto_advanced    = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    # Semi-automatic triage: category detected at ingest + what (if anything) was auto-applied
+    triage_category   = db.Column(db.String(20), nullable=True)   # 'negative'|'gave_info'|'rate_request'|'auto_reply'|NULL
+    triage_confidence = db.Column(db.Float, nullable=True)
+    auto_processed    = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    auto_action       = db.Column(db.String(20), nullable=True)   # 'ignored' | 'followup'
     received_at  = db.Column(db.DateTime, default=_utcnow)
-    classified_at = db.Column(db.DateTime)
+    classified_at = db.Column(db.DateTime)   # when triage classification last ran (NULL = never)
 
     user = db.relationship('User', backref='replies')
 
@@ -266,6 +314,10 @@ class Reply(db.Model):
             'subject': self.subject, 'body': self.body,
             'route': self.route, 'status': self.status,
             'reply_filter_key': self.reply_filter_key or '',
+            'triage_category': self.triage_category or '',
+            'triage_confidence': self.triage_confidence,
+            'auto_processed': bool(self.auto_processed),
+            'auto_action': self.auto_action or '',
             'received_at': self.received_at.strftime('%Y-%m-%d %H:%M') if self.received_at else '',
         }
 

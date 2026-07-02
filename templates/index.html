@@ -1729,6 +1729,36 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .tq-chip:hover { filter:brightness(1.1); }
 .tq-chip-pct { opacity:.7; font-weight:700; margin-left:2px; }
 
+/* ── Semi-automatic triage: category chips, badges, auto strip, automation panel ── */
+.tq-cat-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.tq-cat-chip { font-size:11px; font-weight:600; padding:5px 11px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:5px; line-height:1.4; }
+.tq-cat-chip:hover { filter:brightness(1.08); }
+.tq-cat-chip .n { font-weight:800; opacity:.8; }
+.tq-bulk-btn { font-size:11px; font-weight:700; padding:5px 12px; border-radius:14px; border:1.5px solid #ef4444; background:#ef44441a; color:#ef4444; cursor:pointer; font-family:inherit; }
+.tq-bulk-btn:hover { background:#ef444433; }
+.tq-auto-toggle { font-size:11px; font-weight:600; padding:5px 11px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; margin-left:auto; }
+.tq-auto-toggle:hover { border-color:var(--accent); color:var(--accent); }
+.tq-cat-badge { font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:9px; border:1px solid; white-space:nowrap; }
+.tq-card.tq-cat-negative     { border-left:3px solid #ef4444; }
+.tq-card.tq-cat-rate_request { border-left:3px solid #f59f00; }
+.tq-card.tq-cat-gave_info    { border-left:3px solid #37b24c; }
+.tq-card.tq-cat-auto_reply   { border-left:3px solid #868e96; }
+.tq-action.tq-emph { box-shadow:0 0 0 1.5px currentColor inset; font-weight:700; }
+.tq-auto-strip { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:8px 12px; font-size:12px; }
+.tq-auto-strip-head { display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text2); font-weight:600; }
+.tq-auto-strip-head .grow { flex:1; }
+.tq-auto-item { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px dashed var(--border); color:var(--text2); }
+.tq-auto-item .em { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tq-auto-item .act { color:var(--text3); font-size:11px; white-space:nowrap; }
+.tq-auto-undo { font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:9px; border:1px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; font-family:inherit; margin-left:auto; }
+.tq-auto-undo:hover { border-color:var(--accent); color:var(--accent); }
+.tq-auto-panel { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:12px 14px; }
+.tq-auto-panel h4 { font-size:12px; margin:0 0 8px; color:var(--text); }
+.tq-auto-row { display:flex; align-items:center; gap:10px; padding:5px 0; font-size:12px; color:var(--text2); }
+.tq-auto-row .lbl { min-width:150px; font-weight:600; }
+.tq-auto-row .hint { color:var(--text3); font-size:11px; flex:1; }
+.tq-auto-row select { font-size:11px; padding:3px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text2); font-family:inherit; }
+
 @media (max-width:1100px) {
   .fu-table { min-width:980px; }
 }
@@ -2823,6 +2853,11 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <button class="tq-tab" id="tqf-ignored"         onclick="setFilter('ignored')"><i class="ph-bold ph-prohibit"></i> Ignored <span class="tq-tab-count" id="tqc-ignored">0</span></button>
         </div>
       </div>
+
+      <!-- Auto-detected triage categories + automation settings -->
+      <div class="tq-cat-bar" id="tqCatBar" style="display:none"></div>
+      <div class="tq-auto-panel" id="tqAutoPanel" style="display:none"></div>
+      <div class="tq-auto-strip" id="tqAutoStrip" style="display:none"></div>
 
       <div id="repliesList"></div>
       <div id="repliesPager" style="display:flex;justify-content:center;align-items:center;gap:10px;margin-top:14px"></div>
@@ -5222,6 +5257,18 @@ async function saveSettings() {
 let allReplies = [], replyGroups = [], replyCounts = {}, repliesFilter = 'all', repliesTimer = null, repliesPage = 1, repliesPages = 0, repliesSearchTimer = null;
 const REPLIES_PER_PAGE = 25;
 
+// ── Semi-automatic triage state ──
+let repliesCat = '';                 // active category chip ('' = all)
+let _autoStripItems = [];            // recent auto-processed replies (undo strip)
+let _autoStripOpen = false;
+let _lastBulk = null;                // {category, msg_ids} of the last bulk-ignore (for undo)
+const TRIAGE_CATS = {
+  negative:     { label:'Negative',     emoji:'🚫', color:'#ef4444', action:'ignore'   },
+  rate_request: { label:'Rate request', emoji:'💰', color:'#f59f00', action:'followup' },
+  gave_info:    { label:'Gave info',    emoji:'📦', color:'#37b24c', action:'followup' },
+  auto_reply:   { label:'Auto-reply',   emoji:'🤖', color:'#868e96', action:'ignore'   },
+};
+
 async function initReplies() {
   await loadReplies();
   if (!repliesTimer) repliesTimer = setInterval(() => fetchReplies(true), 120000);
@@ -5235,6 +5282,7 @@ async function loadReplies() {
     view: repliesFilter,
   });
   if (search) params.set('search', search);
+  if (repliesCat) params.set('cat', repliesCat);
   const data = await (await fetch('/api/replies?' + params.toString())).json();
   replyGroups = data.items || [];
   replyCounts = data.counts || {};
@@ -5242,7 +5290,9 @@ async function loadReplies() {
   repliesPages = data.pages || 0;
   allReplies = replyGroups.flat();
   renderReplies();
+  renderCatBar();
   updateBadge();
+  loadAutoStrip();   // fire-and-forget refresh of the auto-processed strip
 }
 function updateBadge() {
   const n = replyCounts.needs_action || 0;
@@ -5256,6 +5306,174 @@ function setFilter(f) {
   const tab = document.getElementById('tqf-' + f);
   if (tab) tab.classList.add('active');
   loadReplies();
+}
+
+// ── Semi-automatic triage: category chips + bulk + auto strip + settings ──────
+
+function tqSetCat(k) {
+  repliesCat = (repliesCat === k) ? '' : k;
+  repliesPage = 1;
+  loadReplies();
+}
+
+function renderCatBar() {
+  const bar = document.getElementById('tqCatBar');
+  if (!bar) return;
+  const cats = (replyCounts.categories) || {};
+  const keys = Object.keys(TRIAGE_CATS).filter(k => (cats[k] || 0) > 0 || repliesCat === k);
+  if (!keys.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  let html = '<span class="tq-suggest-lbl">Auto-detected</span>';
+  keys.forEach(k => {
+    const c = TRIAGE_CATS[k];
+    const n = cats[k] || 0;
+    const on = repliesCat === k;
+    const st = on ? `border-color:${c.color};color:${c.color};background:${c.color}18` : '';
+    html += `<button class="tq-cat-chip${on ? ' active' : ''}" style="${st}" onclick="tqSetCat('${k}')">${c.emoji} ${c.label} <span class="n">${n}</span></button>`;
+  });
+  // Bulk ignore appears only when an "ignore"-recommended category is selected
+  const active = TRIAGE_CATS[repliesCat];
+  if (active && active.action === 'ignore' && (cats[repliesCat] || 0) > 0) {
+    html += `<button class="tq-bulk-btn" onclick="tqBulkIgnore()">✕ Ignore all (${cats[repliesCat]})</button>`;
+  }
+  html += `<button class="tq-auto-toggle" onclick="tqToggleAutoPanel()"><i class="ph-bold ph-robot"></i> Automation</button>`;
+  bar.innerHTML = html;
+  bar.style.display = 'flex';
+}
+
+async function tqBulkIgnore() {
+  const cat = TRIAGE_CATS[repliesCat];
+  if (!cat) return;
+  const n = (replyCounts.categories || {})[repliesCat] || 0;
+  const ok = await showConfirm(
+    `${n} contact${n > 1 ? 's' : ''} detected as "${cat.label}" will be moved to Ignored. You can undo right after.`,
+    { okText: 'Ignore all', title: `Ignore all ${cat.label}?` }
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch('/api/replies/bulk-triage', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({category: repliesCat, action: 'ignore'})
+    });
+    const d = await res.json();
+    if (!d.ok) { toast(d.error || 'Bulk action failed'); return; }
+    _lastBulk = { category: repliesCat, msg_ids: d.msg_ids || [] };
+    toast(`${d.count} moved to Ignored`);
+    repliesCat = '';
+    await loadReplies();
+  } catch (e) { toast('Bulk action failed'); }
+}
+
+async function tqUndoBulk() {
+  if (!_lastBulk || !_lastBulk.msg_ids.length) return;
+  try {
+    const res = await fetch('/api/replies/bulk-triage', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({msg_ids: _lastBulk.msg_ids, action: 'restore'})
+    });
+    const d = await res.json();
+    if (d.ok) { toast(`${d.count} restored to New`); _lastBulk = null; await loadReplies(); }
+    else toast(d.error || 'Undo failed');
+  } catch (e) { toast('Undo failed'); }
+}
+
+async function loadAutoStrip() {
+  try {
+    const d = await (await fetch('/api/replies/auto-processed')).json();
+    _autoStripItems = d.items || [];
+  } catch (e) { _autoStripItems = []; }
+  renderAutoStrip();
+}
+
+function tqAutoActionLabel(it) {
+  if (it.action === 'followup') return '→ pipeline · Got info (1st)';
+  return '→ Ignored';
+}
+
+function renderAutoStrip() {
+  const el = document.getElementById('tqAutoStrip');
+  if (!el) return;
+  const hasBulk = _lastBulk && _lastBulk.msg_ids.length;
+  if (!_autoStripItems.length && !hasBulk) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  let html = '';
+  if (hasBulk) {
+    const c = TRIAGE_CATS[_lastBulk.category] || {label: _lastBulk.category, emoji: '🏷️'};
+    html += `<div class="tq-auto-item" style="border-top:none"><span>${c.emoji}</span>` +
+      `<span class="em">Bulk: ${_lastBulk.msg_ids.length} "${c.label}" moved to Ignored</span>` +
+      `<button class="tq-auto-undo" onclick="tqUndoBulk()">↩ Undo</button></div>`;
+  }
+  if (_autoStripItems.length) {
+    html += `<div class="tq-auto-strip-head" onclick="_autoStripOpen=!_autoStripOpen;renderAutoStrip()">` +
+      `<span>🤖 Auto-processed <b>${_autoStripItems.length}</b> repl${_autoStripItems.length > 1 ? 'ies' : 'y'} (7 days)</span>` +
+      `<span class="grow"></span><span>${_autoStripOpen ? '▴ Hide' : '▾ Show'}</span></div>`;
+    if (_autoStripOpen) {
+      _autoStripItems.forEach((it, i) => {
+        const c = TRIAGE_CATS[it.category] || {emoji: '🏷️'};
+        html += `<div class="tq-auto-item"><span>${c.emoji}</span>` +
+          `<span class="em" title="${esc(it.subject)}">${esc(it.email)}</span>` +
+          `<span class="act">${tqAutoActionLabel(it)} · ${esc(it.received_at)}</span>` +
+          `<button class="tq-auto-undo" onclick="tqUndoAutoIdx(${i})">↩ Undo</button></div>`;
+      });
+    }
+  }
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+async function tqUndoAutoIdx(i) {
+  const it = _autoStripItems[i];
+  if (!it) return;
+  try {
+    const res = await fetch('/api/replies/undo-auto', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({msg_id: it.msg_id})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast('Restored to New' + (d.contact_removed ? ' — pipeline contact removed' : ''));
+      await loadReplies();
+      if (typeof loadFollowups === 'function') loadFollowups();
+    } else toast(d.error || 'Undo failed');
+  } catch (e) { toast('Undo failed'); }
+}
+
+// Automation settings panel: per-category Off / Suggest / Auto
+const TRIAGE_MODE_HINTS = {
+  negative:     'Auto: DNU / opt-out replies are moved to Ignored on arrival (never auto-blocked)',
+  gave_info:    'Auto: contact is created in the pipeline and advanced to "Got info (1st)"',
+  rate_request: 'Auto: rate asks go to the pipeline · "Got info (1st)" with a 💰 tag',
+  auto_reply:   'Auto: out-of-office / bounce noise is moved to Ignored on arrival',
+};
+
+function tqToggleAutoPanel() {
+  const el = document.getElementById('tqAutoPanel');
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  const modes = pipelineTriageModes || {};
+  let html = '<h4>🤖 Triage automation — what happens when a category is detected</h4>';
+  Object.keys(TRIAGE_CATS).forEach(k => {
+    const c = TRIAGE_CATS[k];
+    const cur = modes[k] || 'auto';
+    html += `<div class="tq-auto-row"><span class="lbl">${c.emoji} ${c.label}</span>` +
+      `<select onchange="tqSetTriageMode('${k}', this.value)">` +
+      ['off', 'suggest', 'auto'].map(m =>
+        `<option value="${m}" ${m === cur ? 'selected' : ''}>${m === 'off' ? 'Off' : m === 'suggest' ? 'Suggest only' : 'Auto'}</option>`).join('') +
+      `</select><span class="hint">${TRIAGE_MODE_HINTS[k] || ''}</span></div>`;
+  });
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+async function tqSetTriageMode(cat, val) {
+  pipelineTriageModes = Object.assign({}, pipelineTriageModes, {[cat]: val});
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {
+      method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({triage_modes: {[cat]: val}})
+    });
+    const d = await res.json();
+    if (d.ok) { pipelineTriageModes = d.triage_modes || pipelineTriageModes; toast('Automation updated'); }
+    else toast(d.error || 'Save failed');
+  } catch (e) { toast('Save failed'); }
 }
 function queueRepliesRefresh() {
   clearTimeout(repliesSearchTimer);
@@ -5274,6 +5492,12 @@ async function fetchReplies(silent) {
     else {
       if(sub) sub.textContent = data.new > 0 ? `${data.new} new reply${data.new>1?'s':''}` : 'Up to date — Lead triage queue';
       if (data.new > 0) toast(data.new + ' new repl' + (data.new>1?'ies':'y') + '!');
+      if ((data.auto_ignored || 0) + (data.auto_followup || 0) > 0) {
+        const parts = [];
+        if (data.auto_ignored) parts.push(data.auto_ignored + ' auto-ignored');
+        if (data.auto_followup) parts.push(data.auto_followup + ' → pipeline');
+        toast('🤖 ' + parts.join(', '));
+      }
       await loadReplies();
     }
   } catch(e) { if(sub) sub.textContent = 'Error checking Gmail'; }
@@ -5414,13 +5638,23 @@ function tqCard(msgs) {
   const cardId   = 'tqc_' + emailRaw.replace(/[^a-zA-Z0-9]/g,'_');
   const expandId = 'tqexp_' + emailRaw.replace(/[^a-zA-Z0-9]/g,'_');
 
+  // Semi-automatic triage: detected category → colored badge + emphasized
+  // recommended action button (ignore for negative/auto-reply, FU for info/rate)
+  const triCat = TRIAGE_CATS[latest.triage_category] || null;
+  const rec = triCat ? triCat.action : '';
+  const catBadge = triCat
+    ? '<span class="tq-cat-badge" style="border-color:' + triCat.color + ';color:' + triCat.color + ';background:' + triCat.color + '14">' +
+        triCat.emoji + ' ' + triCat.label +
+        (latest.triage_confidence ? ' · ' + Math.round(latest.triage_confidence * 100) + '%' : '') + '</span>'
+    : '';
+
   // Right column: show actions only for unprocessed states; otherwise show reset
   const showActions = (state === 'new' || state === 'viewed');
   const rightHtml = showActions
     ? '<div class="tq-card-right" onclick="event.stopPropagation()">' +
-        '<button class="tq-action tq-action-fu"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
+        '<button class="tq-action tq-action-fu' + (rec === 'followup' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
           '<i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-action-key">F</span></button>' +
-        '<button class="tq-action tq-action-no"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
+        '<button class="tq-action tq-action-no' + (rec === 'ignore' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
           '<i class="ph-bold ph-x"></i> Ignore <span class="tq-action-key">X</span></button>' +
         '<button class="tq-action tq-action-block" onclick="markContactStop(\'' + emailEsc + '\')" title="Block + Stop List [B]">' +
           '<i class="ph-bold ph-prohibit"></i> Block <span class="tq-action-key">B</span></button>' +
@@ -5476,6 +5710,7 @@ function tqCompactRow(msgs) {
       '<div class="tq-compact-email">' + esc(emailRaw) + '</div>' +
     '</div>' +
     '<span class="tq-compact-icon">' + stateIcon + '</span>' +
+    (latest.auto_processed ? '<span title="Auto-processed by triage">🤖</span>' : '') +
     '<span class="tq-compact-time">' + time + '</span>' +
     '<button class="tq-compact-reset" onclick="markContact(\'' + emailEsc + '\',\'new\')" title="Move back to queue"><i class="ph-bold ph-arrow-counter-clockwise"></i></button>' +
   '</div>';
@@ -5642,6 +5877,7 @@ let fuViewMode = 'table';         // 'table' | 'kanban'
 let pipelineStages = [];          // [{id,name,color}, ...]
 let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_advance_to}, ...]
 let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
+let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -6170,6 +6406,7 @@ async function loadPipelineConfig() {
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
     pipelineFilterKeywords = data.filter_keywords || {};
+    pipelineTriageModes = data.triage_modes || {};
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {

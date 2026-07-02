@@ -663,8 +663,17 @@ def _norm_hex_color(c, fallback='#888888'):
     return c
 
 
+def _kw_in_text(kw, t):
+    """Word-boundary keyword match: 'dnu' must not fire inside 'sandnut'.
+    Both args lowercase; kw may be a multi-word phrase or carry punctuation."""
+    kw = str(kw or '').lower().strip()
+    if not kw:
+        return False
+    return re.search(r'(?<!\w)' + re.escape(kw) + r'(?!\w)', t) is not None
+
+
 def _match_reply_filters(text, filters, keywords):
-    """Reply-filters whose keywords appear in text (case-insensitive substring),
+    """Reply-filters whose keywords appear in text (case-insensitive, word-boundary),
     sorted by confidence desc. Pure: filters/keywords are passed in so callers can
     load workspace config once per request."""
     t = (text or '').lower()
@@ -674,14 +683,175 @@ def _match_reply_filters(text, filters, keywords):
     for f in filters or []:
         kw = (keywords or {}).get(f.get('key'), {}) or {}
         words = kw.get('keywords') or []
-        if any(w and str(w).lower() in t for w in words):
+        if any(_kw_in_text(w, t) for w in words):
             out.append({
                 'key': f.get('key'), 'label': f.get('label', ''),
                 'color': f.get('color') or '#888888', 'emoji': f.get('emoji') or '🏷️',
                 'confidence': kw.get('confidence', 0.8),
+                'category': f.get('category'),
             })
     out.sort(key=lambda x: x['confidence'], reverse=True)
     return out
+
+
+# ── Semi-automatic triage classifier ─────────────────────────────────────────
+# Structural signals that a carrier is sharing load details (rate, weight,
+# pickup/delivery, lane). Keyword filters alone can't catch free-form info dumps.
+_TRIAGE_INFO_SIGNALS = [
+    ('rate_amount', re.compile(r'\$\s?\d{2,3}(?:[,.]?\d{3})*(?:\.\d{1,2})?\b')),
+    ('weight',      re.compile(r'(?i)\b\d{1,3}(?:,\d{3})+\s*(?:lbs?|#)|\b\d{4,6}\s*(?:lbs?|#)')),
+    ('pickup',      re.compile(r'(?i)\b(?:pu|pick\s?up|pickup)\b')),
+    ('delivery',    re.compile(r'(?i)\b(?:del|delv|deliver(?:y|s|ed)?)\b')),
+    ('fcfs',        re.compile(r'(?i)\bfcfs\b')),
+    ('city_state',  re.compile(r'\b[A-Z][a-zA-Z .]+,\s*[A-Z]{2}\b')),
+    ('date',        re.compile(r'(?i)\b(?:mon|tues?|wed(?:nes)?|thur?s?|fri|sat(?:ur)?|sun)(?:day)?\b|\b\d{1,2}/\d{1,2}\b')),
+    ('equipment',   re.compile(r"(?i)\b(?:dry\s?van|reefer|flatbed|step\s?deck|hazmat|53'?\s?(?:ft|')?|48'?\s?(?:ft|')?)")),
+]
+
+# Minimum confidence for an 'auto' mode to actually fire — below it we only suggest.
+TRIAGE_AUTO_MIN_CONF = {'negative': 0.85, 'auto_reply': 0.85, 'gave_info': 0.7, 'rate_request': 0.7}
+
+
+def classify_reply_text(subject, body, filters, keywords):
+    """Pure triage classifier over subject+body.
+
+    Returns {'category', 'confidence', 'filter_key', 'signals'} or None (unknown).
+    Precedence: auto_reply > negative > rate_request > gave_info — an opt-out
+    buried in a load dump must still win, and a quoted $-rate means the carrier
+    *gave* a rate rather than asked for one.
+    """
+    text = ((subject or '') + ' ' + (body or '')).strip()
+    if not text:
+        return None
+    matches = _match_reply_filters(text, filters, keywords)
+    by_cat = {}
+    for m in matches:                       # matches sorted by confidence desc
+        by_cat.setdefault(m.get('category'), m)
+
+    for cat in ('auto_reply', 'negative'):
+        if cat in by_cat:
+            m = by_cat[cat]
+            return {'category': cat, 'confidence': m['confidence'],
+                    'filter_key': m['key'], 'signals': []}
+
+    signals = [name for name, rx in _TRIAGE_INFO_SIGNALS if rx.search(text)]
+    has_money = 'rate_amount' in signals
+
+    if 'rate_request' in by_cat and not has_money:
+        m = by_cat['rate_request']
+        return {'category': 'rate_request', 'confidence': m['confidence'],
+                'filter_key': m['key'], 'signals': signals}
+
+    # Structural gave_info: needs ≥3 points (keyword hit counts as 2) so a lone
+    # "delivery" or city name doesn't misfile a plain conversational reply.
+    kw_hit = by_cat.get('gave_info')
+    score = len(signals) + (2 if kw_hit else 0)
+    if score >= 3:
+        conf = max(kw_hit['confidence'] if kw_hit else 0.0,
+                   min(0.95, 0.45 + 0.1 * score))
+        return {'category': 'gave_info', 'confidence': round(conf, 2),
+                'filter_key': (kw_hit or {}).get('key') or 'gave_info',
+                'signals': signals}
+    return None
+
+
+def _auto_triage_new_replies(uid, msg_ids):
+    """Classify freshly ingested replies and apply the workspace's auto-actions.
+
+    negative / auto_reply  → status 'not_interested' (never auto-Block/stop-list)
+    gave_info / rate_request → status 'follow_up' + create pipeline contact if
+    missing + forward-only advance to the filter's auto_advance_to stage.
+
+    Replies that inherited a suppressed status at ingest are classified but never
+    auto-actioned. Returns counters for the Check-Gmail toast.
+    """
+    from app.models import Reply, Workspace, FollowupContact
+    out = {'classified': 0, 'auto_ignored': 0, 'auto_followup': 0}
+    if not msg_ids:
+        return out
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    if not ws:
+        return out
+    filters = ws.get_reply_filters()
+    kws     = ws.get_filter_keywords()
+    modes   = ws.get_triage_modes()
+    fcfg_by_key = {f.get('key'): f for f in filters}
+    now = _utcnow()
+
+    rows = Reply.query.filter(Reply.user_id == uid, Reply.msg_id.in_(msg_ids)).all()
+    for r in rows:
+        res = classify_reply_text(r.subject, r.body, filters, kws)
+        r.classified_at = now
+        if not res:
+            continue
+        r.triage_category = res['category']
+        r.triage_confidence = res['confidence']
+        out['classified'] += 1
+
+        if r.status != 'new':
+            continue
+        cat = res['category']
+        if modes.get(cat) != 'auto' or res['confidence'] < TRIAGE_AUTO_MIN_CONF.get(cat, 1.0):
+            continue
+
+        if cat in ('negative', 'auto_reply'):
+            r.status = 'not_interested'
+            r.reply_filter_key = res.get('filter_key') or r.reply_filter_key
+            r.auto_processed = True
+            r.auto_action = 'ignored'
+            out['auto_ignored'] += 1
+        else:  # gave_info / rate_request
+            r.status = 'follow_up'
+            r.reply_filter_key = res.get('filter_key') or r.reply_filter_key
+            try:
+                add_to_followups(r)
+            except Exception:
+                db.session.rollback()
+                continue
+            fcfg = fcfg_by_key.get(res.get('filter_key')) or {}
+            target = fcfg.get('auto_advance_to') or 2
+            fc = FollowupContact.query.filter(
+                FollowupContact.workspace_id == ws.id,
+                db.func.lower(FollowupContact.contact_email) == (r.from_email or '').lower()
+            ).first()
+            if fc and int(target) > (fc.pipeline_stage or 1):   # forward-only
+                ok, _err = _apply_pipeline_stage(fc, target, actor_user_id=uid,
+                                                 reason=f'auto_triage:{cat}')
+                if ok:
+                    r.auto_advanced = True
+            r.auto_processed = True
+            r.auto_action = 'followup'
+            out['auto_followup'] += 1
+    db.session.commit()
+    return out
+
+
+def _backfill_triage(uid, limit=500):
+    """Classify-only pass over never-classified replies (no auto-actions), so the
+    pre-existing backlog gets category counts/sections after one Check Gmail."""
+    from app.models import Reply, Workspace
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    if not ws:
+        return 0
+    rows = Reply.query.filter(
+        Reply.user_id == uid,
+        Reply.classified_at.is_(None),
+    ).order_by(Reply.received_at.desc()).limit(limit).all()
+    if not rows:
+        return 0
+    filters = ws.get_reply_filters()
+    kws     = ws.get_filter_keywords()
+    now = _utcnow()
+    n = 0
+    for r in rows:
+        res = classify_reply_text(r.subject, r.body, filters, kws)
+        r.classified_at = now
+        if res:
+            r.triage_category = res['category']
+            r.triage_confidence = res['confidence']
+            n += 1
+    db.session.commit()
+    return n
 
 
 def detect_reply_filters(text, ws):
@@ -2080,7 +2250,7 @@ def load_replies():
         })
     return result
 
-def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
+def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
     uid = current_user_id()
     if not uid:
         return {'items': [], 'counts': {'all': 0, 'new': 0, 'viewed': 0, 'needs_action': 0, 'follow_up': 0, 'ignored': 0}, 'total': 0, 'page': 1, 'pages': 0}
@@ -2141,6 +2311,18 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
             'state': state,
         })
 
+    # Per-category contact counts among unprocessed replies — drives the triage
+    # category chips ("🚫 Negative (12)") independent of the current view.
+    cat_rows = db.session.query(
+        Reply.triage_category,
+        func.count(func.distinct(func.lower(Reply.from_email))),
+    ).filter(
+        Reply.user_id == uid,
+        Reply.status.in_(['new', 'viewed']),
+        Reply.triage_category.isnot(None),
+    ).group_by(Reply.triage_category).all()
+    counts['categories'] = {c: n for c, n in cat_rows if c}
+
     def include_row(row):
         if view == 'all':
             return True
@@ -2149,6 +2331,16 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
         return row['state'] == view
 
     filtered_rows = [row for row in normalized_rows if include_row(row)]
+
+    if cat:
+        cat_emails = {e for (e,) in db.session.query(
+            func.lower(Reply.from_email)
+        ).filter(
+            Reply.user_id == uid,
+            Reply.status.in_(['new', 'viewed']),
+            Reply.triage_category == cat,
+        ).distinct().all()}
+        filtered_rows = [row for row in filtered_rows if row['email'] in cat_emails]
     filtered_rows.sort(key=lambda row: (
         {'new': 0, 'viewed': 1, 'follow_up': 2, 'ignored': 3}.get(row['state'], 5),
         -(row['latest_at'].timestamp() if row['latest_at'] else 0),
@@ -2163,7 +2355,9 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
     msg_rows = db.session.query(
         Reply.id, Reply.msg_id, Reply.from_email, Reply.from_name,
         Reply.subject, Reply.body, Reply.route, Reply.status,
-        Reply.reply_filter_key, Reply.received_at
+        Reply.reply_filter_key, Reply.received_at,
+        Reply.triage_category, Reply.triage_confidence,
+        Reply.auto_processed, Reply.auto_action,
     ).filter(
         Reply.user_id == uid,
         func.lower(Reply.from_email).in_(email_keys)
@@ -2190,6 +2384,10 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all'):
             'reply_filter_key': row.reply_filter_key or '',
             'suggested_filters': _match_reply_filters(
                 (row.subject or '') + ' ' + (row.body or ''), _flt, _kw),
+            'triage_category': row.triage_category or '',
+            'triage_confidence': row.triage_confidence,
+            'auto_processed': bool(row.auto_processed),
+            'auto_action': row.auto_action or '',
             'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
         })
 
@@ -2404,7 +2602,24 @@ def fetch_replies_from_gmail():
         except Exception:
             db.session.rollback()
 
-    return {'new': len(new_replies), 'total': len(all_replies)}
+    # Semi-automatic triage: classify the new arrivals (applying auto-actions per
+    # workspace modes) and backfill categories on the pre-existing backlog.
+    triage = {}
+    if uid:
+        try:
+            triage = _auto_triage_new_replies(uid, [r['msg_id'] for r in new_replies])
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('auto-triage of new replies failed')
+        try:
+            _backfill_triage(uid)
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('triage backfill failed')
+
+    return {'new': len(new_replies), 'total': len(all_replies),
+            'auto_ignored': triage.get('auto_ignored', 0),
+            'auto_followup': triage.get('auto_followup', 0)}
 
 
 def _gmail_get_body(payload):
@@ -3800,7 +4015,8 @@ def api_get_replies():
     per_page = request.args.get('per_page', 25)
     search = (request.args.get('search') or '').strip()
     view = (request.args.get('view') or 'all').strip()
-    return jsonify(get_reply_groups_page(page=page, per_page=per_page, search=search, view=view))
+    cat = (request.args.get('cat') or '').strip()
+    return jsonify(get_reply_groups_page(page=page, per_page=per_page, search=search, view=view, cat=cat))
 
 @app.route('/api/replies/fetch', methods=['POST'])
 @login_required
@@ -4522,14 +4738,16 @@ def api_followups_pipeline_config():
     """Stages + reply filters for the Kanban view, plus the user's saved view mode."""
     from app.models import (Workspace, User as _U,
                             PIPELINE_DEFAULT_STAGES, PIPELINE_DEFAULT_REPLY_FILTERS,
-                            PIPELINE_DEFAULT_FILTER_KEYWORDS)
+                            PIPELINE_DEFAULT_FILTER_KEYWORDS, TRIAGE_DEFAULT_MODES)
     uid = _current_user_id()
     ws = Workspace.query.filter_by(owner_id=uid).first()
     user = db.session.get(_U, uid)
     stages = ws.get_stages() if ws else [dict(s) for s in PIPELINE_DEFAULT_STAGES]
     filters = ws.get_reply_filters() if ws else [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
     keywords = ws.get_filter_keywords() if ws else {k: dict(v) for k, v in PIPELINE_DEFAULT_FILTER_KEYWORDS.items()}
+    modes = ws.get_triage_modes() if ws else dict(TRIAGE_DEFAULT_MODES)
     return jsonify(stages=stages, reply_filters=filters, filter_keywords=keywords,
+                   triage_modes=modes,
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -4595,7 +4813,8 @@ def api_followups_pipeline_config_save():
     orphaned.
     """
     from app.models import (FollowupContact, Workspace, PIPELINE_DEFAULT_REPLY_FILTERS,
-                            PIPELINE_DEFAULT_FILTER_KEYWORDS, PIPELINE_BUILTIN_FILTER_KEYS)
+                            PIPELINE_DEFAULT_FILTER_KEYWORDS, PIPELINE_BUILTIN_FILTER_KEYS,
+                            TRIAGE_CATEGORIES, TRIAGE_MODES, TRIAGE_DEFAULT_MODES)
     uid = _current_user_id()
     ws = Workspace.query.filter_by(owner_id=uid).first()
     if not ws:
@@ -4665,6 +4884,7 @@ def api_followups_pipeline_config_save():
                 'emoji': (f.get('emoji') or '').strip()[:8],
                 'is_custom': key not in PIPELINE_BUILTIN_FILTER_KEYS,   # authoritative by key
                 'order': i + 1,
+                'category': f.get('category') if f.get('category') in TRIAGE_CATEGORIES else None,
             })
             # keywords travel with each filter so brand-new (server-keyed) filters keep theirs
             words = [str(w).strip().lower() for w in (f.get('keywords') or []) if str(w).strip()][:50]
@@ -4686,11 +4906,20 @@ def api_followups_pipeline_config_save():
         cfg['reply_filters'] = norm_filters
         cfg['filter_keywords'] = norm_kw
 
+    modes = data.get('triage_modes')
+    if isinstance(modes, dict):
+        merged = dict(cfg.get('triage_modes') or {})
+        for k, v in modes.items():
+            if k in TRIAGE_DEFAULT_MODES and v in TRIAGE_MODES:
+                merged[k] = v
+        cfg['triage_modes'] = merged
+
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
     db.session.commit()
     return jsonify(ok=True, stages=ws.get_stages(),
                    reply_filters=ws.get_reply_filters(),
-                   filter_keywords=ws.get_filter_keywords())
+                   filter_keywords=ws.get_filter_keywords(),
+                   triage_modes=ws.get_triage_modes())
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])
@@ -4734,6 +4963,110 @@ def api_reply_pipeline_tag():
     db.session.commit()
     return jsonify(ok=True, filter_key=reply.reply_filter_key or '',
                    advanced=advanced, pipeline_stage=new_stage, stage_name=stage_name)
+
+
+@app.route('/api/replies/bulk-triage', methods=['POST'])
+@login_required
+@limiter.limit("20 per minute")
+@csrf_protected
+def api_replies_bulk_triage():
+    """Bulk-resolve triaged replies. Two shapes:
+    {category, action:'ignore'}  — ignore every unprocessed reply in a category
+    {msg_ids, action:'restore'}  — undo path: restore an explicit list to 'new'
+    Returns affected msg_ids so the client can offer Undo."""
+    from app.models import Reply, TRIAGE_CATEGORIES
+    uid = _current_user_id()
+    data = request.get_json() or {}
+    action = (data.get('action') or '').strip()
+    if action not in ('ignore', 'restore'):
+        return jsonify(error="action must be 'ignore' or 'restore'"), 400
+    msg_ids = data.get('msg_ids')
+    category = (data.get('category') or '').strip()
+
+    q = Reply.query.filter(Reply.user_id == uid)
+    if isinstance(msg_ids, list) and msg_ids:
+        q = q.filter(Reply.msg_id.in_([str(m) for m in msg_ids][:500]))
+    elif category:
+        if category not in TRIAGE_CATEGORIES:
+            return jsonify(error='Unknown category'), 400
+        q = q.filter(Reply.status.in_(['new', 'viewed']),
+                     Reply.triage_category == category)
+    else:
+        return jsonify(error='category or msg_ids required'), 400
+
+    affected = []
+    for r in q.all():
+        if action == 'ignore':
+            r.status = 'not_interested'
+        else:
+            r.status = 'new'
+            r.auto_processed = False
+            r.auto_action = None
+        affected.append(r.msg_id)
+    db.session.commit()
+    audit_log('bulk_triage', resource_type='reply',
+              detail={'action': action, 'category': category or None, 'count': len(affected)})
+    return jsonify(ok=True, count=len(affected), msg_ids=affected)
+
+
+@app.route('/api/replies/auto-processed', methods=['GET'])
+@login_required
+def api_replies_auto_processed():
+    """Recent auto-triaged replies (last 7 days) for the Undo strip."""
+    from app.models import Reply
+    uid = _current_user_id()
+    since = _utcnow() - timedelta(days=7)
+    rows = Reply.query.filter(
+        Reply.user_id == uid,
+        Reply.auto_processed.is_(True),
+        Reply.received_at >= since,
+    ).order_by(Reply.received_at.desc()).limit(100).all()
+    return jsonify(count=len(rows), items=[{
+        'msg_id': r.msg_id, 'email': r.from_email, 'from': r.from_name,
+        'subject': r.subject or '', 'category': r.triage_category or '',
+        'action': r.auto_action or '', 'filter_key': r.reply_filter_key or '',
+        'received_at': r.received_at.strftime('%Y-%m-%d %H:%M') if r.received_at else '',
+    } for r in rows])
+
+
+@app.route('/api/replies/undo-auto', methods=['POST'])
+@login_required
+@limiter.limit("60 per minute")
+@csrf_protected
+def api_replies_undo_auto():
+    """Undo a single auto-triage action: reply returns to 'new'; if the action
+    auto-created the pipeline contact from this very reply and no follow-up was
+    sent since, the contact is removed too (pre-existing contacts are left as-is)."""
+    from app.models import Reply, Workspace, FollowupContact
+    uid = _current_user_id()
+    data = request.get_json() or {}
+    msg_id = data.get('msg_id')
+    if not msg_id:
+        return jsonify(error='msg_id required'), 400
+    reply = Reply.query.filter_by(msg_id=msg_id, user_id=uid).first()
+    if not reply:
+        return jsonify(error='Reply not found'), 404
+    if not reply.auto_processed:
+        return jsonify(error='Reply was not auto-processed'), 400
+
+    contact_removed = False
+    if reply.auto_action == 'followup':
+        ws = Workspace.query.filter_by(owner_id=uid).first()
+        if ws:
+            fc = FollowupContact.query.filter(
+                FollowupContact.workspace_id == ws.id,
+                db.func.lower(FollowupContact.contact_email) == (reply.from_email or '').lower()
+            ).first()
+            if fc and fc.source_reply_id == reply.id and not fc.last_followup_sent_at:
+                db.session.delete(fc)   # FollowupEvent rows cascade via relationship
+                contact_removed = True
+
+    reply.status = 'new'
+    reply.auto_processed = False
+    reply.auto_action = None
+    reply.auto_advanced = False
+    db.session.commit()
+    return jsonify(ok=True, contact_removed=contact_removed)
 
 
 @app.route('/api/followups/delete', methods=['POST'])
@@ -5449,6 +5782,11 @@ with app.app_context():
         ('followup_contacts', 'pipeline_stage',      'INTEGER NOT NULL DEFAULT 1'),
         ('replies',           'reply_filter_key',    'VARCHAR(50)'),
         ('replies',           'auto_advanced',       'BOOLEAN NOT NULL DEFAULT FALSE'),
+        # Semi-automatic reply triage
+        ('replies',           'triage_category',     'VARCHAR(20)'),
+        ('replies',           'triage_confidence',   'FLOAT'),
+        ('replies',           'auto_processed',      'BOOLEAN NOT NULL DEFAULT FALSE'),
+        ('replies',           'auto_action',         'VARCHAR(20)'),
     ]
     try:
         with db.engine.connect() as _conn:

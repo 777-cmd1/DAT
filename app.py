@@ -698,7 +698,8 @@ def _match_reply_filters(text, filters, keywords):
 # Structural signals that a carrier is sharing load details (rate, weight,
 # pickup/delivery, lane). Keyword filters alone can't catch free-form info dumps.
 _TRIAGE_INFO_SIGNALS = [
-    ('rate_amount', re.compile(r'\$\s?\d{2,3}(?:[,.]?\d{3})*(?:\.\d{1,2})?\b')),
+    # $1,500 / $5400 / $900 — but not $5 or $50 (too small to be a load rate)
+    ('rate_amount', re.compile(r'\$\s?\d{1,3}(?:[,.]\d{3})+\b|\$\s?\d{3,6}\b')),
     ('weight',      re.compile(r'(?i)\b\d{1,3}(?:,\d{3})+\s*(?:lbs?|#)|\b\d{4,6}\s*(?:lbs?|#)')),
     ('pickup',      re.compile(r'(?i)\b(?:pu|pick\s?up|pickup)\b')),
     ('delivery',    re.compile(r'(?i)\b(?:del|delv|deliver(?:y|s|ed)?)\b')),

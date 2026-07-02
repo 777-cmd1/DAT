@@ -73,6 +73,15 @@ def test_rate_with_dollar_amount_is_gave_info():
     res = _classify('', 'RATE $5400 PU FCFS 0800 DEL 07/01 15,000 lbs')
     assert res and res['category'] == 'gave_info'
 
+def test_rate_with_comma_thousands_is_gave_info():
+    # "$1,500" (comma after a single digit) must count as a quoted rate too
+    res = _classify('', 'We can do it for $1,500 PU Friday DEL Monday')
+    assert res and res['category'] == 'gave_info'
+
+def test_small_dollar_amount_is_not_a_rate_signal():
+    res = _classify('', 'a $5 fee applies')
+    assert res is None
+
 def test_gave_info_structural_load_dump():
     body = ('Still available PU FCFS 0800 - 1700 DEL 07/01 @ 0700 CONSUMER GOODS '
             '15,000 LBS RATE $5400 Let me know On Thu')

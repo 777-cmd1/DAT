@@ -706,10 +706,14 @@ _TRIAGE_INFO_SIGNALS = [
     ('fcfs',        re.compile(r'(?i)\bfcfs\b')),
     ('city_state',  re.compile(r'\b[A-Z][a-zA-Z .]+,\s*[A-Z]{2}\b')),
     ('date',        re.compile(r'(?i)\b(?:mon|tues?|wed(?:nes)?|thur?s?|fri|sat(?:ur)?|sun)(?:day)?\b|\b\d{1,2}/\d{1,2}\b')),
-    ('equipment',   re.compile(r"(?i)\b(?:dry\s?van|reefer|flatbed|step\s?deck|hazmat|53'?\s?(?:ft|')?|48'?\s?(?:ft|')?)")),
+    # bare "53"/"48" must carry a length marker (' or ft) so plain numbers don't count
+    ('equipment',   re.compile(r"(?i)\b(?:dry\s?van|reefer|flatbed|step\s?deck|hazmat|53\s?(?:ft\b|')|48\s?(?:ft\b|'))")),
 ]
 
 # Minimum confidence for an 'auto' mode to actually fire — below it we only suggest.
+# Default keyword confidences mostly sit above these floors; the gate matters when a
+# workspace lowers a keyword's confidence in pipeline settings (then auto stops firing
+# for it without having to flip the whole category to 'suggest').
 TRIAGE_AUTO_MIN_CONF = {'negative': 0.85, 'auto_reply': 0.85, 'gave_info': 0.7, 'rate_request': 0.7}
 
 
@@ -756,17 +760,47 @@ def classify_reply_text(subject, body, filters, keywords):
     return None
 
 
+def _fc_by_email(workspace_id, email):
+    """Case-insensitive FollowupContact lookup by email within a workspace."""
+    from app.models import FollowupContact
+    return FollowupContact.query.filter(
+        FollowupContact.workspace_id == workspace_id,
+        db.func.lower(FollowupContact.contact_email) == (email or '').lower()
+    ).first()
+
+
+def _sync_crm_stage(reply, stage):
+    """Mirror a reply-status change into the PipelineContact CRM — the same side
+    effect the manual /api/replies/status path performs (stage_map there:
+    follow_up→interested, not_interested→lost, new→replied). Best-effort: CRM
+    sync must never break triage."""
+    try:
+        email = (reply.from_email or '')
+        if not email:
+            return
+        upsert_pipeline(email, {
+            'stage': stage,
+            'company': (reply.from_name or '').split('<')[0].strip(),
+            'route': reply.route or '',
+        }, uid=reply.user_id)
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('CRM stage sync failed for reply %s', reply.msg_id)
+
+
 def _auto_triage_new_replies(uid, msg_ids):
     """Classify freshly ingested replies and apply the workspace's auto-actions.
 
     negative / auto_reply  → status 'not_interested' (never auto-Block/stop-list)
     gave_info / rate_request → status 'follow_up' + create pipeline contact if
-    missing + forward-only advance to the filter's auto_advance_to stage.
+    missing + forward-only advance to the filter's auto_advance_to stage (a
+    filter configured with no auto_advance_to means "don't advance" — same
+    semantics as the manual tag path).
 
     Replies that inherited a suppressed status at ingest are classified but never
     auto-actioned. Returns counters for the Check-Gmail toast.
     """
-    from app.models import Reply, Workspace, FollowupContact
+    from app.models import Reply, Workspace
     out = {'classified': 0, 'auto_ignored': 0, 'auto_followup': 0}
     if not msg_ids:
         return out
@@ -795,33 +829,31 @@ def _auto_triage_new_replies(uid, msg_ids):
         if modes.get(cat) != 'auto' or res['confidence'] < TRIAGE_AUTO_MIN_CONF.get(cat, 1.0):
             continue
 
+        r.reply_filter_key = res.get('filter_key') or r.reply_filter_key
+        r.auto_processed = True
+
         if cat in ('negative', 'auto_reply'):
             r.status = 'not_interested'
-            r.reply_filter_key = res.get('filter_key') or r.reply_filter_key
-            r.auto_processed = True
             r.auto_action = 'ignored'
+            _sync_crm_stage(r, 'lost')
             out['auto_ignored'] += 1
         else:  # gave_info / rate_request
             r.status = 'follow_up'
-            r.reply_filter_key = res.get('filter_key') or r.reply_filter_key
+            r.auto_action = 'followup'
             try:
                 add_to_followups(r)
             except Exception:
                 db.session.rollback()
                 continue
+            _sync_crm_stage(r, 'interested')
             fcfg = fcfg_by_key.get(res.get('filter_key')) or {}
-            target = fcfg.get('auto_advance_to') or 2
-            fc = FollowupContact.query.filter(
-                FollowupContact.workspace_id == ws.id,
-                db.func.lower(FollowupContact.contact_email) == (r.from_email or '').lower()
-            ).first()
+            target = fcfg.get('auto_advance_to')   # falsy = configured "don't advance"
+            fc = _fc_by_email(ws.id, r.from_email) if target else None
             if fc and int(target) > (fc.pipeline_stage or 1):   # forward-only
                 ok, _err = _apply_pipeline_stage(fc, target, actor_user_id=uid,
                                                  reason=f'auto_triage:{cat}')
                 if ok:
                     r.auto_advanced = True
-            r.auto_processed = True
-            r.auto_action = 'followup'
             out['auto_followup'] += 1
     db.session.commit()
     return out
@@ -4930,7 +4962,7 @@ def api_followups_pipeline_config_save():
 def api_reply_pipeline_tag():
     """Tag a reply with a pipeline reply-filter and (optionally) auto-advance the
     matching follow-up contact forward to the filter's configured stage."""
-    from app.models import Reply, Workspace, FollowupContact
+    from app.models import Reply, Workspace
     uid = _current_user_id()
     data = request.get_json() or {}
     msg_id = data.get('msg_id')
@@ -4951,10 +4983,7 @@ def api_reply_pipeline_tag():
     advanced, new_stage, stage_name = False, None, None
     if fcfg and fcfg.get('auto_advance_to') and ws:
         target = int(fcfg['auto_advance_to'])
-        fc = FollowupContact.query.filter(
-            FollowupContact.workspace_id == ws.id,
-            db.func.lower(FollowupContact.contact_email) == (reply.from_email or '').lower()
-        ).first()
+        fc = _fc_by_email(ws.id, reply.from_email)
         if fc and target > (fc.pipeline_stage or 1):   # forward-only
             ok, _err = _apply_pipeline_stage(fc, target, actor_user_id=uid, reason=f'reply_tag:{key}')
             if ok:
@@ -4999,10 +5028,12 @@ def api_replies_bulk_triage():
     for r in q.all():
         if action == 'ignore':
             r.status = 'not_interested'
+            _sync_crm_stage(r, 'lost')
         else:
             r.status = 'new'
             r.auto_processed = False
             r.auto_action = None
+            _sync_crm_stage(r, 'replied')
         affected.append(r.msg_id)
     db.session.commit()
     audit_log('bulk_triage', resource_type='reply',
@@ -5038,7 +5069,7 @@ def api_replies_undo_auto():
     """Undo a single auto-triage action: reply returns to 'new'; if the action
     auto-created the pipeline contact from this very reply and no follow-up was
     sent since, the contact is removed too (pre-existing contacts are left as-is)."""
-    from app.models import Reply, Workspace, FollowupContact
+    from app.models import Reply, Workspace
     uid = _current_user_id()
     data = request.get_json() or {}
     msg_id = data.get('msg_id')
@@ -5054,10 +5085,7 @@ def api_replies_undo_auto():
     if reply.auto_action == 'followup':
         ws = Workspace.query.filter_by(owner_id=uid).first()
         if ws:
-            fc = FollowupContact.query.filter(
-                FollowupContact.workspace_id == ws.id,
-                db.func.lower(FollowupContact.contact_email) == (reply.from_email or '').lower()
-            ).first()
+            fc = _fc_by_email(ws.id, reply.from_email)
             if fc and fc.source_reply_id == reply.id and not fc.last_followup_sent_at:
                 db.session.delete(fc)   # FollowupEvent rows cascade via relationship
                 contact_removed = True
@@ -5066,6 +5094,7 @@ def api_replies_undo_auto():
     reply.auto_processed = False
     reply.auto_action = None
     reply.auto_advanced = False
+    _sync_crm_stage(reply, 'replied')
     db.session.commit()
     return jsonify(ok=True, contact_removed=contact_removed)
 
@@ -5347,8 +5376,8 @@ def save_pipeline(contacts):
     ).delete(synchronize_session=False)
     db.session.commit()
 
-def upsert_pipeline(email, updates):
-    uid = current_user_id()
+def upsert_pipeline(email, updates, uid=None):
+    uid = uid or current_user_id()
     if not uid: return {}
     from app.models import PipelineContact
     existing = PipelineContact.query.filter_by(user_id=uid, email=email.lower()).first()

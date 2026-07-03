@@ -5271,6 +5271,7 @@ const TRIAGE_CATS = {
 
 async function initReplies() {
   await loadReplies();
+  loadAutoStrip();   // strip only changes on Check Gmail / bulk / undo — not per page click
   if (!repliesTimer) repliesTimer = setInterval(() => fetchReplies(true), 120000);
 }
 async function loadReplies() {
@@ -5292,7 +5293,6 @@ async function loadReplies() {
   renderReplies();
   renderCatBar();
   updateBadge();
-  loadAutoStrip();   // fire-and-forget refresh of the auto-processed strip
 }
 function updateBadge() {
   const n = replyCounts.needs_action || 0;
@@ -5360,6 +5360,7 @@ async function tqBulkIgnore() {
     toast(`${d.count} moved to Ignored`);
     repliesCat = '';
     await loadReplies();
+    renderAutoStrip();   // show the bulk-undo row immediately
   } catch (e) { toast('Bulk action failed'); }
 }
 
@@ -5371,7 +5372,7 @@ async function tqUndoBulk() {
       body: JSON.stringify({msg_ids: _lastBulk.msg_ids, action: 'restore'})
     });
     const d = await res.json();
-    if (d.ok) { toast(`${d.count} restored to New`); _lastBulk = null; await loadReplies(); }
+    if (d.ok) { toast(`${d.count} restored to New`); _lastBulk = null; await loadReplies(); renderAutoStrip(); }
     else toast(d.error || 'Undo failed');
   } catch (e) { toast('Undo failed'); }
 }
@@ -5385,8 +5386,12 @@ async function loadAutoStrip() {
 }
 
 function tqAutoActionLabel(it) {
-  if (it.action === 'followup') return '→ pipeline · Got info (1st)';
-  return '→ Ignored';
+  if (it.action !== 'followup') return '→ Ignored';
+  // Resolve the actual configured stage (workspaces can rename/repoint stages)
+  const f = (pipelineReplyFilters || []).find(x => x.key === it.filter_key);
+  const sid = f && f.auto_advance_to;
+  const st = sid ? (pipelineStages || []).find(s => s.id === sid) : null;
+  return '→ pipeline' + (st ? ' · ' + esc(st.name) : '');
 }
 
 function renderAutoStrip() {
@@ -5431,6 +5436,7 @@ async function tqUndoAutoIdx(i) {
     if (d.ok) {
       toast('Restored to New' + (d.contact_removed ? ' — pipeline contact removed' : ''));
       await loadReplies();
+      loadAutoStrip();
       if (typeof loadFollowups === 'function') loadFollowups();
     } else toast(d.error || 'Undo failed');
   } catch (e) { toast('Undo failed'); }
@@ -5439,8 +5445,8 @@ async function tqUndoAutoIdx(i) {
 // Automation settings panel: per-category Off / Suggest / Auto
 const TRIAGE_MODE_HINTS = {
   negative:     'Auto: DNU / opt-out replies are moved to Ignored on arrival (never auto-blocked)',
-  gave_info:    'Auto: contact is created in the pipeline and advanced to "Got info (1st)"',
-  rate_request: 'Auto: rate asks go to the pipeline · "Got info (1st)" with a 💰 tag',
+  gave_info:    'Auto: contact is created in the pipeline and advanced to the filter\'s configured stage',
+  rate_request: 'Auto: rate asks go to the pipeline (configured stage) with a 💰 tag',
   auto_reply:   'Auto: out-of-office / bounce noise is moved to Ignored on arrival',
 };
 
@@ -5499,6 +5505,7 @@ async function fetchReplies(silent) {
         toast('🤖 ' + parts.join(', '));
       }
       await loadReplies();
+      loadAutoStrip();
     }
   } catch(e) { if(sub) sub.textContent = 'Error checking Gmail'; }
   btn.disabled = false;
@@ -5668,7 +5675,7 @@ function tqCard(msgs) {
   const dotHtml = (state === 'new' || state === 'viewed' || state === 'follow_up')
     ? '<span class="tq-avatar-dot ' + state + '"></span>' : '';
 
-  return '<div class="tq-card state-' + state + '" id="' + cardId + '">' +
+  return '<div class="tq-card state-' + state + (triCat ? ' tq-cat-' + latest.triage_category : '') + '" id="' + cardId + '">' +
     '<div class="tq-card-inner">' +
       // Left content (click = expand)
       '<div class="tq-card-left" onclick="tqToggleExpand(\'' + expandId + '\')">' +
@@ -5676,6 +5683,7 @@ function tqCard(msgs) {
         '<div class="tq-card-content">' +
           '<div class="tq-card-meta">' +
             tqStatePill(state) +
+            catBadge +
             '<span class="tq-reply-badge"><i class="ph-bold ph-chat-dots" style="font-size:10px"></i> ' + replyCount + '</span>' +
             '<span class="tq-time">' + time + '</span>' +
           '</div>' +

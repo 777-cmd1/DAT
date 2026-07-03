@@ -152,6 +152,39 @@ def test_auto_followup_gave_info_creates_contact_at_stage_2(app, db):
     assert fc.pipeline_stage == 2          # "Got info (1st)"
     assert r.auto_advanced is True
 
+def test_no_advance_when_filter_advance_disabled(app, db):
+    """auto_advance_to=None on the filter means "don't advance" — the auto path
+    must respect it exactly like the manual tag path does."""
+    from app.models import FollowupContact, PIPELINE_DEFAULT_REPLY_FILTERS
+    user, ws = _make_user_ws(db)
+    filters = [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
+    for f in filters:
+        if f['key'] in ('gave_info', 'rate_request'):
+            f['auto_advance_to'] = None
+    ws.pipeline_config = {'reply_filters': filters}
+    db.session.commit()
+    r = _add_reply(db, user, 'Still available PU FCFS 0800 DEL 07/01 15,000 lbs RATE $5400')
+    out = _app._auto_triage_new_replies(user.id, [r.msg_id])
+    db.session.refresh(r)
+    assert out['auto_followup'] == 1
+    assert r.status == 'follow_up'
+    assert r.auto_advanced is False          # no forced fallback to stage 2
+    fc = FollowupContact.query.filter_by(
+        workspace_id=ws.id, contact_email=r.from_email.lower()).first()
+    assert fc is not None and (fc.pipeline_stage or 1) == 1
+
+def test_auto_actions_sync_crm_pipeline(app, db):
+    """Auto-ignore/auto-followup must mirror stages into the PipelineContact CRM
+    the same way the manual /api/replies/status path does."""
+    from app.models import PipelineContact
+    user, ws = _make_user_ws(db)
+    neg = _add_reply(db, user, 'DNU. Do not contact us again.')
+    info = _add_reply(db, user, 'Still available PU FCFS DEL 07/01 15,000 lbs RATE $5400')
+    _app._auto_triage_new_replies(user.id, [neg.msg_id, info.msg_id])
+    stages = {p.email: p.stage for p in PipelineContact.query.filter_by(user_id=user.id).all()}
+    assert stages.get(neg.from_email.lower()) == 'lost'
+    assert stages.get(info.from_email.lower()) == 'interested'
+
 def test_suggest_mode_classifies_but_does_not_act(app, db):
     user, ws = _make_user_ws(db)
     ws.pipeline_config = {'triage_modes': {'negative': 'suggest'}}
@@ -235,6 +268,18 @@ def test_undo_auto_removes_auto_created_contact(app, db, client):
     assert r.status == 'new' and r.auto_processed is False
     assert FollowupContact.query.filter_by(
         workspace_id=ws.id, contact_email=r.from_email.lower()).first() is None
+
+def test_auto_processed_endpoint_lists_recent(app, db, client):
+    user, _ = _make_user_ws(db)
+    _login(client, user)
+    r = _add_reply(db, user, 'DNU')
+    _app._auto_triage_new_replies(user.id, [r.msg_id])
+    res = client.get('/api/replies/auto-processed')
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data['count'] >= 1
+    item = next(i for i in data['items'] if i['msg_id'] == r.msg_id)
+    assert item['category'] == 'negative' and item['action'] == 'ignored'
 
 def test_pipeline_config_exposes_triage_modes(app, db, client):
     user, _ = _make_user_ws(db)

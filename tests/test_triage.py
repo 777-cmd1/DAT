@@ -247,6 +247,35 @@ def test_bulk_ignore_and_restore(app, db, client):
     db.session.refresh(r1); db.session.refresh(r2)
     assert r1.status == 'new' and r2.status == 'new'
 
+def test_bulk_followup_creates_contacts_and_advances(app, db, client):
+    """Bulk 'followup' on a category: status → follow_up, pipeline contact created,
+    stage advanced to the filter's configured target, CRM stage 'interested'."""
+    from app.models import FollowupContact, PipelineContact
+    user, ws = _make_user_ws(db)
+    _login(client, user)
+    r1 = _add_reply(db, user, 'We can do it for $1,500 PU Friday DEL Monday')
+    r2 = _add_reply(db, user, "What's your rate on this lane?")
+    r1.triage_category = 'gave_info'
+    r2.triage_category = 'rate_request'; r2.reply_filter_key = 'rate_request'
+    db.session.commit()
+
+    res = client.post('/api/replies/bulk-triage',
+                      json={'category': 'gave_info', 'action': 'followup'})
+    assert res.status_code == 200 and res.get_json()['count'] == 1
+    res = client.post('/api/replies/bulk-triage',
+                      json={'category': 'rate_request', 'action': 'followup'})
+    assert res.status_code == 200 and res.get_json()['count'] == 1
+
+    for r in (r1, r2):
+        db.session.refresh(r)
+        assert r.status == 'follow_up'
+        fc = FollowupContact.query.filter_by(
+            workspace_id=ws.id, contact_email=r.from_email.lower()).first()
+        assert fc is not None and fc.pipeline_stage == 2   # both built-ins target stage 2
+    assert r1.reply_filter_key == 'gave_info'              # backfilled from category
+    stages = {p.email: p.stage for p in PipelineContact.query.filter_by(user_id=user.id).all()}
+    assert stages.get(r1.from_email.lower()) == 'interested'
+
 def test_bulk_rejects_bad_input(app, db, client):
     user, _ = _make_user_ws(db)
     _login(client, user)

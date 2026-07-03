@@ -1549,13 +1549,6 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-tabs-compact { margin-bottom:0; }
 .fu-tabs-compact .fu-tab { padding:7px 14px; font-weight:700; }
 .fu-tabs-compact .fu-tab.active { background:var(--accent); color:#fff; box-shadow:none; }
-.fu-quick-filters { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
-.fu-qf { font-size:11px; font-weight:600; padding:5px 11px; border-radius:16px; border:1px solid var(--border); background:var(--surface); color:var(--text3); cursor:pointer; font-family:inherit; transition:filter .15s; }
-.fu-qf:hover { filter:brightness(1.08); }
-.fu-qf.active { background:var(--bg); color:var(--text); border-color:var(--accent); }
-.fu-qf-count { opacity:.7; font-weight:700; margin-left:3px; }
-.fu-contact-rf { margin-top:4px; }
-.fu-rf-badge { display:inline-block; font-size:10px; font-weight:600; padding:2px 7px; border-radius:11px; border:1px solid; white-space:nowrap; line-height:1.5; }
 .fu-queue-shell { display:flex; flex-direction:column; gap:14px; }
 .fu-toolbar {
   display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;
@@ -1715,19 +1708,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .pl-row-del-spacer { flex:0 0 auto; width:28px; text-align:center; opacity:.5; font-size:12px; cursor:help; }
 .pl-row-del { border:none; background:var(--surface2); color:var(--text3); width:30px; height:30px; border-radius:7px; cursor:pointer; font-size:13px; flex-shrink:0; }
 .pl-row-del:hover { background:var(--red-dim); color:var(--red); }
-/* Reply-filter tag select on triage cards */
-.tq-pl-tag { margin-top:7px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-.tq-pl-tag select { font-size:11px; padding:3px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-family:inherit; max-width:100%; }
-.tq-pl-tag select:focus { outline:none; border-color:var(--accent); }
-.tq-pl-tag.tagged select { border-color:var(--accent); color:var(--accent); }
-.tq-pl-swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; box-shadow:0 0 0 1px var(--border); }
-.tq-pl-new { font-size:11px; padding:3px 7px; border-radius:6px; border:1px dashed var(--border); background:transparent; color:var(--text3); cursor:pointer; font-family:inherit; }
-.tq-pl-new:hover { border-color:var(--accent); color:var(--accent); }
-.tq-suggest { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:7px; }
 .tq-suggest-lbl { font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); }
-.tq-chip { font-size:10px; font-weight:600; padding:3px 7px; border-radius:11px; border:1px solid; cursor:pointer; font-family:inherit; line-height:1.4; }
-.tq-chip:hover { filter:brightness(1.1); }
-.tq-chip-pct { opacity:.7; font-weight:700; margin-left:2px; }
 
 /* ── Semi-automatic triage: category chips, badges, auto strip, automation panel ── */
 .tq-cat-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
@@ -1736,6 +1717,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .tq-cat-chip .n { font-weight:800; opacity:.8; }
 .tq-bulk-btn { font-size:11px; font-weight:700; padding:5px 12px; border-radius:14px; border:1.5px solid #ef4444; background:#ef44441a; color:#ef4444; cursor:pointer; font-family:inherit; }
 .tq-bulk-btn:hover { background:#ef444433; }
+.tq-bulk-btn.tq-bulk-fu { border-color:#37b24c; background:#37b24c1a; color:#37b24c; }
+.tq-bulk-btn.tq-bulk-fu:hover { background:#37b24c33; }
 .tq-auto-toggle { font-size:11px; font-weight:600; padding:5px 11px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; margin-left:auto; }
 .tq-auto-toggle:hover { border-color:var(--accent); color:var(--accent); }
 .tq-cat-badge { font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:9px; border:1px solid; white-space:nowrap; }
@@ -1752,12 +1735,17 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .tq-auto-item .act { color:var(--text3); font-size:11px; white-space:nowrap; }
 .tq-auto-undo { font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:9px; border:1px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; font-family:inherit; margin-left:auto; }
 .tq-auto-undo:hover { border-color:var(--accent); color:var(--accent); }
-.tq-auto-panel { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:12px 14px; }
-.tq-auto-panel h4 { font-size:12px; margin:0 0 8px; color:var(--text); }
-.tq-auto-row { display:flex; align-items:center; gap:10px; padding:5px 0; font-size:12px; color:var(--text2); }
-.tq-auto-row .lbl { min-width:150px; font-weight:600; }
-.tq-auto-row .hint { color:var(--text3); font-size:11px; flex:1; }
-.tq-auto-row select { font-size:11px; padding:3px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text2); font-family:inherit; }
+.tq-auto-panel { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:14px 16px; max-width:760px; }
+.tq-auto-panel h4 { font-size:12.5px; margin:0 0 10px; color:var(--text); }
+.tq-auto-row { display:grid; grid-template-columns:150px 140px 1fr; gap:6px 14px; align-items:center; padding:6px 0; font-size:12px; color:var(--text2); border-top:1px dashed var(--border); }
+.tq-auto-row:first-of-type { border-top:none; }
+.tq-auto-row .lbl { font-weight:600; white-space:nowrap; }
+.tq-auto-row .hint { color:var(--text3); font-size:11px; line-height:1.45; }
+.tq-auto-row select { width:100%; font-size:11.5px; padding:5px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text2); font-family:inherit; }
+@media (max-width:640px) {
+  .tq-auto-row { grid-template-columns:1fr 1fr; }
+  .tq-auto-row .hint { grid-column:1 / -1; }
+}
 
 @media (max-width:1100px) {
   .fu-table { min-width:980px; }
@@ -2957,7 +2945,6 @@ html:not([data-theme="dark"]) .send-cta-bar {
             <div class="fu-progress-track"><div class="fu-progress-fill" id="fuProgressFill"></div></div>
           </div>
 
-          <div class="fu-quick-filters" id="fuQuickFilters" style="display:none"></div>
 
           <div class="fu-table-wrap" id="fuTableWrap">
             <table class="fu-table">
@@ -5321,46 +5308,58 @@ function renderCatBar() {
   if (!bar) return;
   const cats = (replyCounts.categories) || {};
   const keys = Object.keys(TRIAGE_CATS).filter(k => (cats[k] || 0) > 0 || repliesCat === k);
-  if (!keys.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
-  let html = '<span class="tq-suggest-lbl">Auto-detected</span>';
-  keys.forEach(k => {
-    const c = TRIAGE_CATS[k];
-    const n = cats[k] || 0;
-    const on = repliesCat === k;
-    const st = on ? `border-color:${c.color};color:${c.color};background:${c.color}18` : '';
-    html += `<button class="tq-cat-chip${on ? ' active' : ''}" style="${st}" onclick="tqSetCat('${k}')">${c.emoji} ${c.label} <span class="n">${n}</span></button>`;
-  });
-  // Bulk ignore appears only when an "ignore"-recommended category is selected
-  const active = TRIAGE_CATS[repliesCat];
-  if (active && active.action === 'ignore' && (cats[repliesCat] || 0) > 0) {
-    html += `<button class="tq-bulk-btn" onclick="tqBulkIgnore()">✕ Ignore all (${cats[repliesCat]})</button>`;
+  let html = '';
+  if (keys.length) {
+    html += '<span class="tq-suggest-lbl">Auto-detected</span>';
+    keys.forEach(k => {
+      const c = TRIAGE_CATS[k];
+      const n = cats[k] || 0;
+      const on = repliesCat === k;
+      const st = on ? `border-color:${c.color};color:${c.color};background:${c.color}18` : '';
+      html += `<button class="tq-cat-chip${on ? ' active' : ''}" style="${st}" onclick="tqSetCat('${k}')">${c.emoji} ${c.label} <span class="n">${n}</span></button>`;
+    });
+    // Bulk action for the selected category: ignore-recommended → "Ignore all",
+    // followup-recommended → "Follow-up all" (pipeline + configured stage)
+    const active = TRIAGE_CATS[repliesCat];
+    if (active && (cats[repliesCat] || 0) > 0) {
+      if (active.action === 'ignore') {
+        html += `<button class="tq-bulk-btn" onclick="tqBulkAction('ignore')">✕ Ignore all (${cats[repliesCat]})</button>`;
+      } else {
+        html += `<button class="tq-bulk-btn tq-bulk-fu" onclick="tqBulkAction('followup')">⏱ Follow-up all (${cats[repliesCat]})</button>`;
+      }
+    }
   }
+  // Automation toggle stays reachable even when the queue has no detected categories
   html += `<button class="tq-auto-toggle" onclick="tqToggleAutoPanel()"><i class="ph-bold ph-robot"></i> Automation</button>`;
   bar.innerHTML = html;
   bar.style.display = 'flex';
 }
 
-async function tqBulkIgnore() {
+async function tqBulkAction(action) {
   const cat = TRIAGE_CATS[repliesCat];
   if (!cat) return;
   const n = (replyCounts.categories || {})[repliesCat] || 0;
+  const isFu = action === 'followup';
   const ok = await showConfirm(
-    `${n} contact${n > 1 ? 's' : ''} detected as "${cat.label}" will be moved to Ignored. You can undo right after.`,
-    { okText: 'Ignore all', title: `Ignore all ${cat.label}?` }
+    isFu
+      ? `${n} contact${n > 1 ? 's' : ''} detected as "${cat.label}" will be added to Follow-up and moved forward in the pipeline. You can undo right after.`
+      : `${n} contact${n > 1 ? 's' : ''} detected as "${cat.label}" will be moved to Ignored. You can undo right after.`,
+    { okText: isFu ? 'Follow-up all' : 'Ignore all', title: `${isFu ? 'Follow-up' : 'Ignore'} all ${cat.label}?` }
   );
   if (!ok) return;
   try {
     const res = await fetch('/api/replies/bulk-triage', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({category: repliesCat, action: 'ignore'})
+      body: JSON.stringify({category: repliesCat, action})
     });
     const d = await res.json();
     if (!d.ok) { toast(d.error || 'Bulk action failed'); return; }
-    _lastBulk = { category: repliesCat, msg_ids: d.msg_ids || [] };
-    toast(`${d.count} moved to Ignored`);
+    _lastBulk = { category: repliesCat, msg_ids: d.msg_ids || [], action };
+    toast(isFu ? `${d.count} added to Follow-up` : `${d.count} moved to Ignored`);
     repliesCat = '';
     await loadReplies();
     renderAutoStrip();   // show the bulk-undo row immediately
+    if (isFu && typeof loadFollowups === 'function') loadFollowups();
   } catch (e) { toast('Bulk action failed'); }
 }
 
@@ -5402,8 +5401,9 @@ function renderAutoStrip() {
   let html = '';
   if (hasBulk) {
     const c = TRIAGE_CATS[_lastBulk.category] || {label: _lastBulk.category, emoji: '🏷️'};
+    const what = _lastBulk.action === 'followup' ? 'added to Follow-up' : 'moved to Ignored';
     html += `<div class="tq-auto-item" style="border-top:none"><span>${c.emoji}</span>` +
-      `<span class="em">Bulk: ${_lastBulk.msg_ids.length} "${c.label}" moved to Ignored</span>` +
+      `<span class="em">Bulk: ${_lastBulk.msg_ids.length} "${c.label}" ${what}</span>` +
       `<button class="tq-auto-undo" onclick="tqUndoBulk()">↩ Undo</button></div>`;
   }
   if (_autoStripItems.length) {
@@ -5595,40 +5595,6 @@ function tqStatePill(state) {
   return '<span class="tq-state-pill ' + state + '">' + (labels[state] || state.toUpperCase()) + '</span>';
 }
 
-// Reply-filter tag selector (pipeline) for a triage card:
-// auto-detected suggestion chips + colored select + swatch + inline "New filter".
-function tqPipelineTag(reply) {
-  if (!pipelineReplyFilters || !pipelineReplyFilters.length) return '';
-  const cur = reply.reply_filter_key || '';
-  const msgId = esc((reply.msg_id || '').replace(/'/g, "\\'"));
-  const curF = (pipelineReplyFilters || []).find(f => f.key === cur) || null;
-
-  // Auto-detected suggestions (computed server-side), excluding the current tag.
-  const sugg = (reply.suggested_filters || []).filter(s => s.key !== cur);
-  let chips = '';
-  if (sugg.length) {
-    chips = '<div class="tq-suggest"><span class="tq-suggest-lbl">Auto-detected</span>' +
-      sugg.slice(0, 4).map(s =>
-        `<button class="tq-chip" style="background:${esc(s.color)}1f;border-color:${esc(s.color)};color:${esc(s.color)}" ` +
-        `onclick="event.stopPropagation();tqApplyFilter('${msgId}','${esc(s.key)}')" title="Apply ${esc(s.label)}">` +
-        `${esc(s.emoji || '🏷️')} ${esc(s.label)} <span class="tq-chip-pct">${Math.round((s.confidence || 0) * 100)}%</span></button>`
-      ).join('') + '</div>';
-  }
-
-  let opts = '<option value="">＋ Tag reply…</option>';
-  pipelineReplyFilters.forEach(f => {
-    opts += `<option value="${esc(f.key)}" ${f.key === cur ? 'selected' : ''}>${esc(f.emoji || '🏷️')} ${esc(f.label)}${f.auto_advance_to ? ' ↦' : ''}</option>`;
-  });
-  const swatch = curF ? `<span class="tq-pl-swatch" style="background:${esc(curF.color || '#888')}"></span>` : '';
-
-  return chips +
-    `<div class="tq-pl-tag ${cur ? 'tagged' : ''}" onclick="event.stopPropagation()">` +
-      swatch +
-      `<select onchange="tagReplyPipeline('${msgId}', this.value, this)">${opts}</select>` +
-      `<button class="tq-pl-new" onclick="event.stopPropagation();tqNewFilterFor('${msgId}')" title="Create a new filter for this reply">＋ New</button>` +
-    `</div>`;
-}
-
 // Full triage card — 2-column layout
 function tqCard(msgs) {
   const latest = msgs[0];
@@ -5651,8 +5617,7 @@ function tqCard(msgs) {
   const rec = triCat ? triCat.action : '';
   const catBadge = triCat
     ? '<span class="tq-cat-badge" style="border-color:' + triCat.color + ';color:' + triCat.color + ';background:' + triCat.color + '14">' +
-        triCat.emoji + ' ' + triCat.label +
-        (latest.triage_confidence ? ' · ' + Math.round(latest.triage_confidence * 100) + '%' : '') + '</span>'
+        triCat.emoji + ' ' + triCat.label + '</span>'
     : '';
 
   // Right column: show actions only for unprocessed states; otherwise show reset
@@ -5691,7 +5656,6 @@ function tqCard(msgs) {
           '<div class="tq-email">' + esc(emailRaw) + '</div>' +
           '<div class="tq-preview">' + esc(preview) + (preview.length >= 110 ? '…' : '') + '</div>' +
           (route ? '<div class="tq-route"><i class="ph-bold ph-map-pin" style="font-size:10px"></i> ' + esc(route) + '</div>' : '') +
-          tqPipelineTag(latest) +
           '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' + esc(latest.body || '(empty)') + '</div>' +
         '</div>' +
       '</div>' +
@@ -5876,7 +5840,6 @@ let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSp
 let _fuDropdownContactId = null;
 let selectedFuIds = new Set();
 let fuSentFilter = '';            // '' | 'unsent_today' | 'today' | 'yesterday'  (client-side)
-let fuReplyFilterKey = '';        // '' = all | reply-filter key (client-side quick filter)
 let fuSortKey = '';               // '' = default urgency sort | 'next_followup_at' | 'last_activity_at'
 let fuSortDir = 'desc';           // 'asc' | 'desc'
 let _fuInflight = new Set();      // guards against double-click duplicate sends
@@ -5928,52 +5891,7 @@ function fuMatchesFilters(c, ignoreReplyFilter) {
     if (fuSentFilter === 'yesterday' && r !== 'yesterday') return false;
     if (fuSentFilter === 'unsent_today' && r === 'today') return false;
   }
-  if (!ignoreReplyFilter && fuReplyFilterKey && (c.last_reply_filter || '') !== fuReplyFilterKey) return false;
   return true;
-}
-
-// Reply-filter badge (color/emoji/label) for a contact's last tagged reply.
-function _replyFilterMeta(key) {
-  return (pipelineReplyFilters || []).find(f => f.key === key) || null;
-}
-function fuReplyFilterBadge(key, compact) {
-  const f = key && _replyFilterMeta(key);
-  if (!f) return '';
-  const c = f.color || '#888';
-  return `<span class="fu-rf-badge" style="background:${esc(c)}1f;border-color:${esc(c)};color:${esc(c)}" ` +
-    `title="Last reply: ${esc(f.label)}">${esc(f.emoji || '🏷️')}${compact ? '' : ' ' + esc(f.label)}</span>`;
-}
-
-// Quick-filter bar — colored buttons per reply filter, counts from loaded contacts.
-function renderFuQuickFilters() {
-  const box = document.getElementById('fuQuickFilters');
-  if (!box) return;
-  const filters = pipelineReplyFilters || [];
-  if (!filters.length) {
-    fuReplyFilterKey = '';          // avoid a stale filter with no visible control to clear it
-    box.innerHTML = ''; box.style.display = 'none'; return;
-  }
-  box.style.display = '';
-  // Count over contacts matching the other client filters (search/sent) but NOT the
-  // reply-filter itself, so each chip shows how many it *would* match.
-  const base = (fuContacts || []).filter(c => fuMatchesFilters(c, true));
-  const counts = {};
-  base.forEach(c => { const k = c.last_reply_filter || ''; if (k) counts[k] = (counts[k] || 0) + 1; });
-  let html = `<button class="fu-qf ${fuReplyFilterKey === '' ? 'active' : ''}" onclick="setFuReplyFilter('')">All <span class="fu-qf-count">${base.length}</span></button>`;
-  filters.forEach(f => {
-    const c = f.color || '#888';
-    const active = fuReplyFilterKey === f.key;
-    const style = active ? `background:${esc(c)};border-color:${esc(c)};color:#fff`
-                         : `background:${esc(c)}1a;border-color:${esc(c)};color:${esc(c)}`;
-    html += `<button class="fu-qf" style="${style}" onclick="setFuReplyFilter('${esc(f.key)}')">` +
-      `${esc(f.emoji || '🏷️')} ${esc(f.label)} <span class="fu-qf-count">${counts[f.key] || 0}</span></button>`;
-  });
-  box.innerHTML = html;
-}
-function setFuReplyFilter(key) {
-  fuReplyFilterKey = key;
-  renderFuCurrentView();
-  renderFuSelection();
 }
 
 function getVisibleFuContacts() {
@@ -6180,7 +6098,6 @@ function resetFuFilters() {
   fuStateFilter = '';
   fuSpecialFilter = '';
   fuSentFilter = '';
-  fuReplyFilterKey = '';
   fuSortKey = '';
   fuSortDir = 'desc';
   const search = document.getElementById('fuSearch');
@@ -6369,7 +6286,6 @@ function renderFuContacts() {
       <td class="fu-contact-cell">
         <div class="fu-contact-primary">${company}</div>
         <div class="fu-contact-secondary">${email}</div>
-        ${c.last_reply_filter ? `<div class="fu-contact-rf">${fuReplyFilterBadge(c.last_reply_filter)}</div>` : ''}
       </td>
       <td>
         <div class="fu-meta-stack">
@@ -6444,7 +6360,6 @@ function applyFuViewVisibility() {
 }
 
 function renderFuCurrentView() {
-  renderFuQuickFilters();
   if (fuViewMode === 'kanban') renderFuKanban();
   else renderFuContacts();
 }
@@ -6505,7 +6420,7 @@ function fuKanbanCard(c) {
     <button class="fu-kanban-card-menu" onclick="event.stopPropagation();toggleFuDropdown(event,'${c.id}')" title="Actions">⋯</button>
     <div class="fu-kanban-card-title">${company}</div>
     <div class="fu-kanban-card-email">${email}</div>
-    <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}${fuReplyFilterBadge(c.last_reply_filter, true)}</div>
+    <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
     <div class="fu-kanban-card-foot">⏰ ${lastAct}${route}</div>
   </div>`;
 }
@@ -6676,98 +6591,6 @@ async function savePipelineConfig() {
       await loadPipelineStats(); renderFuKanban();
     }
   } catch(e) { toast('Error: ' + e.message, true); }
-}
-
-// Tag a reply with a pipeline filter (Replies triage) → optional auto-advance.
-async function tagReplyPipeline(msgId, key, selectEl) {
-  try {
-    const res = await fetch('/api/replies/pipeline-tag', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ msg_id: msgId, filter_key: key })
-    });
-    const data = await res.json();
-    if (!res.ok) { toast('Error: ' + (data.error || 'tag failed'), true); return false; }
-    // reflect locally so chips/swatch refresh without a server round-trip
-    const rep = (allReplies || []).find(x => x.msg_id === msgId);
-    if (rep) rep.reply_filter_key = key || '';
-    // Re-render only the affected contact card (not the whole list) so other cards'
-    // expanded bodies and the scroll position are preserved.
-    const grp = (replyGroups || []).find(g => g.some(r => r.msg_id === msgId));
-    const cardEl = grp && document.getElementById('tqc_' + (grp[0].email || '').replace(/[^a-zA-Z0-9]/g, '_'));
-    if (cardEl) cardEl.outerHTML = tqCard(grp);
-    else renderReplies();
-    if (data.advanced) toast('Tagged & moved to ' + (data.stage_name || ('stage ' + data.pipeline_stage)));
-    else toast(key ? 'Reply tagged' : 'Tag cleared');
-    return true;
-  } catch(e) { toast('Error: ' + e.message, true); return false; }
-}
-
-// Apply a suggested/selected filter to a reply (used by auto-detect chips).
-async function tqApplyFilter(msgId, key) {
-  await tagReplyPipeline(msgId, key, null);
-}
-
-// Inline "create a filter for this reply": reuses the existing pipeline-config PUT
-// (no new endpoint) — sends the full filter list plus the new one, returns its key.
-async function createReplyFilterInline(label, color, emoji) {
-  const beforeKeys = new Set((pipelineReplyFilters || []).map(f => f.key));
-  const reply_filters = (pipelineReplyFilters || []).map(f => ({
-    key: f.key, label: f.label, color: f.color, emoji: f.emoji,
-    auto_advance_to: f.auto_advance_to,
-    keywords: (pipelineFilterKeywords[f.key]?.keywords) || [],
-  }));
-  reply_filters.push({ key: '', label, color, emoji: emoji || '🏷️', auto_advance_to: null, keywords: [] });
-  try {
-    const res = await fetch('/api/followups/pipeline-config', {
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ reply_filters })
-    });
-    const data = await res.json();
-    if (!res.ok) { toast('Error: ' + (data.error || 'create failed'), true); return null; }
-    pipelineReplyFilters = data.reply_filters || [];
-    pipelineFilterKeywords = data.filter_keywords || {};
-    const created = pipelineReplyFilters.find(f => !beforeKeys.has(f.key));
-    return created ? created.key : null;
-  } catch(e) { toast('Error: ' + e.message, true); return null; }
-}
-
-async function tqNewFilterFor(msgId) {
-  const r = await promptNewFilter();
-  if (!r) return;
-  const key = await createReplyFilterInline(r.label, r.color, r.emoji);
-  if (key) await tqApplyFilter(msgId, key);
-}
-
-// Small self-contained modal: name + color + emoji → {label,color,emoji} | null.
-function promptNewFilter() {
-  return new Promise(resolve => {
-    const ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
-    ov.innerHTML =
-      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;width:300px;box-shadow:0 20px 50px rgba(0,0,0,.45)">' +
-        '<div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:12px">New reply filter</div>' +
-        '<input id="_nfName" placeholder="Filter name" maxlength="120" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--text);margin-bottom:10px">' +
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
-          '<label style="font-size:12px;color:var(--text2)">Color</label>' +
-          '<input id="_nfColor" type="color" value="#FF1493" style="width:46px;height:34px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;padding:2px">' +
-          '<input id="_nfEmoji" placeholder="🏷️" maxlength="4" style="width:52px;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 4px;font-size:13px;color:var(--text)">' +
-        '</div>' +
-        '<div style="display:flex;gap:8px">' +
-          '<button id="_nfOk" class="btn btn-primary" style="flex:1">Create</button>' +
-          '<button id="_nfCancel" class="btn btn-secondary" style="flex:1">Cancel</button>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(ov);
-    const close = v => { ov.remove(); resolve(v); };
-    ov.querySelector('#_nfOk').onclick = () => {
-      const label = ov.querySelector('#_nfName').value.trim();
-      if (!label) { ov.querySelector('#_nfName').focus(); return; }
-      close({ label, color: ov.querySelector('#_nfColor').value, emoji: ov.querySelector('#_nfEmoji').value.trim() });
-    };
-    ov.querySelector('#_nfCancel').onclick = () => close(null);
-    ov.addEventListener('click', e => { if (e.target === ov) close(null); });
-    setTimeout(() => ov.querySelector('#_nfName').focus(), 30);
-  });
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────

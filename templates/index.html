@@ -1549,6 +1549,13 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-tabs-compact { margin-bottom:0; }
 .fu-tabs-compact .fu-tab { padding:7px 14px; font-weight:700; }
 .fu-tabs-compact .fu-tab.active { background:var(--accent); color:#fff; box-shadow:none; }
+.fu-quick-filters { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.fu-qf { font-size:11px; font-weight:600; padding:5px 11px; border-radius:16px; border:1px solid var(--border); background:var(--surface); color:var(--text3); cursor:pointer; font-family:inherit; transition:filter .15s; }
+.fu-qf:hover { filter:brightness(1.08); }
+.fu-qf.active { background:var(--bg); color:var(--text); border-color:var(--accent); }
+.fu-qf-count { opacity:.7; font-weight:700; margin-left:3px; }
+.fu-contact-rf { margin-top:4px; }
+.fu-rf-badge { display:inline-block; font-size:10px; font-weight:600; padding:2px 7px; border-radius:11px; border:1px solid; white-space:nowrap; line-height:1.5; }
 .fu-queue-shell { display:flex; flex-direction:column; gap:14px; }
 .fu-toolbar {
   display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;
@@ -1698,13 +1705,59 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .pl-row input[type=color] { width:36px; height:34px; padding:2px; border:1px solid var(--border); border-radius:7px; background:var(--surface2); cursor:pointer; flex:0 0 auto; }
 .pl-frow select.pl-filter-adv { width:auto; flex:0 0 auto; min-width:160px; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:7px 8px; font-size:12px; color:var(--text); font-family:inherit; }
 .pl-row input:focus, .pl-frow input:focus, .pl-frow select:focus { outline:none; border-color:var(--accent); }
+.pl-frow { flex-wrap:wrap; }
+.pl-frow input.pl-filter-color { flex:0 0 auto; width:38px; height:34px; padding:2px; cursor:pointer; background:var(--surface2); border:1px solid var(--border); border-radius:7px; }
+.pl-frow input.pl-filter-emoji { flex:0 0 auto; width:46px; text-align:center; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:7px 4px; font-size:13px; color:var(--text); }
+.pl-frow input.pl-filter-kw { flex:1 1 100%; background:var(--surface); border:1px dashed var(--border); border-radius:7px; padding:6px 10px; font-size:12px; color:var(--text2); font-family:inherit; }
+.pl-badge { flex:0 0 auto; font-size:9px; font-weight:700; letter-spacing:.04em; padding:3px 6px; border-radius:5px; }
+.pl-badge-custom { background:rgba(76,108,245,.16); color:#4c6cf5; }
+.pl-badge-builtin { background:var(--surface2); color:var(--text3); }
+.pl-row-del-spacer { flex:0 0 auto; width:28px; text-align:center; opacity:.5; font-size:12px; cursor:help; }
 .pl-row-del { border:none; background:var(--surface2); color:var(--text3); width:30px; height:30px; border-radius:7px; cursor:pointer; font-size:13px; flex-shrink:0; }
 .pl-row-del:hover { background:var(--red-dim); color:var(--red); }
 /* Reply-filter tag select on triage cards */
-.tq-pl-tag { margin-top:7px; }
+.tq-pl-tag { margin-top:7px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .tq-pl-tag select { font-size:11px; padding:3px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-family:inherit; max-width:100%; }
 .tq-pl-tag select:focus { outline:none; border-color:var(--accent); }
 .tq-pl-tag.tagged select { border-color:var(--accent); color:var(--accent); }
+.tq-pl-swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto; box-shadow:0 0 0 1px var(--border); }
+.tq-pl-new { font-size:11px; padding:3px 7px; border-radius:6px; border:1px dashed var(--border); background:transparent; color:var(--text3); cursor:pointer; font-family:inherit; }
+.tq-pl-new:hover { border-color:var(--accent); color:var(--accent); }
+.tq-suggest { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:7px; }
+.tq-suggest-lbl { font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); }
+.tq-chip { font-size:10px; font-weight:600; padding:3px 7px; border-radius:11px; border:1px solid; cursor:pointer; font-family:inherit; line-height:1.4; }
+.tq-chip:hover { filter:brightness(1.1); }
+.tq-chip-pct { opacity:.7; font-weight:700; margin-left:2px; }
+
+/* ── Semi-automatic triage: category chips, badges, auto strip, automation panel ── */
+.tq-cat-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.tq-cat-chip { font-size:11px; font-weight:600; padding:5px 11px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:5px; line-height:1.4; }
+.tq-cat-chip:hover { filter:brightness(1.08); }
+.tq-cat-chip .n { font-weight:800; opacity:.8; }
+.tq-bulk-btn { font-size:11px; font-weight:700; padding:5px 12px; border-radius:14px; border:1.5px solid #ef4444; background:#ef44441a; color:#ef4444; cursor:pointer; font-family:inherit; }
+.tq-bulk-btn:hover { background:#ef444433; }
+.tq-auto-toggle { font-size:11px; font-weight:600; padding:5px 11px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; margin-left:auto; }
+.tq-auto-toggle:hover { border-color:var(--accent); color:var(--accent); }
+.tq-cat-badge { font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:9px; border:1px solid; white-space:nowrap; }
+.tq-card.tq-cat-negative     { border-left:3px solid #ef4444; }
+.tq-card.tq-cat-rate_request { border-left:3px solid #f59f00; }
+.tq-card.tq-cat-gave_info    { border-left:3px solid #37b24c; }
+.tq-card.tq-cat-auto_reply   { border-left:3px solid #868e96; }
+.tq-action.tq-emph { box-shadow:0 0 0 1.5px currentColor inset; font-weight:700; }
+.tq-auto-strip { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:8px 12px; font-size:12px; }
+.tq-auto-strip-head { display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text2); font-weight:600; }
+.tq-auto-strip-head .grow { flex:1; }
+.tq-auto-item { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px dashed var(--border); color:var(--text2); }
+.tq-auto-item .em { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tq-auto-item .act { color:var(--text3); font-size:11px; white-space:nowrap; }
+.tq-auto-undo { font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:9px; border:1px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; font-family:inherit; margin-left:auto; }
+.tq-auto-undo:hover { border-color:var(--accent); color:var(--accent); }
+.tq-auto-panel { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:12px 14px; }
+.tq-auto-panel h4 { font-size:12px; margin:0 0 8px; color:var(--text); }
+.tq-auto-row { display:flex; align-items:center; gap:10px; padding:5px 0; font-size:12px; color:var(--text2); }
+.tq-auto-row .lbl { min-width:150px; font-weight:600; }
+.tq-auto-row .hint { color:var(--text3); font-size:11px; flex:1; }
+.tq-auto-row select { font-size:11px; padding:3px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text2); font-family:inherit; }
 
 @media (max-width:1100px) {
   .fu-table { min-width:980px; }
@@ -2801,6 +2854,11 @@ html:not([data-theme="dark"]) .send-cta-bar {
         </div>
       </div>
 
+      <!-- Auto-detected triage categories + automation settings -->
+      <div class="tq-cat-bar" id="tqCatBar" style="display:none"></div>
+      <div class="tq-auto-panel" id="tqAutoPanel" style="display:none"></div>
+      <div class="tq-auto-strip" id="tqAutoStrip" style="display:none"></div>
+
       <div id="repliesList"></div>
       <div id="repliesPager" style="display:flex;justify-content:center;align-items:center;gap:10px;margin-top:14px"></div>
     </div>
@@ -2898,6 +2956,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
             <div class="fu-progress-track"><div class="fu-progress-fill" id="fuProgressFill"></div></div>
           </div>
+
+          <div class="fu-quick-filters" id="fuQuickFilters" style="display:none"></div>
 
           <div class="fu-table-wrap" id="fuTableWrap">
             <table class="fu-table">
@@ -3527,9 +3587,9 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <div id="pipelineStagesEditor" class="pl-cfg-list"></div>
           <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineStageRow()">+ Add Stage</button>
 
-          <div class="pl-cfg-subhead" style="margin-top:18px">Reply filters <span class="pl-cfg-hint">tag a reply → optional auto-advance</span></div>
+          <div class="pl-cfg-subhead" style="margin-top:18px">Reply filters <span class="pl-cfg-hint">color · emoji · label · auto-advance · auto-detect keywords. Built-in filters can't be deleted.</span></div>
           <div id="pipelineFiltersEditor" class="pl-cfg-list"></div>
-          <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineFilterRow()">+ Add Filter</button>
+          <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineFilterRow()">+ Add Custom Filter</button>
 
           <div style="margin-top:16px">
             <button class="btn btn-primary" onclick="savePipelineConfig()">Save Pipeline Config</button>
@@ -5197,8 +5257,21 @@ async function saveSettings() {
 let allReplies = [], replyGroups = [], replyCounts = {}, repliesFilter = 'all', repliesTimer = null, repliesPage = 1, repliesPages = 0, repliesSearchTimer = null;
 const REPLIES_PER_PAGE = 25;
 
+// ── Semi-automatic triage state ──
+let repliesCat = '';                 // active category chip ('' = all)
+let _autoStripItems = [];            // recent auto-processed replies (undo strip)
+let _autoStripOpen = false;
+let _lastBulk = null;                // {category, msg_ids} of the last bulk-ignore (for undo)
+const TRIAGE_CATS = {
+  negative:     { label:'Negative',     emoji:'🚫', color:'#ef4444', action:'ignore'   },
+  rate_request: { label:'Rate request', emoji:'💰', color:'#f59f00', action:'followup' },
+  gave_info:    { label:'Gave info',    emoji:'📦', color:'#37b24c', action:'followup' },
+  auto_reply:   { label:'Auto-reply',   emoji:'🤖', color:'#868e96', action:'ignore'   },
+};
+
 async function initReplies() {
   await loadReplies();
+  loadAutoStrip();   // strip only changes on Check Gmail / bulk / undo — not per page click
   if (!repliesTimer) repliesTimer = setInterval(() => fetchReplies(true), 120000);
 }
 async function loadReplies() {
@@ -5210,6 +5283,7 @@ async function loadReplies() {
     view: repliesFilter,
   });
   if (search) params.set('search', search);
+  if (repliesCat) params.set('cat', repliesCat);
   const data = await (await fetch('/api/replies?' + params.toString())).json();
   replyGroups = data.items || [];
   replyCounts = data.counts || {};
@@ -5217,6 +5291,7 @@ async function loadReplies() {
   repliesPages = data.pages || 0;
   allReplies = replyGroups.flat();
   renderReplies();
+  renderCatBar();
   updateBadge();
 }
 function updateBadge() {
@@ -5231,6 +5306,180 @@ function setFilter(f) {
   const tab = document.getElementById('tqf-' + f);
   if (tab) tab.classList.add('active');
   loadReplies();
+}
+
+// ── Semi-automatic triage: category chips + bulk + auto strip + settings ──────
+
+function tqSetCat(k) {
+  repliesCat = (repliesCat === k) ? '' : k;
+  repliesPage = 1;
+  loadReplies();
+}
+
+function renderCatBar() {
+  const bar = document.getElementById('tqCatBar');
+  if (!bar) return;
+  const cats = (replyCounts.categories) || {};
+  const keys = Object.keys(TRIAGE_CATS).filter(k => (cats[k] || 0) > 0 || repliesCat === k);
+  if (!keys.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  let html = '<span class="tq-suggest-lbl">Auto-detected</span>';
+  keys.forEach(k => {
+    const c = TRIAGE_CATS[k];
+    const n = cats[k] || 0;
+    const on = repliesCat === k;
+    const st = on ? `border-color:${c.color};color:${c.color};background:${c.color}18` : '';
+    html += `<button class="tq-cat-chip${on ? ' active' : ''}" style="${st}" onclick="tqSetCat('${k}')">${c.emoji} ${c.label} <span class="n">${n}</span></button>`;
+  });
+  // Bulk ignore appears only when an "ignore"-recommended category is selected
+  const active = TRIAGE_CATS[repliesCat];
+  if (active && active.action === 'ignore' && (cats[repliesCat] || 0) > 0) {
+    html += `<button class="tq-bulk-btn" onclick="tqBulkIgnore()">✕ Ignore all (${cats[repliesCat]})</button>`;
+  }
+  html += `<button class="tq-auto-toggle" onclick="tqToggleAutoPanel()"><i class="ph-bold ph-robot"></i> Automation</button>`;
+  bar.innerHTML = html;
+  bar.style.display = 'flex';
+}
+
+async function tqBulkIgnore() {
+  const cat = TRIAGE_CATS[repliesCat];
+  if (!cat) return;
+  const n = (replyCounts.categories || {})[repliesCat] || 0;
+  const ok = await showConfirm(
+    `${n} contact${n > 1 ? 's' : ''} detected as "${cat.label}" will be moved to Ignored. You can undo right after.`,
+    { okText: 'Ignore all', title: `Ignore all ${cat.label}?` }
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch('/api/replies/bulk-triage', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({category: repliesCat, action: 'ignore'})
+    });
+    const d = await res.json();
+    if (!d.ok) { toast(d.error || 'Bulk action failed'); return; }
+    _lastBulk = { category: repliesCat, msg_ids: d.msg_ids || [] };
+    toast(`${d.count} moved to Ignored`);
+    repliesCat = '';
+    await loadReplies();
+    renderAutoStrip();   // show the bulk-undo row immediately
+  } catch (e) { toast('Bulk action failed'); }
+}
+
+async function tqUndoBulk() {
+  if (!_lastBulk || !_lastBulk.msg_ids.length) return;
+  try {
+    const res = await fetch('/api/replies/bulk-triage', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({msg_ids: _lastBulk.msg_ids, action: 'restore'})
+    });
+    const d = await res.json();
+    if (d.ok) { toast(`${d.count} restored to New`); _lastBulk = null; await loadReplies(); renderAutoStrip(); }
+    else toast(d.error || 'Undo failed');
+  } catch (e) { toast('Undo failed'); }
+}
+
+async function loadAutoStrip() {
+  try {
+    const d = await (await fetch('/api/replies/auto-processed')).json();
+    _autoStripItems = d.items || [];
+  } catch (e) { _autoStripItems = []; }
+  renderAutoStrip();
+}
+
+function tqAutoActionLabel(it) {
+  if (it.action !== 'followup') return '→ Ignored';
+  // Resolve the actual configured stage (workspaces can rename/repoint stages)
+  const f = (pipelineReplyFilters || []).find(x => x.key === it.filter_key);
+  const sid = f && f.auto_advance_to;
+  const st = sid ? (pipelineStages || []).find(s => s.id === sid) : null;
+  return '→ pipeline' + (st ? ' · ' + esc(st.name) : '');
+}
+
+function renderAutoStrip() {
+  const el = document.getElementById('tqAutoStrip');
+  if (!el) return;
+  const hasBulk = _lastBulk && _lastBulk.msg_ids.length;
+  if (!_autoStripItems.length && !hasBulk) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  let html = '';
+  if (hasBulk) {
+    const c = TRIAGE_CATS[_lastBulk.category] || {label: _lastBulk.category, emoji: '🏷️'};
+    html += `<div class="tq-auto-item" style="border-top:none"><span>${c.emoji}</span>` +
+      `<span class="em">Bulk: ${_lastBulk.msg_ids.length} "${c.label}" moved to Ignored</span>` +
+      `<button class="tq-auto-undo" onclick="tqUndoBulk()">↩ Undo</button></div>`;
+  }
+  if (_autoStripItems.length) {
+    html += `<div class="tq-auto-strip-head" onclick="_autoStripOpen=!_autoStripOpen;renderAutoStrip()">` +
+      `<span>🤖 Auto-processed <b>${_autoStripItems.length}</b> repl${_autoStripItems.length > 1 ? 'ies' : 'y'} (7 days)</span>` +
+      `<span class="grow"></span><span>${_autoStripOpen ? '▴ Hide' : '▾ Show'}</span></div>`;
+    if (_autoStripOpen) {
+      _autoStripItems.forEach((it, i) => {
+        const c = TRIAGE_CATS[it.category] || {emoji: '🏷️'};
+        html += `<div class="tq-auto-item"><span>${c.emoji}</span>` +
+          `<span class="em" title="${esc(it.subject)}">${esc(it.email)}</span>` +
+          `<span class="act">${tqAutoActionLabel(it)} · ${esc(it.received_at)}</span>` +
+          `<button class="tq-auto-undo" onclick="tqUndoAutoIdx(${i})">↩ Undo</button></div>`;
+      });
+    }
+  }
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+async function tqUndoAutoIdx(i) {
+  const it = _autoStripItems[i];
+  if (!it) return;
+  try {
+    const res = await fetch('/api/replies/undo-auto', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({msg_id: it.msg_id})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast('Restored to New' + (d.contact_removed ? ' — pipeline contact removed' : ''));
+      await loadReplies();
+      loadAutoStrip();
+      if (typeof loadFollowups === 'function') loadFollowups();
+    } else toast(d.error || 'Undo failed');
+  } catch (e) { toast('Undo failed'); }
+}
+
+// Automation settings panel: per-category Off / Suggest / Auto
+const TRIAGE_MODE_HINTS = {
+  negative:     'Auto: DNU / opt-out replies are moved to Ignored on arrival (never auto-blocked)',
+  gave_info:    'Auto: contact is created in the pipeline and advanced to the filter\'s configured stage',
+  rate_request: 'Auto: rate asks go to the pipeline (configured stage) with a 💰 tag',
+  auto_reply:   'Auto: out-of-office / bounce noise is moved to Ignored on arrival',
+};
+
+function tqToggleAutoPanel() {
+  const el = document.getElementById('tqAutoPanel');
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  const modes = pipelineTriageModes || {};
+  let html = '<h4>🤖 Triage automation — what happens when a category is detected</h4>';
+  Object.keys(TRIAGE_CATS).forEach(k => {
+    const c = TRIAGE_CATS[k];
+    const cur = modes[k] || 'auto';
+    html += `<div class="tq-auto-row"><span class="lbl">${c.emoji} ${c.label}</span>` +
+      `<select onchange="tqSetTriageMode('${k}', this.value)">` +
+      ['off', 'suggest', 'auto'].map(m =>
+        `<option value="${m}" ${m === cur ? 'selected' : ''}>${m === 'off' ? 'Off' : m === 'suggest' ? 'Suggest only' : 'Auto'}</option>`).join('') +
+      `</select><span class="hint">${TRIAGE_MODE_HINTS[k] || ''}</span></div>`;
+  });
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+async function tqSetTriageMode(cat, val) {
+  pipelineTriageModes = Object.assign({}, pipelineTriageModes, {[cat]: val});
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {
+      method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({triage_modes: {[cat]: val}})
+    });
+    const d = await res.json();
+    if (d.ok) { pipelineTriageModes = d.triage_modes || pipelineTriageModes; toast('Automation updated'); }
+    else toast(d.error || 'Save failed');
+  } catch (e) { toast('Save failed'); }
 }
 function queueRepliesRefresh() {
   clearTimeout(repliesSearchTimer);
@@ -5249,7 +5498,14 @@ async function fetchReplies(silent) {
     else {
       if(sub) sub.textContent = data.new > 0 ? `${data.new} new reply${data.new>1?'s':''}` : 'Up to date — Lead triage queue';
       if (data.new > 0) toast(data.new + ' new repl' + (data.new>1?'ies':'y') + '!');
+      if ((data.auto_ignored || 0) + (data.auto_followup || 0) > 0) {
+        const parts = [];
+        if (data.auto_ignored) parts.push(data.auto_ignored + ' auto-ignored');
+        if (data.auto_followup) parts.push(data.auto_followup + ' → pipeline');
+        toast('🤖 ' + parts.join(', '));
+      }
       await loadReplies();
+      loadAutoStrip();
     }
   } catch(e) { if(sub) sub.textContent = 'Error checking Gmail'; }
   btn.disabled = false;
@@ -5339,17 +5595,38 @@ function tqStatePill(state) {
   return '<span class="tq-state-pill ' + state + '">' + (labels[state] || state.toUpperCase()) + '</span>';
 }
 
-// Reply-filter tag selector (pipeline) for a triage card
+// Reply-filter tag selector (pipeline) for a triage card:
+// auto-detected suggestion chips + colored select + swatch + inline "New filter".
 function tqPipelineTag(reply) {
   if (!pipelineReplyFilters || !pipelineReplyFilters.length) return '';
   const cur = reply.reply_filter_key || '';
   const msgId = esc((reply.msg_id || '').replace(/'/g, "\\'"));
+  const curF = (pipelineReplyFilters || []).find(f => f.key === cur) || null;
+
+  // Auto-detected suggestions (computed server-side), excluding the current tag.
+  const sugg = (reply.suggested_filters || []).filter(s => s.key !== cur);
+  let chips = '';
+  if (sugg.length) {
+    chips = '<div class="tq-suggest"><span class="tq-suggest-lbl">Auto-detected</span>' +
+      sugg.slice(0, 4).map(s =>
+        `<button class="tq-chip" style="background:${esc(s.color)}1f;border-color:${esc(s.color)};color:${esc(s.color)}" ` +
+        `onclick="event.stopPropagation();tqApplyFilter('${msgId}','${esc(s.key)}')" title="Apply ${esc(s.label)}">` +
+        `${esc(s.emoji || '🏷️')} ${esc(s.label)} <span class="tq-chip-pct">${Math.round((s.confidence || 0) * 100)}%</span></button>`
+      ).join('') + '</div>';
+  }
+
   let opts = '<option value="">＋ Tag reply…</option>';
   pipelineReplyFilters.forEach(f => {
-    opts += `<option value="${esc(f.key)}" ${f.key === cur ? 'selected' : ''}>${esc(f.label)}${f.auto_advance_to ? ' ↦' : ''}</option>`;
+    opts += `<option value="${esc(f.key)}" ${f.key === cur ? 'selected' : ''}>${esc(f.emoji || '🏷️')} ${esc(f.label)}${f.auto_advance_to ? ' ↦' : ''}</option>`;
   });
-  return `<div class="tq-pl-tag ${cur ? 'tagged' : ''}" onclick="event.stopPropagation()">` +
-    `<select onchange="tagReplyPipeline('${msgId}', this.value, this)">${opts}</select></div>`;
+  const swatch = curF ? `<span class="tq-pl-swatch" style="background:${esc(curF.color || '#888')}"></span>` : '';
+
+  return chips +
+    `<div class="tq-pl-tag ${cur ? 'tagged' : ''}" onclick="event.stopPropagation()">` +
+      swatch +
+      `<select onchange="tagReplyPipeline('${msgId}', this.value, this)">${opts}</select>` +
+      `<button class="tq-pl-new" onclick="event.stopPropagation();tqNewFilterFor('${msgId}')" title="Create a new filter for this reply">＋ New</button>` +
+    `</div>`;
 }
 
 // Full triage card — 2-column layout
@@ -5368,13 +5645,23 @@ function tqCard(msgs) {
   const cardId   = 'tqc_' + emailRaw.replace(/[^a-zA-Z0-9]/g,'_');
   const expandId = 'tqexp_' + emailRaw.replace(/[^a-zA-Z0-9]/g,'_');
 
+  // Semi-automatic triage: detected category → colored badge + emphasized
+  // recommended action button (ignore for negative/auto-reply, FU for info/rate)
+  const triCat = TRIAGE_CATS[latest.triage_category] || null;
+  const rec = triCat ? triCat.action : '';
+  const catBadge = triCat
+    ? '<span class="tq-cat-badge" style="border-color:' + triCat.color + ';color:' + triCat.color + ';background:' + triCat.color + '14">' +
+        triCat.emoji + ' ' + triCat.label +
+        (latest.triage_confidence ? ' · ' + Math.round(latest.triage_confidence * 100) + '%' : '') + '</span>'
+    : '';
+
   // Right column: show actions only for unprocessed states; otherwise show reset
   const showActions = (state === 'new' || state === 'viewed');
   const rightHtml = showActions
     ? '<div class="tq-card-right" onclick="event.stopPropagation()">' +
-        '<button class="tq-action tq-action-fu"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
+        '<button class="tq-action tq-action-fu' + (rec === 'followup' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
           '<i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-action-key">F</span></button>' +
-        '<button class="tq-action tq-action-no"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
+        '<button class="tq-action tq-action-no' + (rec === 'ignore' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
           '<i class="ph-bold ph-x"></i> Ignore <span class="tq-action-key">X</span></button>' +
         '<button class="tq-action tq-action-block" onclick="markContactStop(\'' + emailEsc + '\')" title="Block + Stop List [B]">' +
           '<i class="ph-bold ph-prohibit"></i> Block <span class="tq-action-key">B</span></button>' +
@@ -5388,7 +5675,7 @@ function tqCard(msgs) {
   const dotHtml = (state === 'new' || state === 'viewed' || state === 'follow_up')
     ? '<span class="tq-avatar-dot ' + state + '"></span>' : '';
 
-  return '<div class="tq-card state-' + state + '" id="' + cardId + '">' +
+  return '<div class="tq-card state-' + state + (triCat ? ' tq-cat-' + latest.triage_category : '') + '" id="' + cardId + '">' +
     '<div class="tq-card-inner">' +
       // Left content (click = expand)
       '<div class="tq-card-left" onclick="tqToggleExpand(\'' + expandId + '\')">' +
@@ -5396,6 +5683,7 @@ function tqCard(msgs) {
         '<div class="tq-card-content">' +
           '<div class="tq-card-meta">' +
             tqStatePill(state) +
+            catBadge +
             '<span class="tq-reply-badge"><i class="ph-bold ph-chat-dots" style="font-size:10px"></i> ' + replyCount + '</span>' +
             '<span class="tq-time">' + time + '</span>' +
           '</div>' +
@@ -5430,6 +5718,7 @@ function tqCompactRow(msgs) {
       '<div class="tq-compact-email">' + esc(emailRaw) + '</div>' +
     '</div>' +
     '<span class="tq-compact-icon">' + stateIcon + '</span>' +
+    (latest.auto_processed ? '<span title="Auto-processed by triage">🤖</span>' : '') +
     '<span class="tq-compact-time">' + time + '</span>' +
     '<button class="tq-compact-reset" onclick="markContact(\'' + emailEsc + '\',\'new\')" title="Move back to queue"><i class="ph-bold ph-arrow-counter-clockwise"></i></button>' +
   '</div>';
@@ -5587,13 +5876,16 @@ let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSp
 let _fuDropdownContactId = null;
 let selectedFuIds = new Set();
 let fuSentFilter = '';            // '' | 'unsent_today' | 'today' | 'yesterday'  (client-side)
+let fuReplyFilterKey = '';        // '' = all | reply-filter key (client-side quick filter)
 let fuSortKey = '';               // '' = default urgency sort | 'next_followup_at' | 'last_activity_at'
 let fuSortDir = 'desc';           // 'asc' | 'desc'
 let _fuInflight = new Set();      // guards against double-click duplicate sends
 // ── Kanban / pipeline (shares fuContacts with the table) ──
 let fuViewMode = 'table';         // 'table' | 'kanban'
 let pipelineStages = [];          // [{id,name,color}, ...]
-let pipelineReplyFilters = [];
+let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_advance_to}, ...]
+let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
+let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -5623,7 +5915,7 @@ function fuSentRecency(iso) {
 
 // Client-side filters (search box + sent-status dropdown) applied on top of the
 // server-side state/stage/special filters.
-function fuMatchesFilters(c) {
+function fuMatchesFilters(c, ignoreReplyFilter) {
   const search = (document.getElementById('fuSearch')?.value||'').toLowerCase();
   if (search && !(
     (c.contact_email||'').toLowerCase().includes(search) ||
@@ -5636,7 +5928,52 @@ function fuMatchesFilters(c) {
     if (fuSentFilter === 'yesterday' && r !== 'yesterday') return false;
     if (fuSentFilter === 'unsent_today' && r === 'today') return false;
   }
+  if (!ignoreReplyFilter && fuReplyFilterKey && (c.last_reply_filter || '') !== fuReplyFilterKey) return false;
   return true;
+}
+
+// Reply-filter badge (color/emoji/label) for a contact's last tagged reply.
+function _replyFilterMeta(key) {
+  return (pipelineReplyFilters || []).find(f => f.key === key) || null;
+}
+function fuReplyFilterBadge(key, compact) {
+  const f = key && _replyFilterMeta(key);
+  if (!f) return '';
+  const c = f.color || '#888';
+  return `<span class="fu-rf-badge" style="background:${esc(c)}1f;border-color:${esc(c)};color:${esc(c)}" ` +
+    `title="Last reply: ${esc(f.label)}">${esc(f.emoji || '🏷️')}${compact ? '' : ' ' + esc(f.label)}</span>`;
+}
+
+// Quick-filter bar — colored buttons per reply filter, counts from loaded contacts.
+function renderFuQuickFilters() {
+  const box = document.getElementById('fuQuickFilters');
+  if (!box) return;
+  const filters = pipelineReplyFilters || [];
+  if (!filters.length) {
+    fuReplyFilterKey = '';          // avoid a stale filter with no visible control to clear it
+    box.innerHTML = ''; box.style.display = 'none'; return;
+  }
+  box.style.display = '';
+  // Count over contacts matching the other client filters (search/sent) but NOT the
+  // reply-filter itself, so each chip shows how many it *would* match.
+  const base = (fuContacts || []).filter(c => fuMatchesFilters(c, true));
+  const counts = {};
+  base.forEach(c => { const k = c.last_reply_filter || ''; if (k) counts[k] = (counts[k] || 0) + 1; });
+  let html = `<button class="fu-qf ${fuReplyFilterKey === '' ? 'active' : ''}" onclick="setFuReplyFilter('')">All <span class="fu-qf-count">${base.length}</span></button>`;
+  filters.forEach(f => {
+    const c = f.color || '#888';
+    const active = fuReplyFilterKey === f.key;
+    const style = active ? `background:${esc(c)};border-color:${esc(c)};color:#fff`
+                         : `background:${esc(c)}1a;border-color:${esc(c)};color:${esc(c)}`;
+    html += `<button class="fu-qf" style="${style}" onclick="setFuReplyFilter('${esc(f.key)}')">` +
+      `${esc(f.emoji || '🏷️')} ${esc(f.label)} <span class="fu-qf-count">${counts[f.key] || 0}</span></button>`;
+  });
+  box.innerHTML = html;
+}
+function setFuReplyFilter(key) {
+  fuReplyFilterKey = key;
+  renderFuCurrentView();
+  renderFuSelection();
 }
 
 function getVisibleFuContacts() {
@@ -5843,6 +6180,7 @@ function resetFuFilters() {
   fuStateFilter = '';
   fuSpecialFilter = '';
   fuSentFilter = '';
+  fuReplyFilterKey = '';
   fuSortKey = '';
   fuSortDir = 'desc';
   const search = document.getElementById('fuSearch');
@@ -6031,6 +6369,7 @@ function renderFuContacts() {
       <td class="fu-contact-cell">
         <div class="fu-contact-primary">${company}</div>
         <div class="fu-contact-secondary">${email}</div>
+        ${c.last_reply_filter ? `<div class="fu-contact-rf">${fuReplyFilterBadge(c.last_reply_filter)}</div>` : ''}
       </td>
       <td>
         <div class="fu-meta-stack">
@@ -6074,6 +6413,8 @@ async function loadPipelineConfig() {
     const data = await res.json();
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
+    pipelineFilterKeywords = data.filter_keywords || {};
+    pipelineTriageModes = data.triage_modes || {};
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -6103,6 +6444,7 @@ function applyFuViewVisibility() {
 }
 
 function renderFuCurrentView() {
+  renderFuQuickFilters();
   if (fuViewMode === 'kanban') renderFuKanban();
   else renderFuContacts();
 }
@@ -6163,7 +6505,7 @@ function fuKanbanCard(c) {
     <button class="fu-kanban-card-menu" onclick="event.stopPropagation();toggleFuDropdown(event,'${c.id}')" title="Actions">⋯</button>
     <div class="fu-kanban-card-title">${company}</div>
     <div class="fu-kanban-card-email">${email}</div>
-    <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
+    <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}${fuReplyFilterBadge(c.last_reply_filter, true)}</div>
     <div class="fu-kanban-card-foot">⏰ ${lastAct}${route}</div>
   </div>`;
 }
@@ -6270,14 +6612,27 @@ function addPipelineStageRow(stage) {
 function addPipelineFilterRow(filter) {
   const box = document.getElementById('pipelineFiltersEditor');
   if (!box) return;
-  const f = filter || { key: '', label: '', auto_advance_to: null };
+  const f = filter || { key: '', label: '', auto_advance_to: null, color: '#FF1493', emoji: '🏷️', is_custom: true };
+  // New rows (no filter arg) are always custom; loaded rows trust the server's is_custom.
+  const isCustom = filter ? !!f.is_custom : true;
   const row = document.createElement('div');
   row.className = 'pl-frow';
   if (f.key) row.dataset.key = f.key;
+  row.dataset.custom = isCustom ? '1' : '0';
+  const kws = (pipelineFilterKeywords[f.key]?.keywords || []).join(', ');
+  const badge = isCustom
+    ? '<span class="pl-badge pl-badge-custom">CUSTOM</span>'
+    : '<span class="pl-badge pl-badge-builtin">BUILT-IN</span>';
+  const delBtn = isCustom
+    ? `<button class="pl-row-del" title="Remove filter" onclick="this.closest('.pl-frow').remove()">✕</button>`
+    : '<span class="pl-row-del-spacer" title="Built-in filters can\'t be deleted">🔒</span>';
   row.innerHTML =
+    `<input class="pl-filter-color" type="color" value="${esc(f.color || '#FF1493')}" title="Filter color">` +
+    `<input class="pl-filter-emoji" value="${esc(f.emoji || '')}" placeholder="🏷️" maxlength="4" title="Emoji">` +
     `<input class="pl-filter-label" value="${esc(f.label)}" placeholder="Reply text / label" maxlength="120">` +
     `<select class="pl-filter-adv">${_plStageOptionsHtml(f.auto_advance_to)}</select>` +
-    `<button class="pl-row-del" title="Remove filter" onclick="this.closest('.pl-frow').remove()">✕</button>`;
+    badge + delBtn +
+    `<input class="pl-filter-kw" value="${esc(kws)}" placeholder="auto-detect keywords, comma-separated" title="Keywords for auto-detection">`;
   box.appendChild(row);
 }
 
@@ -6300,7 +6655,10 @@ async function savePipelineConfig() {
   const reply_filters = [...document.querySelectorAll('#pipelineFiltersEditor .pl-frow')].map(r => ({
     key: r.dataset.key || '',
     label: r.querySelector('.pl-filter-label').value.trim(),
+    color: r.querySelector('.pl-filter-color').value,
+    emoji: r.querySelector('.pl-filter-emoji').value.trim(),
     auto_advance_to: r.querySelector('.pl-filter-adv').value ? parseInt(r.querySelector('.pl-filter-adv').value) : null,
+    keywords: r.querySelector('.pl-filter-kw').value.split(',').map(s => s.trim()).filter(Boolean),
   })).filter(f => f.label);
   try {
     const res = await fetch('/api/followups/pipeline-config', {
@@ -6311,6 +6669,7 @@ async function savePipelineConfig() {
     if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
+    pipelineFilterKeywords = data.filter_keywords || {};
     renderPipelineConfigEditor();
     toast('Pipeline config saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {
@@ -6327,11 +6686,88 @@ async function tagReplyPipeline(msgId, key, selectEl) {
       body: JSON.stringify({ msg_id: msgId, filter_key: key })
     });
     const data = await res.json();
-    if (!res.ok) { toast('Error: ' + (data.error || 'tag failed'), true); return; }
-    if (selectEl) selectEl.parentElement.classList.toggle('tagged', !!key);
+    if (!res.ok) { toast('Error: ' + (data.error || 'tag failed'), true); return false; }
+    // reflect locally so chips/swatch refresh without a server round-trip
+    const rep = (allReplies || []).find(x => x.msg_id === msgId);
+    if (rep) rep.reply_filter_key = key || '';
+    // Re-render only the affected contact card (not the whole list) so other cards'
+    // expanded bodies and the scroll position are preserved.
+    const grp = (replyGroups || []).find(g => g.some(r => r.msg_id === msgId));
+    const cardEl = grp && document.getElementById('tqc_' + (grp[0].email || '').replace(/[^a-zA-Z0-9]/g, '_'));
+    if (cardEl) cardEl.outerHTML = tqCard(grp);
+    else renderReplies();
     if (data.advanced) toast('Tagged & moved to ' + (data.stage_name || ('stage ' + data.pipeline_stage)));
     else toast(key ? 'Reply tagged' : 'Tag cleared');
-  } catch(e) { toast('Error: ' + e.message, true); }
+    return true;
+  } catch(e) { toast('Error: ' + e.message, true); return false; }
+}
+
+// Apply a suggested/selected filter to a reply (used by auto-detect chips).
+async function tqApplyFilter(msgId, key) {
+  await tagReplyPipeline(msgId, key, null);
+}
+
+// Inline "create a filter for this reply": reuses the existing pipeline-config PUT
+// (no new endpoint) — sends the full filter list plus the new one, returns its key.
+async function createReplyFilterInline(label, color, emoji) {
+  const beforeKeys = new Set((pipelineReplyFilters || []).map(f => f.key));
+  const reply_filters = (pipelineReplyFilters || []).map(f => ({
+    key: f.key, label: f.label, color: f.color, emoji: f.emoji,
+    auto_advance_to: f.auto_advance_to,
+    keywords: (pipelineFilterKeywords[f.key]?.keywords) || [],
+  }));
+  reply_filters.push({ key: '', label, color, emoji: emoji || '🏷️', auto_advance_to: null, keywords: [] });
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ reply_filters })
+    });
+    const data = await res.json();
+    if (!res.ok) { toast('Error: ' + (data.error || 'create failed'), true); return null; }
+    pipelineReplyFilters = data.reply_filters || [];
+    pipelineFilterKeywords = data.filter_keywords || {};
+    const created = pipelineReplyFilters.find(f => !beforeKeys.has(f.key));
+    return created ? created.key : null;
+  } catch(e) { toast('Error: ' + e.message, true); return null; }
+}
+
+async function tqNewFilterFor(msgId) {
+  const r = await promptNewFilter();
+  if (!r) return;
+  const key = await createReplyFilterInline(r.label, r.color, r.emoji);
+  if (key) await tqApplyFilter(msgId, key);
+}
+
+// Small self-contained modal: name + color + emoji → {label,color,emoji} | null.
+function promptNewFilter() {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+    ov.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;width:300px;box-shadow:0 20px 50px rgba(0,0,0,.45)">' +
+        '<div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:12px">New reply filter</div>' +
+        '<input id="_nfName" placeholder="Filter name" maxlength="120" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--text);margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+          '<label style="font-size:12px;color:var(--text2)">Color</label>' +
+          '<input id="_nfColor" type="color" value="#FF1493" style="width:46px;height:34px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;padding:2px">' +
+          '<input id="_nfEmoji" placeholder="🏷️" maxlength="4" style="width:52px;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 4px;font-size:13px;color:var(--text)">' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button id="_nfOk" class="btn btn-primary" style="flex:1">Create</button>' +
+          '<button id="_nfCancel" class="btn btn-secondary" style="flex:1">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    const close = v => { ov.remove(); resolve(v); };
+    ov.querySelector('#_nfOk').onclick = () => {
+      const label = ov.querySelector('#_nfName').value.trim();
+      if (!label) { ov.querySelector('#_nfName').focus(); return; }
+      close({ label, color: ov.querySelector('#_nfColor').value, emoji: ov.querySelector('#_nfEmoji').value.trim() });
+    };
+    ov.querySelector('#_nfCancel').onclick = () => close(null);
+    ov.addEventListener('click', e => { if (e.target === ov) close(null); });
+    setTimeout(() => ov.querySelector('#_nfName').focus(), 30);
+  });
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────

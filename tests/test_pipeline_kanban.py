@@ -263,18 +263,23 @@ def test_detect_reply_filters_helper(app, db, client):
         assert _app.detect_reply_filters('hello there, thanks', wsx) == []
 
 
-def test_replies_payload_includes_suggested_filters(app, db, client):
+def test_replies_payload_includes_triage_fields(app, db, client):
+    """Per-render suggestions were replaced by persisted triage fields (the tag
+    UI was removed); the list must expose them and not the old field."""
     from app.models import Reply
     user, ws = _make_user_and_login(db, client)
     db.session.add(Reply(user_id=user.id, workspace_id=ws.id, msg_id='S1',
                          from_email='john@x.com', from_name='John',
                          subject='Re: load', body='We can use you on this lane',
-                         status='new'))
+                         status='new', triage_category='gave_info',
+                         triage_confidence=0.85))
     db.session.commit()
     data = client.get('/api/replies?view=all').get_json()
     flat = [r for grp in data['items'] for r in grp]
     rep = next(r for r in flat if r['msg_id'] == 'S1')
-    assert 'can_use' in [s['key'] for s in rep['suggested_filters']]
+    assert rep['triage_category'] == 'gave_info'
+    assert 'suggested_filters' not in rep
+    assert data['counts']['categories'].get('gave_info') == 1
 
 
 # ── Phase 3: Follow-up last-reply-filter mapping + quick-filter counts ────────

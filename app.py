@@ -2396,12 +2396,6 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
         func.lower(Reply.from_email).in_(email_keys)
     ).order_by(func.lower(Reply.from_email), Reply.received_at.desc()).all()
 
-    # Workspace reply-filter config loaded once → auto-detect suggestions per reply.
-    from app.models import Workspace as _WS
-    _ws = _WS.query.filter_by(owner_id=uid).first()
-    _flt = _ws.get_reply_filters() if _ws else []
-    _kw = _ws.get_filter_keywords() if _ws else {}
-
     grouped = {}
     for row in msg_rows:
         key = (row.from_email or '').lower()
@@ -2415,8 +2409,6 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
             'route': row.route,
             'status': row.status,
             'reply_filter_key': row.reply_filter_key or '',
-            'suggested_filters': _match_reply_filters(
-                (row.subject or '') + ' ' + (row.body or ''), _flt, _kw),
             'triage_category': row.triage_category or '',
             'triage_confidence': row.triage_confidence,
             'auto_processed': bool(row.auto_processed),
@@ -5000,16 +4992,17 @@ def api_reply_pipeline_tag():
 @limiter.limit("20 per minute")
 @csrf_protected
 def api_replies_bulk_triage():
-    """Bulk-resolve triaged replies. Two shapes:
-    {category, action:'ignore'}  — ignore every unprocessed reply in a category
-    {msg_ids, action:'restore'}  — undo path: restore an explicit list to 'new'
+    """Bulk-resolve triaged replies. Shapes:
+    {category, action:'ignore'}    — ignore every unprocessed reply in a category
+    {category, action:'followup'}  — follow-up + pipeline contact + stage advance
+    {msg_ids, action:'restore'}    — undo path: restore an explicit list to 'new'
     Returns affected msg_ids so the client can offer Undo."""
-    from app.models import Reply, TRIAGE_CATEGORIES
+    from app.models import Reply, Workspace, TRIAGE_CATEGORIES
     uid = _current_user_id()
     data = request.get_json() or {}
     action = (data.get('action') or '').strip()
-    if action not in ('ignore', 'restore'):
-        return jsonify(error="action must be 'ignore' or 'restore'"), 400
+    if action not in ('ignore', 'followup', 'restore'):
+        return jsonify(error="action must be 'ignore', 'followup' or 'restore'"), 400
     msg_ids = data.get('msg_ids')
     category = (data.get('category') or '').strip()
 
@@ -5024,11 +5017,32 @@ def api_replies_bulk_triage():
     else:
         return jsonify(error='category or msg_ids required'), 400
 
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    fcfg_by_key = {f.get('key'): f for f in (ws.get_reply_filters() if ws else [])}
+    # A reply may lack a filter key (e.g. structural detection while in suggest
+    # mode) — fall back to its category's built-in filter for the stage target.
+    _cat_default_key = {'gave_info': 'gave_info', 'rate_request': 'rate_request'}
+
     affected = []
     for r in q.all():
         if action == 'ignore':
             r.status = 'not_interested'
             _sync_crm_stage(r, 'lost')
+        elif action == 'followup':
+            r.status = 'follow_up'
+            if not r.reply_filter_key:
+                r.reply_filter_key = _cat_default_key.get(r.triage_category)
+            try:
+                add_to_followups(r)
+            except Exception:
+                db.session.rollback()
+                continue
+            _sync_crm_stage(r, 'interested')
+            fcfg = fcfg_by_key.get(r.reply_filter_key) or {}
+            target = fcfg.get('auto_advance_to')
+            fc = _fc_by_email(ws.id, r.from_email) if (ws and target) else None
+            if fc and int(target) > (fc.pipeline_stage or 1):   # forward-only
+                _apply_pipeline_stage(fc, target, actor_user_id=uid, reason='bulk_triage')
         else:
             r.status = 'new'
             r.auto_processed = False

@@ -164,6 +164,22 @@ def test_overdue_counts_touch_due(app, db, client):
     ids = {c['id'] for c in client.get('/api/followups?filter=overdue').get_json()['contacts']}
     assert fc.id in ids
 
+def test_overdue_counts_any_dated_active_contact(app, db, client):
+    """A date is a commitment even when both auto-engines are off (e.g. triage
+    created the contact while workspace auto-FU was disabled)."""
+    from app.models import FollowupContact
+    user, ws = _mk(db, client)
+    fc = FollowupContact(user_id=user.id, workspace_id=ws.id,
+                         contact_email='dated@x.com', state='active',
+                         stage='fu1_scheduled', is_followup_enabled=False,
+                         pipeline_stage=1, touch_enabled=False,
+                         next_followup_at=_app._utcnow() - timedelta(days=1))
+    db.session.add(fc); db.session.commit()
+    data = client.get('/api/followups').get_json()
+    assert data['counts']['overdue'] >= 1
+    ids = {c['id'] for c in client.get('/api/followups?filter=overdue').get_json()['contacts']}
+    assert fc.id in ids
+
 
 # ── Config endpoint round-trip + sweep on save ────────────────────────────────
 

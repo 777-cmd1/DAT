@@ -123,6 +123,20 @@ PIPELINE_DEFAULT_FILTER_KEYWORDS = {
 # Built-in keys are editable (color/emoji/label/keywords/auto-advance) but never deletable.
 PIPELINE_BUILTIN_FILTER_KEYS = {f["key"] for f in PIPELINE_DEFAULT_REPLY_FILTERS}
 
+# Per-stage touch cadence: once the FU1-3 drip is finished/stopped, how often to
+# re-touch a contact sitting in each Kanban stage. mode: 'manual' → lands in the
+# Today queue for a one-click send; 'auto' → the scheduler sends a template
+# itself; 'off' → no cadence. Stage 1 is owned by the FU1-3 drip; Booked is a
+# terminal by default. Keys are stage ids as strings (JSON round-trip safe).
+CADENCE_MODES = ('manual', 'auto', 'off')
+PIPELINE_DEFAULT_CADENCE = {
+    '1': {'days': 0, 'mode': 'off'},
+    '2': {'days': 3, 'mode': 'manual'},
+    '3': {'days': 7, 'mode': 'manual'},
+    '4': {'days': 7, 'mode': 'manual'},
+    '5': {'days': 0, 'mode': 'off'},
+}
+
 # Fallback palette for custom filters saved before colors existed (deterministic by position).
 _FILTER_PALETTE = ["#FF1493", "#00CED1", "#FF8C00", "#8A2BE2", "#20B2AA", "#DC143C", "#1E90FF", "#32CD32"]
 
@@ -201,6 +215,24 @@ class Workspace(db.Model):
             else:
                 merged[k] = v
         return merged
+
+    def get_cadence(self):
+        """Per-stage touch cadence, stored overrides overlaid on defaults.
+        Malformed entries fall back to defaults; days clamped to 1..60."""
+        config = self.pipeline_config or {}
+        out = {k: dict(v) for k, v in PIPELINE_DEFAULT_CADENCE.items()}
+        for k, v in (config.get('cadence') or {}).items():
+            if not isinstance(v, dict):
+                continue
+            mode = v.get('mode')
+            if mode not in CADENCE_MODES:
+                continue
+            try:
+                days = max(1, min(60, int(v.get('days') or 0))) if mode != 'off' else 0
+            except (TypeError, ValueError):
+                continue
+            out[str(k)] = {'days': days, 'mode': mode}
+        return out
 
     def get_triage_modes(self):
         """Per-category automation mode ('off'|'suggest'|'auto'), stored overrides
@@ -432,6 +464,11 @@ class FollowupContact(db.Model):
     pipeline_stage = db.Column(db.Integer, default=1, nullable=False, server_default='1')  # Kanban stage 1-5
     is_followup_enabled = db.Column(db.Boolean, default=True, nullable=False)
     next_followup_at = db.Column(db.DateTime)
+    # Cadence touches (post-drip re-touch engine): touch_enabled marks that
+    # next_followup_at is a stage-cadence touch; attention_at = warm contact
+    # replied and awaits a human answer (🔥 in the Today queue).
+    touch_enabled = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    attention_at  = db.Column(db.DateTime, nullable=True)
     last_followup_sent_at = db.Column(db.DateTime)
     last_reply_at = db.Column(db.DateTime)
     last_activity_at = db.Column(db.DateTime)
@@ -483,6 +520,8 @@ class FollowupContact(db.Model):
             'stage': self.stage,
             'pipeline_stage': self.pipeline_stage or 1,
             'is_followup_enabled': self.is_followup_enabled,
+            'touch_enabled': bool(self.touch_enabled),
+            'attention_at': fmt(self.attention_at),
             'next_followup_at': fmt(self.next_followup_at),
             'last_followup_sent_at': fmt(self.last_followup_sent_at),
             'last_reply_at': fmt(self.last_reply_at),

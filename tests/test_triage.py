@@ -116,6 +116,15 @@ def _make_user_ws(db):
     return user, ws
 
 
+def _enable_auto(db, ws):
+    """Default modes are suggest (except auto_reply) — auto-action tests opt in."""
+    cfg = dict(ws.pipeline_config or {})
+    cfg['triage_modes'] = {c: 'auto' for c in
+                           ('negative', 'gave_info', 'rate_request', 'auto_reply')}
+    ws.pipeline_config = cfg
+    db.session.commit()
+
+
 def _add_reply(db, user, body, subject='', email=None, status='new'):
     from app.models import Reply
     r = Reply(user_id=user.id, msg_id=f'<{uuid.uuid4().hex}@t>',
@@ -128,6 +137,7 @@ def _add_reply(db, user, body, subject='', email=None, status='new'):
 
 def test_auto_ignore_negative(app, db):
     user, ws = _make_user_ws(db)
+    _enable_auto(db, ws)
     r = _add_reply(db, user, 'DNU. Do not contact us again.')
     out = _app._auto_triage_new_replies(user.id, [r.msg_id])
     db.session.refresh(r)
@@ -140,6 +150,7 @@ def test_auto_ignore_negative(app, db):
 def test_auto_followup_gave_info_creates_contact_at_stage_2(app, db):
     from app.models import FollowupContact
     user, ws = _make_user_ws(db)
+    _enable_auto(db, ws)
     r = _add_reply(db, user, 'Still available PU FCFS 0800 DEL 07/01 15,000 lbs RATE $5400')
     out = _app._auto_triage_new_replies(user.id, [r.msg_id])
     db.session.refresh(r)
@@ -163,6 +174,7 @@ def test_no_advance_when_filter_advance_disabled(app, db):
             f['auto_advance_to'] = None
     ws.pipeline_config = {'reply_filters': filters}
     db.session.commit()
+    _enable_auto(db, ws)
     r = _add_reply(db, user, 'Still available PU FCFS 0800 DEL 07/01 15,000 lbs RATE $5400')
     out = _app._auto_triage_new_replies(user.id, [r.msg_id])
     db.session.refresh(r)
@@ -178,12 +190,26 @@ def test_auto_actions_sync_crm_pipeline(app, db):
     the same way the manual /api/replies/status path does."""
     from app.models import PipelineContact
     user, ws = _make_user_ws(db)
+    _enable_auto(db, ws)
     neg = _add_reply(db, user, 'DNU. Do not contact us again.')
     info = _add_reply(db, user, 'Still available PU FCFS DEL 07/01 15,000 lbs RATE $5400')
     _app._auto_triage_new_replies(user.id, [neg.msg_id, info.msg_id])
     stages = {p.email: p.stage for p in PipelineContact.query.filter_by(user_id=user.id).all()}
     assert stages.get(neg.from_email.lower()) == 'lost'
     assert stages.get(info.from_email.lower()) == 'interested'
+
+def test_default_suggest_leaves_reply_in_queue_with_category(app, db):
+    """Out of the box (no stored modes): detected replies stay in New with a
+    category so the chips/bulk workflow sees them; only OOO noise is auto'd."""
+    user, ws = _make_user_ws(db)
+    r = _add_reply(db, user, "What's your rate on this lane?")
+    ooo = _add_reply(db, user, 'Automatic reply: out of office until Monday')
+    out = _app._auto_triage_new_replies(user.id, [r.msg_id, ooo.msg_id])
+    db.session.refresh(r); db.session.refresh(ooo)
+    assert r.status == 'new' and r.triage_category == 'rate_request'
+    assert out['detected'] == {'rate_request': 1}
+    assert out['auto_followup'] == 0
+    assert ooo.status == 'not_interested' and out['auto_ignored'] == 1
 
 def test_suggest_mode_classifies_but_does_not_act(app, db):
     user, ws = _make_user_ws(db)
@@ -199,6 +225,7 @@ def test_suggest_mode_classifies_but_does_not_act(app, db):
 
 def test_inherited_suppressed_status_not_auto_actioned(app, db):
     user, ws = _make_user_ws(db)
+    _enable_auto(db, ws)
     r = _add_reply(db, user, 'We have loads PU Laredo, TX DEL Dallas, TX $900', status='not_interested')
     _app._auto_triage_new_replies(user.id, [r.msg_id])
     db.session.refresh(r)
@@ -287,6 +314,7 @@ def test_bulk_rejects_bad_input(app, db, client):
 def test_undo_auto_removes_auto_created_contact(app, db, client):
     from app.models import FollowupContact
     user, ws = _make_user_ws(db)
+    _enable_auto(db, ws)
     _login(client, user)
     r = _add_reply(db, user, 'Still available PU FCFS DEL 07/01 15,000 lbs RATE $5400')
     _app._auto_triage_new_replies(user.id, [r.msg_id])
@@ -299,7 +327,8 @@ def test_undo_auto_removes_auto_created_contact(app, db, client):
         workspace_id=ws.id, contact_email=r.from_email.lower()).first() is None
 
 def test_auto_processed_endpoint_lists_recent(app, db, client):
-    user, _ = _make_user_ws(db)
+    user, ws = _make_user_ws(db)
+    _enable_auto(db, ws)
     _login(client, user)
     r = _add_reply(db, user, 'DNU')
     _app._auto_triage_new_replies(user.id, [r.msg_id])
@@ -316,16 +345,16 @@ def test_pipeline_config_exposes_triage_modes(app, db, client):
     res = client.get('/api/followups/pipeline-config')
     assert res.status_code == 200
     modes = res.get_json()['triage_modes']
-    assert modes == {'negative': 'auto', 'gave_info': 'auto',
-                     'rate_request': 'auto', 'auto_reply': 'auto'}
+    assert modes == {'negative': 'suggest', 'gave_info': 'suggest',
+                     'rate_request': 'suggest', 'auto_reply': 'auto'}
 
     res = client.put('/api/followups/pipeline-config',
-                     json={'triage_modes': {'negative': 'suggest', 'bogus': 'auto',
+                     json={'triage_modes': {'negative': 'auto', 'bogus': 'auto',
                                             'gave_info': 'bad-value'}})
     assert res.status_code == 200
     modes = res.get_json()['triage_modes']
-    assert modes['negative'] == 'suggest'
-    assert modes['gave_info'] == 'auto'      # invalid value ignored
+    assert modes['negative'] == 'auto'
+    assert modes['gave_info'] == 'suggest'   # invalid value ignored
     assert 'bogus' not in modes
 
 def test_new_builtin_filters_appended_to_old_configs(app, db):

@@ -56,10 +56,14 @@ PIPELINE_DEFAULT_STAGES = [
 # + advance to the filter's auto_advance_to stage).
 TRIAGE_CATEGORIES = ('negative', 'gave_info', 'rate_request', 'auto_reply')
 TRIAGE_MODES = ('off', 'suggest', 'auto')
+# Suggest by default: detected replies stay in the New queue with a badge and
+# category chip so the user bulk-resolves them from the filter (auto mode moves
+# them out of the queue instantly, which reads as "detection didn't happen").
+# Auto-reply/OOO noise is the exception — nobody wants to review bounces.
 TRIAGE_DEFAULT_MODES = {
-    'negative':     'auto',
-    'gave_info':    'auto',
-    'rate_request': 'auto',
+    'negative':     'suggest',
+    'gave_info':    'suggest',
+    'rate_request': 'suggest',
     'auto_reply':   'auto',
 }
 

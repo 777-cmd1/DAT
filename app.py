@@ -801,7 +801,7 @@ def _auto_triage_new_replies(uid, msg_ids):
     auto-actioned. Returns counters for the Check-Gmail toast.
     """
     from app.models import Reply, Workspace
-    out = {'classified': 0, 'auto_ignored': 0, 'auto_followup': 0}
+    out = {'classified': 0, 'auto_ignored': 0, 'auto_followup': 0, 'detected': {}}
     if not msg_ids:
         return out
     ws = Workspace.query.filter_by(owner_id=uid).first()
@@ -827,6 +827,9 @@ def _auto_triage_new_replies(uid, msg_ids):
             continue
         cat = res['category']
         if modes.get(cat) != 'auto' or res['confidence'] < TRIAGE_AUTO_MIN_CONF.get(cat, 1.0):
+            # left in the queue (suggest mode / below auto threshold) — surface
+            # the detection in the Check-Gmail toast so it doesn't look missed
+            out['detected'][cat] = out['detected'].get(cat, 0) + 1
             continue
 
         r.reply_filter_key = res.get('filter_key') or r.reply_filter_key
@@ -2644,7 +2647,8 @@ def fetch_replies_from_gmail():
 
     return {'new': len(new_replies), 'total': len(all_replies),
             'auto_ignored': triage.get('auto_ignored', 0),
-            'auto_followup': triage.get('auto_followup', 0)}
+            'auto_followup': triage.get('auto_followup', 0),
+            'detected': triage.get('detected', {})}
 
 
 def _gmail_get_body(payload):

@@ -5458,7 +5458,7 @@ function tqToggleAutoPanel() {
   let html = '<h4>🤖 Triage automation — what happens when a category is detected</h4>';
   Object.keys(TRIAGE_CATS).forEach(k => {
     const c = TRIAGE_CATS[k];
-    const cur = modes[k] || 'auto';
+    const cur = modes[k] || (k === 'auto_reply' ? 'auto' : 'suggest');
     html += `<div class="tq-auto-row"><span class="lbl">${c.emoji} ${c.label}</span>` +
       `<select onchange="tqSetTriageMode('${k}', this.value)">` +
       ['off', 'suggest', 'auto'].map(m =>
@@ -5504,6 +5504,9 @@ async function fetchReplies(silent) {
         if (data.auto_followup) parts.push(data.auto_followup + ' → pipeline');
         toast('🤖 ' + parts.join(', '));
       }
+      const det = data.detected || {};
+      const detParts = Object.keys(det).map(k => (TRIAGE_CATS[k]?.emoji || '🏷️') + det[k]);
+      if (detParts.length) toast('🔍 Detected: ' + detParts.join(' ') + ' — check the filters');
       await loadReplies();
       loadAutoStrip();
     }

@@ -5254,6 +5254,112 @@ def api_replies_undo_auto():
     return jsonify(ok=True, contact_removed=contact_removed)
 
 
+@app.route('/api/dashboard')
+@login_required
+def api_dashboard():
+    """All main-page dashboard blocks in one call: today's actions, funnel,
+    base health, 14-day activity, top lanes."""
+    from app.models import Reply, Send, FollowupContact, FollowupEvent, Workspace
+    from sqlalchemy import func, case, distinct
+    uid = _current_user_id()
+    now = _utcnow()
+    sod = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    eod = now.replace(hour=23, minute=59, second=59)
+
+    # Today's actions
+    fc_active = FollowupContact.query.filter(FollowupContact.user_id == uid,
+                                             FollowupContact.state == 'active')
+    due_q = fc_active.filter(FollowupContact.next_followup_at <= eod)
+    due_today = due_q.count()
+    done_today = fc_active.filter(FollowupContact.last_followup_sent_at >= sod).count()
+    nxt = due_q.order_by(FollowupContact.next_followup_at.asc()).first()
+    attention = fc_active.filter(FollowupContact.attention_at.isnot(None)).count()
+
+    pending_rows = db.session.query(Reply.triage_category, func.count()).filter(
+        Reply.user_id == uid, Reply.status.in_(['new', 'viewed'])
+    ).group_by(Reply.triage_category).all()
+    replies_pending = {'total': sum(n for _, n in pending_rows),
+                       'by_category': {(c or 'other'): n for c, n in pending_rows}}
+
+    # Funnel per window: sends + distinct repliers from data; stage advances from the event log
+    def _funnel(days):
+        cutoff = now - timedelta(days=days)
+        sent = Send.query.filter(Send.user_id == uid, Send.status == 'sent',
+                                 Send.sent_at >= cutoff).count()
+        replied = db.session.query(func.count(distinct(func.lower(Reply.from_email)))).filter(
+            Reply.user_id == uid, Reply.received_at >= cutoff).scalar() or 0
+        def moved(stage_id):
+            return db.session.query(func.count(distinct(FollowupEvent.followup_contact_id))).join(
+                FollowupContact, FollowupEvent.followup_contact_id == FollowupContact.id
+            ).filter(FollowupContact.user_id == uid,
+                     FollowupEvent.event_type == 'pipeline_move',
+                     FollowupEvent.to_stage == str(stage_id),
+                     FollowupEvent.event_at >= cutoff).scalar() or 0
+        return {'sent': sent, 'replied': replied, 'got_info': moved(2),
+                'repeat': moved(3), 'booked': moved(5)}
+
+    # Base health
+    no_next = fc_active.filter(FollowupContact.next_followup_at.is_(None),
+                               FollowupContact.scheduled_once == False).count()
+    rot_cut = now - timedelta(days=14)
+    rotting = fc_active.filter(FollowupContact.pipeline_stage >= 2,
+                               db.or_(FollowupContact.last_activity_at < rot_cut,
+                                      FollowupContact.last_activity_at.is_(None))).count()
+    f30 = _funnel(30)
+    reply_rate = round(100.0 * f30['replied'] / f30['sent'], 1) if f30['sent'] else None
+
+    booked_ids = [r[0] for r in db.session.query(distinct(FollowupEvent.followup_contact_id)).join(
+        FollowupContact, FollowupEvent.followup_contact_id == FollowupContact.id
+    ).filter(FollowupContact.user_id == uid, FollowupEvent.event_type == 'pipeline_move',
+             FollowupEvent.to_stage == '5').all()]
+    avg_touches = None
+    if booked_ids:
+        touches = db.session.query(func.count()).filter(
+            FollowupEvent.followup_contact_id.in_(booked_ids),
+            FollowupEvent.event_type.in_(['manual_send', 'free_send', 'touch_sent',
+                                          'recurring_sent', 'scheduled_once_sent'])).scalar() or 0
+        avg_touches = round(touches / len(booked_ids), 1)
+
+    # 14-day activity
+    cut14 = sod - timedelta(days=13)
+    s_rows = dict(db.session.query(func.date(Send.sent_at), func.count()).filter(
+        Send.user_id == uid, Send.status == 'sent', Send.sent_at >= cut14
+    ).group_by(func.date(Send.sent_at)).all())
+    r_rows = dict(db.session.query(func.date(Reply.received_at), func.count()).filter(
+        Reply.user_id == uid, Reply.received_at >= cut14
+    ).group_by(func.date(Reply.received_at)).all())
+    activity = []
+    for i in range(14):
+        d = (cut14 + timedelta(days=i)).date()
+        activity.append({'day': d.strftime('%b %d'),
+                         'sends': int(s_rows.get(str(d), s_rows.get(d, 0)) or 0),
+                         'replies': int(r_rows.get(str(d), r_rows.get(d, 0)) or 0)})
+
+    # Top lanes by carrier replies (30d), enriched with gave-info counts
+    cutoff30 = now - timedelta(days=30)
+    lane_rows = db.session.query(
+        Reply.route, func.count(),
+        func.count(case((Reply.triage_category.in_(['gave_info', 'rate_request']), 1))),
+    ).filter(Reply.user_id == uid, Reply.received_at >= cutoff30,
+             Reply.route.isnot(None), Reply.route != ''
+    ).group_by(Reply.route).order_by(func.count().desc()).limit(5).all()
+    top_lanes = [{'lane': l, 'replies': n, 'gave_info': g} for l, n, g in lane_rows]
+
+    return jsonify(
+        touches={'due_today': due_today, 'done_today': done_today,
+                 'next': ({'name': nxt.contact_name or nxt.contact_email,
+                           'route': nxt.current_route or ''} if nxt else None)},
+        attention=attention,
+        replies_pending=replies_pending,
+        funnel={'7': _funnel(7), '30': f30},
+        health={'no_next_step': no_next, 'rotting': rotting,
+                'reply_rate': reply_rate, 'sends_30d': f30['sent'],
+                'replies_30d': f30['replied'], 'avg_touches_to_booked': avg_touches},
+        activity=activity,
+        top_lanes=top_lanes,
+    )
+
+
 @app.route('/api/followups/touch', methods=['POST'])
 @login_required
 @limiter.limit("120 per minute")

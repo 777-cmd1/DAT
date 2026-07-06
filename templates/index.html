@@ -1743,6 +1743,32 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .tq-auto-row .hint { color:var(--text3); font-size:11px; line-height:1.45; }
 .tq-auto-row select { width:100%; font-size:11.5px; padding:5px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text2); font-family:inherit; }
 
+/* ── Dashboard ── */
+.dash-wrap { display:flex; flex-direction:column; gap:12px; max-width:1080px; }
+.dash-row { display:grid; gap:12px; }
+.dash-r3 { grid-template-columns:repeat(3,1fr); } .dash-r4 { grid-template-columns:repeat(4,1fr); }
+@media(max-width:900px){ .dash-r3,.dash-r4 { grid-template-columns:1fr 1fr; } }
+.dash-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:15px 17px; }
+.dash-card.click { cursor:pointer; } .dash-card.click:hover { border-color:var(--accent); }
+.dash-k { font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); margin-bottom:6px; }
+.dash-big { font-size:28px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.1; color:var(--text); }
+.dash-big small { font-size:13px; font-weight:600; color:var(--text2); }
+.dash-hint { font-size:11.5px; color:var(--text3); margin-top:4px; }
+.dash-bar { height:6px; border-radius:4px; background:var(--surface2); margin-top:9px; overflow:hidden; }
+.dash-bar i { display:block; height:100%; border-radius:4px; background:var(--accent); }
+.dash-h2 { font-size:13.5px; font-weight:700; margin:0; color:var(--text); }
+.dash-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.dash-pill { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:10px; vertical-align:3px; }
+.dash-pill.good { color:#0ca30c; background:#0ca30c1c; } .dash-pill.warn { color:#eda100; background:#eda1001f; }
+.dash-svg text { font:10.5px inherit; fill:var(--text2); }
+.dash-svg .lbl { font-weight:700; fill:var(--text); } .dash-svg .mut { fill:var(--text3); }
+.dash-legend { display:flex; gap:12px; font-size:11.5px; color:var(--text2); }
+.dash-dot { width:9px; height:9px; border-radius:3px; display:inline-block; margin-right:4px; vertical-align:-1px; }
+.dash-table { width:100%; border-collapse:collapse; font-size:12px; }
+.dash-table th { text-align:left; color:var(--text3); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; padding:5px 8px; border-bottom:1px solid var(--border); }
+.dash-table td { padding:6px 8px; border-bottom:1px dashed var(--border); color:var(--text2); font-variant-numeric:tabular-nums; }
+.dash-table td:first-child { color:var(--text); font-weight:600; }
+
 /* ── Today's touches panel (Follow-up cadence engine) ── */
 .fu-touch-panel { border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:10px 14px; margin-bottom:12px; }
 .fu-touch-head { font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:6px; }
@@ -2346,6 +2372,9 @@ html:not([data-theme="dark"]) .send-cta-bar {
     <nav class="nav">
       <!-- PRIMARY: core workflow -->
       <div class="nav-section">Workflow</div>
+      <div class="nav-item" onclick="nav('dashboard',this)">
+        <i class="nav-icon ph-bold ph-squares-four" aria-hidden="true"></i> Dashboard
+      </div>
       <div class="nav-item active" onclick="nav('send',this)">
         <i class="nav-icon ph-bold ph-paper-plane-tilt" aria-hidden="true"></i> Send
       </div>
@@ -2825,6 +2854,15 @@ html:not([data-theme="dark"]) .send-cta-bar {
     </div>
 
     <!-- REPLIES TRIAGE QUEUE -->
+    <!-- DASHBOARD PAGE -->
+    <div class="page" id="page-dashboard">
+      <div class="page-header">
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">Today's actions first, funnel and base health below</div>
+      </div>
+      <div id="dashBody" class="dash-wrap"><div class="tq-empty">Loading…</div></div>
+    </div>
+
     <div class="page" id="page-replies">
       <div class="page-header">
         <div class="page-title">Replies</div>
@@ -3720,6 +3758,7 @@ function nav(page, el) {
   if (page === 'templates')     loadTemplates();
   if (page === 'settings')      loadSettings();
   if (page === 'replies')       initReplies();
+  if (page === 'dashboard')     loadDashboard();
   if (page === 'followup')      loadFollowups();
   if (page === 'pipeline')      loadPipeline();
   if (page === 'intelligence')  loadIntelligence();
@@ -6393,6 +6432,122 @@ function renderFuCurrentView() {
   renderTouchPanel();
   if (fuViewMode === 'kanban') renderFuKanban();
   else renderFuContacts();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+let _dash = null, _dashPeriod = '30';
+const _DASH_RAMP = ['#86b6ef', '#5598e7', '#2a78d6', '#184f95', '#0d366b'];
+const _DASH_RAMP_D = ['#a9c9f3', '#6da7ec', '#3987e5', '#256abf', '#1c5cab'];
+const _DASH_S = { light: ['#2a78d6', '#1baf7a'], dark: ['#3987e5', '#199e70'] };
+function _dashDark() { return (document.documentElement.getAttribute('data-theme') || 'dark') !== 'light'; }
+
+async function loadDashboard() {
+  try { _dash = await (await fetch('/api/dashboard')).json(); }
+  catch (e) { document.getElementById('dashBody').innerHTML = '<div class="tq-empty">Failed to load</div>'; return; }
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const d = _dash; if (!d) return;
+  const t = d.touches, pend = d.replies_pending;
+  const pct = t.due_today ? Math.min(100, Math.round(100 * t.done_today / (t.done_today + t.due_today))) : 100;
+  const cats = pend.by_category || {};
+  const catStr = ['negative', 'rate_request', 'gave_info', 'auto_reply'].map(k => {
+    const c = TRIAGE_CATS[k]; return cats[k] ? `${c.emoji} ${cats[k]}` : '';
+  }).filter(Boolean).join(' · ') + (cats.other ? ` · other ${cats.other}` : '');
+  const h = d.health;
+  let html = `
+  <div class="dash-row dash-r3">
+    <div class="dash-card click" onclick="nav('followup',document.querySelectorAll('.nav-item')[3])">
+      <div class="dash-k">📋 Touches today</div>
+      <div class="dash-big">${t.done_today}<small> done · ${t.due_today} due</small></div>
+      <div class="dash-bar"><i style="width:${pct}%"></i></div>
+      <div class="dash-hint">${t.next ? 'next: ' + esc(t.next.name) + (t.next.route ? ' — ' + esc(t.next.route) : '') : 'all clear'}</div>
+    </div>
+    <div class="dash-card click" onclick="nav('followup',document.querySelectorAll('.nav-item')[3])">
+      <div class="dash-k">🔥 Warm replies to answer</div>
+      <div class="dash-big" style="color:${d.attention ? '#eda100' : 'var(--text)'}">${d.attention}</div>
+      <div class="dash-hint">replied after "Got info" — answer today</div>
+    </div>
+    <div class="dash-card click" onclick="nav('replies',document.querySelectorAll('.nav-item')[2])">
+      <div class="dash-k">📨 Replies need decision</div>
+      <div class="dash-big">${pend.total}</div>
+      <div class="dash-hint">${esc(catStr) || 'inbox zero'}</div>
+    </div>
+  </div>
+  <div class="dash-card">
+    <div class="dash-head"><p class="dash-h2">Funnel — where the pipeline leaks</p>
+      <span class="seg" style="display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden">
+        <button onclick="_dashPeriod='7';renderDashboard()" style="border:0;font:inherit;font-size:11.5px;font-weight:600;padding:4px 11px;cursor:pointer;background:${_dashPeriod==='7'?'var(--accent)':'transparent'};color:${_dashPeriod==='7'?'#fff':'var(--text2)'}">7 days</button>
+        <button onclick="_dashPeriod='30';renderDashboard()" style="border:0;font:inherit;font-size:11.5px;font-weight:600;padding:4px 11px;cursor:pointer;background:${_dashPeriod==='30'?'var(--accent)':'transparent'};color:${_dashPeriod==='30'?'#fff':'var(--text2)'}">30 days</button>
+      </span></div>
+    <svg class="dash-svg" width="100%" height="205" viewBox="0 0 1000 205" preserveAspectRatio="none">${_dashFunnelSvg(d.funnel[_dashPeriod])}</svg>
+  </div>
+  <div class="dash-row dash-r4">
+    <div class="dash-card"><div class="dash-k">No next step</div>
+      <div class="dash-big">${h.no_next_step} ${h.no_next_step === 0 ? '<span class="dash-pill good">✓ iron rule</span>' : ''}</div>
+      <div class="dash-hint">every active contact has a date</div></div>
+    <div class="dash-card click" onclick="nav('followup',document.querySelectorAll('.nav-item')[3])">
+      <div class="dash-k">Rotting warm (14d+)</div>
+      <div class="dash-big" style="color:${h.rotting ? '#eda100' : 'var(--text)'}">${h.rotting} ${h.rotting ? '<span class="dash-pill warn">review</span>' : ''}</div>
+      <div class="dash-hint">stage ≥ Got info, no activity 14+ days</div></div>
+    <div class="dash-card"><div class="dash-k">Reply rate · 30d</div>
+      <div class="dash-big">${h.reply_rate !== null ? h.reply_rate + '<small>%</small>' : '—'}</div>
+      <div class="dash-hint">${h.replies_30d} repliers / ${h.sends_30d} sends</div></div>
+    <div class="dash-card"><div class="dash-k">Avg touches → booked</div>
+      <div class="dash-big">${h.avg_touches_to_booked ?? '—'}</div>
+      <div class="dash-hint">from pipeline event log</div></div>
+  </div>
+  <div class="dash-card">
+    <div class="dash-head"><p class="dash-h2">Activity — last 14 days</p>
+      <div class="dash-legend"><span><span class="dash-dot" style="background:${_DASH_S[_dashDark()?'dark':'light'][0]}"></span><b>Sends</b></span>
+      <span><span class="dash-dot" style="background:${_DASH_S[_dashDark()?'dark':'light'][1]}"></span><b>Replies</b></span></div></div>
+    <svg class="dash-svg" width="100%" height="185" viewBox="0 0 1000 185" preserveAspectRatio="none">${_dashActivitySvg(d.activity)}</svg>
+  </div>
+  <div class="dash-card">
+    <div class="dash-head"><p class="dash-h2">Top lanes by carrier replies · 30d</p></div>
+    ${d.top_lanes.length ? `<div style="overflow-x:auto"><table class="dash-table">
+      <tr><th>Lane</th><th>Replies</th><th>Gave info</th></tr>
+      ${d.top_lanes.map(l => `<tr><td>${esc(l.lane)}</td><td>${l.replies}</td><td>${l.gave_info}</td></tr>`).join('')}
+    </table></div>` : '<div class="dash-hint">No routed replies in the last 30 days yet</div>'}
+  </div>`;
+  document.getElementById('dashBody').innerHTML = html;
+}
+
+function _dashFunnelSvg(f) {
+  const steps = [['Sent', f.sent], ['Replied', f.replied], ['Got info', f.got_info],
+                 ['Repeat', f.repeat], ['Booked', f.booked]];
+  const ramp = _dashDark() ? _DASH_RAMP_D : _DASH_RAMP;
+  const max = Math.max(1, ...steps.map(s => s[1] || 0));
+  let out = '';
+  steps.forEach((s, i) => {
+    const y = i * 41 + 2, w = Math.max(6, (s[1] / max) * 660);
+    const conv = i && steps[i-1][1] ? (100 * s[1] / steps[i-1][1]).toFixed(1) + '%' : '';
+    out += `<rect x="150" y="${y}" width="${w}" height="34" rx="4" fill="${ramp[i]}"><title>${s[1]} ${s[0]}${conv ? ' · ' + conv + ' of prev' : ''}</title></rect>` +
+      `<text class="lbl" x="140" y="${y+21}" text-anchor="end">${s[0]}</text>` +
+      `<text class="lbl" x="${158+w}" y="${y+21}">${(s[1]||0).toLocaleString()}</text>` +
+      (conv ? `<text class="mut" x="${232+w}" y="${y+21}">${conv}</text>` : '');
+  });
+  return out;
+}
+
+function _dashActivitySvg(act) {
+  const W = 1000, H = 185, P = {l: 36, r: 14, t: 10, b: 22};
+  const mx = Math.max(10, ...act.map(a => a.sends));
+  const X = i => P.l + i * (W - P.l - P.r) / Math.max(1, act.length - 1);
+  const Y = v => H - P.b - v / mx * (H - P.t - P.b);
+  const S = _DASH_S[_dashDark() ? 'dark' : 'light'];
+  let g = '';
+  for (let v = 0; v <= mx; v += Math.max(1, Math.ceil(mx / 4)))
+    g += `<line x1="${P.l}" x2="${W-P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)" stroke-width="1"/><text class="mut" x="4" y="${Y(v)+4}">${v}</text>`;
+  const path = (key, col) => `<path d="${act.map((a,i)=>(i?'L':'M')+X(i)+' '+Y(a[key])).join(' ')}" fill="none" stroke="${col}" stroke-width="2"/>` +
+    (act.length ? `<circle cx="${X(act.length-1)}" cy="${Y(act[act.length-1][key])}" r="4" fill="${col}" stroke="var(--surface)" stroke-width="2"/>` : '');
+  g += path('sends', S[0]) + path('replies', S[1]);
+  act.forEach((a, i) => {
+    if (i % 2 === 0) g += `<text class="mut" x="${X(i)}" y="${H-5}" text-anchor="middle">${a.day}</text>`;
+    g += `<rect x="${X(i)-17}" y="0" width="34" height="${H}" fill="transparent"><title>${a.day} · Sends ${a.sends} · Replies ${a.replies}</title></rect>`;
+  });
+  return g;
 }
 
 // ── Today's touches: due cadence touches + 🔥 warm replies, quick actions ──────

@@ -1742,6 +1742,21 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .tq-auto-row .lbl { font-weight:600; white-space:nowrap; }
 .tq-auto-row .hint { color:var(--text3); font-size:11px; line-height:1.45; }
 .tq-auto-row select { width:100%; font-size:11.5px; padding:5px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text2); font-family:inherit; }
+
+/* ── Today's touches panel (Follow-up cadence engine) ── */
+.fu-touch-panel { border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:10px 14px; margin-bottom:12px; }
+.fu-touch-head { font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.fu-touch-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px dashed var(--border); font-size:12px; color:var(--text2); }
+.fu-touch-row.hot { background:linear-gradient(90deg, #f59f0018, transparent); border-radius:8px; }
+.fu-touch-row .ft-who { min-width:0; flex:1 1 220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fu-touch-row .ft-email { color:var(--text3); font-size:11px; margin-left:6px; }
+.fu-touch-row .ft-stage { font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:9px; background:var(--surface); border:1px solid var(--border); white-space:nowrap; }
+.fu-touch-row .ft-route { color:var(--text3); font-size:11px; flex:0 1 200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fu-touch-row .ft-actions { margin-left:auto; display:flex; gap:5px; flex-wrap:nowrap; }
+.pl-cad-row { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text2); padding:5px 0; }
+.pl-cad-row .pl-cad-name { min-width:170px; font-weight:600; color:var(--text); }
+.pl-cad-row input[type=number] { width:60px; padding:5px 7px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit; }
+.pl-cad-row select { padding:5px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text2); font-family:inherit; font-size:12px; }
 @media (max-width:640px) {
   .tq-auto-row { grid-template-columns:1fr 1fr; }
   .tq-auto-row .hint { grid-column:1 / -1; }
@@ -2915,6 +2930,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
           </div>
 
+          <div id="fuTouchPanel" class="fu-touch-panel" style="display:none"></div>
+
           <div class="fu-summary-strip" id="fuStatsBar"></div>
 
           <div class="fu-bulk-bar" id="fuBulkBar" style="display:none">
@@ -3577,6 +3594,9 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <div class="pl-cfg-subhead" style="margin-top:18px">Reply filters <span class="pl-cfg-hint">color · emoji · label · auto-advance · auto-detect keywords. Built-in filters can't be deleted.</span></div>
           <div id="pipelineFiltersEditor" class="pl-cfg-list"></div>
           <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineFilterRow()">+ Add Custom Filter</button>
+
+          <div class="pl-cfg-subhead" style="margin-top:18px">Touch cadence <span class="pl-cfg-hint">how often to re-touch contacts sitting in each stage once the FU1-3 drip is done. Manual = lands in Today's touches for a one-click send; Auto = a template is sent automatically.</span></div>
+          <div id="pipelineCadenceEditor" class="pl-cfg-list"></div>
 
           <div style="margin-top:16px">
             <button class="btn btn-primary" onclick="savePipelineConfig()">Save Pipeline Config</button>
@@ -5857,6 +5877,7 @@ let pipelineStages = [];          // [{id,name,color}, ...]
 let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_advance_to}, ...]
 let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
 let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
+let pipelineCadence = {};         // {stage_id(str): {days, mode:'manual'|'auto'|'off'}}
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -6292,7 +6313,7 @@ function renderFuContacts() {
         <input type="checkbox" class="fu-checkbox" id="fu-cb-${c.id}" ${selectedFuIds.has(c.id)?'checked':''} onclick="toggleFuSelect('${c.id}',event)">
       </td>
       <td class="fu-contact-cell">
-        <div class="fu-contact-primary">${company}</div>
+        <div class="fu-contact-primary">${c.attention_at ? '🔥 ' : ''}${company}</div>
         <div class="fu-contact-secondary">${email}</div>
       </td>
       <td>
@@ -6339,6 +6360,7 @@ async function loadPipelineConfig() {
     pipelineReplyFilters = data.reply_filters || [];
     pipelineFilterKeywords = data.filter_keywords || {};
     pipelineTriageModes = data.triage_modes || {};
+    pipelineCadence = data.cadence || {};
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -6368,8 +6390,60 @@ function applyFuViewVisibility() {
 }
 
 function renderFuCurrentView() {
+  renderTouchPanel();
   if (fuViewMode === 'kanban') renderFuKanban();
   else renderFuContacts();
+}
+
+// ── Today's touches: due cadence touches + 🔥 warm replies, quick actions ──────
+function renderTouchPanel() {
+  const el = document.getElementById('fuTouchPanel');
+  if (!el) return;
+  const eod = new Date(); eod.setHours(23, 59, 59, 999);
+  const due = (fuContacts || []).filter(c => c.state === 'active' && (
+    c.attention_at ||
+    ((c.is_followup_enabled || c.touch_enabled) && c.next_followup_at &&
+      new Date(c.next_followup_at) <= eod)
+  ));
+  if (!due.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  due.sort((a, b) =>
+    ((b.attention_at ? 1 : 0) - (a.attention_at ? 1 : 0)) ||
+    (new Date(a.next_followup_at || 0) - new Date(b.next_followup_at || 0)));
+  const stageName = id => (pipelineStages.find(s => s.id === id) || {}).name || ('Stage ' + id);
+  const now = new Date();
+  const rows = due.slice(0, 30).map(c => {
+    const late = c.next_followup_at && new Date(c.next_followup_at) < now;
+    return `<div class="fu-touch-row${c.attention_at ? ' hot' : ''}">` +
+      `<span>${c.attention_at ? '🔥' : (late ? '⏰' : '📅')}</span>` +
+      `<span class="ft-who"><b>${esc(c.contact_name || c.company_name || c.contact_email)}</b>` +
+        `<span class="ft-email">${esc(c.contact_email)}</span></span>` +
+      `<span class="ft-stage">${esc(stageName(c.pipeline_stage))}</span>` +
+      (c.current_route ? `<span class="ft-route">${esc(c.current_route)}</span>` : '') +
+      `<span class="ft-actions">` +
+        `<button class="fu-btn-primary" onclick="fuAction('${c.id}','free-send')">Send touch</button>` +
+        `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',1)">+1d</button>` +
+        `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',3)">+3d</button>` +
+        `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',7)">+7d</button>` +
+        `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','skip')" title="Skip — push by stage cadence">Skip</button>` +
+      `</span></div>`;
+  }).join('');
+  el.innerHTML = `<div class="fu-touch-head">📋 Today's touches <b>${due.length}</b>` +
+    (due.length > 30 ? ' <span style="font-weight:400;color:var(--text3)">(showing first 30)</span>' : '') +
+    `</div>` + rows;
+  el.style.display = 'block';
+}
+
+async function fuTouch(id, action, days) {
+  try {
+    const res = await fetch('/api/followups/touch', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id, action, days})
+    });
+    const d = await res.json();
+    if (!d.ok) { toast(d.error || 'Failed'); return; }
+    toast(action === 'skip' ? 'Skipped — rescheduled by cadence' : `Snoozed +${days}d`);
+    await loadFollowups();
+  } catch (e) { toast('Failed'); }
 }
 
 async function setFuViewMode(mode, persist = true) {
@@ -6426,7 +6500,7 @@ function fuKanbanCard(c) {
   return `<div class="fu-kanban-card" draggable="true" data-id="${c.id}"
        ondragstart="fuKanbanDragStart(event,'${c.id}')" ondragend="fuKanbanDragEnd(event)">
     <button class="fu-kanban-card-menu" onclick="event.stopPropagation();toggleFuDropdown(event,'${c.id}')" title="Actions">⋯</button>
-    <div class="fu-kanban-card-title">${company}</div>
+    <div class="fu-kanban-card-title">${c.attention_at ? '🔥 ' : ''}${company}</div>
     <div class="fu-kanban-card-email">${email}</div>
     <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
     <div class="fu-kanban-card-foot">⏰ ${lastAct}${route}</div>
@@ -6566,6 +6640,23 @@ function renderPipelineConfigEditor() {
   sBox.innerHTML = ''; fBox.innerHTML = '';
   pipelineStages.forEach(addPipelineStageRow);
   pipelineReplyFilters.forEach(addPipelineFilterRow);
+  renderPipelineCadenceEditor();
+}
+
+function renderPipelineCadenceEditor() {
+  const box = document.getElementById('pipelineCadenceEditor');
+  if (!box) return;
+  box.innerHTML = (pipelineStages || []).map(s => {
+    const c = pipelineCadence[String(s.id)] || { days: 0, mode: 'off' };
+    return `<div class="pl-cad-row" data-sid="${s.id}">` +
+      `<span class="pl-cad-name">${esc(s.name)}</span>` +
+      `every <input type="number" class="pl-cad-days" min="1" max="60" value="${c.days || 3}"> days` +
+      `<select class="pl-cad-mode">` +
+        `<option value="off" ${c.mode === 'off' ? 'selected' : ''}>Off</option>` +
+        `<option value="manual" ${c.mode === 'manual' ? 'selected' : ''}>Manual — Today's touches</option>` +
+        `<option value="auto" ${c.mode === 'auto' ? 'selected' : ''}>Auto-send template</option>` +
+      `</select></div>`;
+  }).join('');
 }
 
 async function savePipelineConfig() {
@@ -6583,16 +6674,24 @@ async function savePipelineConfig() {
     auto_advance_to: r.querySelector('.pl-filter-adv').value ? parseInt(r.querySelector('.pl-filter-adv').value) : null,
     keywords: r.querySelector('.pl-filter-kw').value.split(',').map(s => s.trim()).filter(Boolean),
   })).filter(f => f.label);
+  const cadence = {};
+  document.querySelectorAll('#pipelineCadenceEditor .pl-cad-row').forEach(r => {
+    cadence[r.dataset.sid] = {
+      days: parseInt(r.querySelector('.pl-cad-days').value) || 3,
+      mode: r.querySelector('.pl-cad-mode').value,
+    };
+  });
   try {
     const res = await fetch('/api/followups/pipeline-config', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ stages, reply_filters })
+      body: JSON.stringify({ stages, reply_filters, cadence })
     });
     const data = await res.json();
     if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
     pipelineFilterKeywords = data.filter_keywords || {};
+    pipelineCadence = data.cadence || {};
     renderPipelineConfigEditor();
     toast('Pipeline config saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {

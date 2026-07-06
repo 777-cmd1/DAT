@@ -488,6 +488,15 @@ def _normalize_followup_contact(contact):
         contact.recurring_time = None
         changed = True
 
+    # Iron rule (lazy self-heal on every listing): an active contact with no drip
+    # and no scheduled touch gets one from its stage cadence, staggered so a
+    # legacy backlog spreads over the cadence window instead of one wall.
+    try:
+        if _schedule_touch(contact, stagger=True):
+            changed = True
+    except Exception:
+        pass   # never let cadence scheduling break a listing
+
     if changed:
         contact.updated_at = _utcnow()
     return changed
@@ -970,6 +979,45 @@ def _latest_reply_filter_map(uid, emails=None):
     return out
 
 
+def _cadence_for_stage(ws, stage_id):
+    """Cadence config for a Kanban stage; unknown/custom stages default to off."""
+    cad = ws.get_cadence() if ws else {}
+    return cad.get(str(stage_id or 1), {'days': 0, 'mode': 'off'})
+
+
+def _schedule_touch(fc, ws=None, force=False, stagger=False):
+    """Iron rule: an active contact whose FU drip is not running always carries a
+    next stage-cadence touch (or touch_enabled=False when the stage mode is off).
+
+    force=False only fills gaps (no reschedule churn on read paths); force=True
+    re-bases from now (after a send / stage move / config change). stagger
+    spreads bulk scheduling across the cadence window (deterministic by id) so
+    a backlog doesn't land on a single day. Returns True if a touch was set.
+    """
+    from app.models import Workspace
+    if (fc.state != 'active' or fc.is_followup_enabled
+            or fc.scheduled_once or fc.recurring_enabled):
+        return False
+    ws = ws or (db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None)
+    cad = _cadence_for_stage(ws, fc.pipeline_stage or 1)
+    if cad.get('mode') == 'off' or not cad.get('days'):
+        if fc.touch_enabled:
+            fc.touch_enabled = False
+            fc.next_followup_at = None
+        return False
+    if not force and fc.touch_enabled and fc.next_followup_at:
+        return False   # already scheduled — don't churn on read paths
+    days = int(cad['days'])
+    if stagger and days > 1:
+        try:
+            days = 1 + int(str(fc.id).replace('-', '')[:8], 16) % days
+        except (ValueError, TypeError):
+            pass
+    fc.touch_enabled = True
+    fc.next_followup_at = _utcnow() + timedelta(days=days)
+    return True
+
+
 def _apply_pipeline_stage(fc, target_stage, actor_user_id=None, reason='manual'):
     """Move a follow-up contact to a Kanban pipeline stage (1..N).
 
@@ -993,6 +1041,7 @@ def _apply_pipeline_stage(fc, target_stage, actor_user_id=None, reason='manual')
         _record_event(fc, 'pipeline_move', actor_user_id=actor_user_id,
                       from_stage=str(old), to_stage=str(target),
                       notes=f'pipeline {old}->{target} ({reason})')
+        _schedule_touch(fc, ws, force=True)   # new stage → new cadence
     return True, None
 
 
@@ -4319,11 +4368,14 @@ def api_followups_list():
         q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
     elif special == 'overdue':
         q = q.filter(FollowupContact.next_followup_at < now, FollowupContact.state == 'active',
-                     FollowupContact.is_followup_enabled == True)
+                     db.or_(FollowupContact.is_followup_enabled == True,
+                            FollowupContact.touch_enabled == True))
     elif special == 'due_today':
         q = q.filter(FollowupContact.next_followup_at <= end_of_day,
                      FollowupContact.next_followup_at >= now,
-                     FollowupContact.state == 'active', FollowupContact.is_followup_enabled == True)
+                     FollowupContact.state == 'active',
+                     db.or_(FollowupContact.is_followup_enabled == True,
+                            FollowupContact.touch_enabled == True))
     elif special == 'scheduled':
         q = q.filter(FollowupContact.scheduled_once == True,
                      FollowupContact.next_followup_at > now)
@@ -4339,8 +4391,9 @@ def api_followups_list():
         func.count(case((FollowupContact.state == 'blocked', 1))).label('blocked'),
         func.count(case((FollowupContact.state == 'closed', 1))).label('closed'),
         func.count(case(((FollowupContact.stage == 'completed_fu3') & (FollowupContact.state == 'active'), 1))).label('needs_action'),
-        func.count(case(((FollowupContact.next_followup_at < now) & (FollowupContact.state == 'active') & (FollowupContact.is_followup_enabled == True), 1))).label('overdue'),
-        func.count(case(((FollowupContact.next_followup_at <= end_of_day) & (FollowupContact.next_followup_at >= now) & (FollowupContact.state == 'active') & (FollowupContact.is_followup_enabled == True), 1))).label('due_today'),
+        func.count(case(((FollowupContact.next_followup_at < now) & (FollowupContact.state == 'active') & ((FollowupContact.is_followup_enabled == True) | (FollowupContact.touch_enabled == True)), 1))).label('overdue'),
+        func.count(case(((FollowupContact.next_followup_at <= end_of_day) & (FollowupContact.next_followup_at >= now) & (FollowupContact.state == 'active') & ((FollowupContact.is_followup_enabled == True) | (FollowupContact.touch_enabled == True)), 1))).label('due_today'),
+        func.count(case((FollowupContact.attention_at.isnot(None) & (FollowupContact.state == 'active'), 1))).label('attention'),
         func.count(case(((FollowupContact.scheduled_once == True) & (FollowupContact.next_followup_at > now), 1))).label('scheduled'),
     ).filter(FollowupContact.user_id == uid).first()
 
@@ -4350,6 +4403,7 @@ def api_followups_list():
         'closed': count_q.closed, 'needs_action': count_q.needs_action, 'overdue': count_q.overdue,
         'due_today': count_q.due_today,
         'scheduled': count_q.scheduled,
+        'attention': count_q.attention,
     }
     rmap = _latest_reply_filter_map(uid, {(c.contact_email or '').lower() for c in contacts})
     contacts_out = []
@@ -4504,6 +4558,7 @@ def api_followups_action():
             fc.is_followup_enabled = False
             fc.next_followup_at = None
             fc.completed_fu3_at = now
+            _schedule_touch(fc, force=True)   # drip done → cadence takes over
 
         _record_event(fc, 'manual_send', actor_user_id=uid,
                       from_stage=old_stage, to_stage=fc.stage)
@@ -4538,6 +4593,8 @@ def api_followups_action():
         fc.is_followup_enabled = False
         fc.last_followup_sent_at = now
         fc.last_activity_at = now
+        fc.attention_at = None              # touch delivered — 🔥 resolved
+        _schedule_touch(fc, force=True)     # next touch per stage cadence
         _record_event(fc, 'free_send', actor_user_id=uid,
                       from_stage=fc.stage, to_stage=fc.stage)
         db.session.commit()
@@ -4823,8 +4880,10 @@ def api_followups_pipeline_config():
     filters = ws.get_reply_filters() if ws else [dict(f) for f in PIPELINE_DEFAULT_REPLY_FILTERS]
     keywords = ws.get_filter_keywords() if ws else {k: dict(v) for k, v in PIPELINE_DEFAULT_FILTER_KEYWORDS.items()}
     modes = ws.get_triage_modes() if ws else dict(TRIAGE_DEFAULT_MODES)
+    from app.models import PIPELINE_DEFAULT_CADENCE as _DC
+    cadence = ws.get_cadence() if ws else {k: dict(v) for k, v in _DC.items()}
     return jsonify(stages=stages, reply_filters=filters, filter_keywords=keywords,
-                   triage_modes=modes,
+                   triage_modes=modes, cadence=cadence,
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -4991,12 +5050,43 @@ def api_followups_pipeline_config_save():
                 merged[k] = v
         cfg['triage_modes'] = merged
 
+    cadence = data.get('cadence')
+    cadence_changed = False
+    if isinstance(cadence, dict):
+        from app.models import CADENCE_MODES
+        valid_stage_ids = {str(s['id']) for s in (ws.get_stages())}
+        merged_cad = dict(cfg.get('cadence') or {})
+        for k, v in cadence.items():
+            if str(k) not in valid_stage_ids or not isinstance(v, dict):
+                continue
+            mode = v.get('mode')
+            if mode not in CADENCE_MODES:
+                continue
+            try:
+                days = max(1, min(60, int(v.get('days') or 0))) if mode != 'off' else 0
+            except (TypeError, ValueError):
+                continue
+            merged_cad[str(k)] = {'days': days, 'mode': mode}
+        cfg['cadence'] = merged_cad
+        cadence_changed = True
+
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
     db.session.commit()
+
+    if cadence_changed:
+        # Re-base touches for the whole workspace under the new cadence (staggered
+        # so a large stage doesn't dump every touch on one day).
+        from app.models import FollowupContact as _FC
+        for fc in _FC.query.filter_by(workspace_id=ws.id, state='active').all():
+            if not fc.is_followup_enabled:
+                _schedule_touch(fc, ws, force=True, stagger=True)
+        db.session.commit()
+
     return jsonify(ok=True, stages=ws.get_stages(),
                    reply_filters=ws.get_reply_filters(),
                    filter_keywords=ws.get_filter_keywords(),
-                   triage_modes=ws.get_triage_modes())
+                   triage_modes=ws.get_triage_modes(),
+                   cadence=ws.get_cadence())
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])
@@ -5163,6 +5253,45 @@ def api_replies_undo_auto():
     _sync_crm_stage(reply, 'replied')
     db.session.commit()
     return jsonify(ok=True, contact_removed=contact_removed)
+
+
+@app.route('/api/followups/touch', methods=['POST'])
+@login_required
+@limiter.limit("120 per minute")
+@csrf_protected
+def api_followups_touch():
+    """Today-queue quick actions on a cadence touch:
+    snooze (+N days), skip (re-base by stage cadence), clear_attention (resolve 🔥)."""
+    from app.models import FollowupContact
+    uid = _current_user_id()
+    data = request.get_json() or {}
+    fc = db.session.get(FollowupContact, data.get('id'))
+    if not fc or fc.user_id != uid:
+        return jsonify(error='Not found'), 404
+    action = (data.get('action') or '').strip()
+
+    if action == 'snooze':
+        try:
+            days = int(data.get('days') or 1)
+        except (TypeError, ValueError):
+            days = 1
+        days = max(1, min(30, days))
+        fc.next_followup_at = _utcnow() + timedelta(days=days)
+        fc.touch_enabled = True
+        fc.attention_at = None
+        _record_event(fc, 'touch_snoozed', actor_user_id=uid, notes=f'+{days}d')
+    elif action == 'skip':
+        fc.attention_at = None
+        if not _schedule_touch(fc, force=True):
+            fc.next_followup_at = None
+        _record_event(fc, 'touch_skipped', actor_user_id=uid)
+    elif action == 'clear_attention':
+        fc.attention_at = None
+    else:
+        return jsonify(error="action must be 'snooze', 'skip' or 'clear_attention'"), 400
+    fc.updated_at = _utcnow()
+    db.session.commit()
+    return jsonify(ok=True, contact=fc.to_dict())
 
 
 @app.route('/api/followups/delete', methods=['POST'])
@@ -5533,26 +5662,30 @@ def add_to_followups(reply_obj):
 
 
 def _check_reply_stops_followup(reply_email, user_id):
-    """If a reply comes from a contact in followup_contacts, stop their FU."""
+    """A reply from a pipeline contact: stop the FU drip (per settings), flag warm
+    contacts for a human answer (🔥), and — iron rule — schedule the next
+    stage-cadence touch instead of leaving the contact with no next step."""
     from app.models import FollowupContact, Workspace
     ws = Workspace.query.filter_by(owner_id=user_id).first()
     if not ws:
         return
-    settings = _get_fu_settings(ws.id)
-    if not settings['auto_stop_on_reply']:
-        return
-
     email = reply_email.strip().lower()
     fc = FollowupContact.query.filter_by(workspace_id=ws.id, contact_email=email).first()
-    if not fc or not fc.is_followup_enabled:
+    if not fc:
         return
 
     now = _utcnow()
-    fc.is_followup_enabled = False
     fc.last_reply_at = now
     fc.last_activity_at = now
-    fc.next_followup_at = None
-    _record_event(fc, 'reply_detected', actor_type='system', notes=f'Reply from {email}')
+    if (fc.pipeline_stage or 1) >= 2:
+        fc.attention_at = now          # warm contact replied — answer today
+
+    settings = _get_fu_settings(ws.id)
+    if fc.is_followup_enabled and settings['auto_stop_on_reply']:
+        fc.is_followup_enabled = False
+        if not _schedule_touch(fc, ws, force=True):
+            fc.next_followup_at = None
+        _record_event(fc, 'reply_detected', actor_type='system', notes=f'Reply from {email}')
 
 
 def _get_fu_templates_for_user(uid):
@@ -5813,7 +5946,70 @@ def _run_scheduled_followups():
         if rec_total:
             app.logger.info(f'FU scheduler: sent {rec_total} recurring follow-ups')
 
-        return sent_total + rec_total
+        # ── Path 3: Stage-cadence touches (auto mode only) ───────────────────
+        # Manual-mode touches just sit in Today/Overdue until the user acts.
+        try:
+            tq = FollowupContact.query.filter(
+                FollowupContact.state == 'active',
+                FollowupContact.touch_enabled == True,
+                FollowupContact.is_followup_enabled == False,
+                FollowupContact.recurring_enabled == False,
+                FollowupContact.next_followup_at <= now,
+            )
+            try:
+                touches = tq.with_for_update(skip_locked=True).all()
+            except Exception:
+                touches = tq.all()
+        except Exception as e:
+            app.logger.error(f'FU touch scheduler query error: {e}')
+            return sent_total + rec_total
+
+        from app.models import Workspace as _WS
+        touch_total = 0
+        for fc in touches:
+            if fc.id in processed_ids:
+                continue
+            try:
+                ws = db.session.get(_WS, fc.workspace_id) if fc.workspace_id else None
+                cad = _cadence_for_stage(ws, fc.pipeline_stage or 1)
+                if cad.get('mode') != 'auto':
+                    continue   # manual/off — leave it in the Today queue
+                template_text = _get_random_fu_template(fc.user_id)
+                if not template_text:
+                    continue
+                acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
+                if not acct:
+                    continue
+                cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+                       'phone': acct.your_phone or '', 'route': fc.current_route or '',
+                       'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
+                fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
+                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                           'source_thread_id': fc.source_thread_id or ''}
+                ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
+                if ok:
+                    fc.last_followup_sent_at = now
+                    fc.last_activity_at = now
+                    fc.attention_at = None
+                    _schedule_touch(fc, ws, force=True)
+                    _record_event(fc, 'touch_sent', actor_type='scheduler',
+                                  from_stage=fc.stage, to_stage=fc.stage)
+                    processed_ids.add(fc.id)
+                    touch_total += 1
+                else:
+                    _record_event(fc, 'touch_sent', actor_type='scheduler',
+                                  from_stage=fc.stage, to_stage=fc.stage,
+                                  metadata_json=json.dumps({'error': str(err)}),
+                                  notes='Send failed - will retry')
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f'FU touch scheduler error for {fc.contact_email}: {e}')
+
+        if touch_total:
+            app.logger.info(f'FU scheduler: sent {touch_total} cadence touches')
+
+        return sent_total + rec_total + touch_total
 
 def scheduled_followup_worker():
     """Daemon thread: checks for due follow-ups every 15 minutes."""
@@ -5883,6 +6079,9 @@ with app.app_context():
         ('replies',           'triage_confidence',   'FLOAT'),
         ('replies',           'auto_processed',      'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('replies',           'auto_action',         'VARCHAR(20)'),
+        # Follow-up cadence engine (Today's touches)
+        ('followup_contacts', 'touch_enabled',       'BOOLEAN NOT NULL DEFAULT FALSE'),
+        ('followup_contacts', 'attention_at',        'TIMESTAMP'),
     ]
     try:
         with db.engine.connect() as _conn:

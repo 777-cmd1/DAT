@@ -90,7 +90,11 @@ PIPELINE_DEFAULT_FILTER_KEYWORDS = {
                                     "we don't use landstar", "we dont use landstar", "don't use landstar",
                                     "dont use landstar", "we do not use landstar", "not able to book with landstar"], "confidence": 0.9},
     "no_landstar_v2": {"keywords": ["no landstar"],                                                 "confidence": 0.8},
-    "dnu":            {"keywords": ["dnu", "do not use", "do not contact"],                         "confidence": 0.95},
+    "dnu":            {"keywords": ["dnu", "do not use", "do not contact",
+                                    "can't use you", "cannot use you", "can not use you",
+                                    "we don't use you", "we dont use you", "don't use you",
+                                    "dont use you", "won't use you", "wont use you",
+                                    "will not use you", "unable to use you", "not use your company"], "confidence": 0.95},
     "no_contact":     {"keywords": ["don't contact me", "do not contact me", "stop contacting", "remove me", "unsubscribe", "take me off"], "confidence": 0.9},
     "cannot_use_ls":  {"keywords": ["we cannot use landstar", "cannot use ls"],                     "confidence": 0.9},
     "rate_request":   {"keywords": ["what's your rate", "whats your rate", "what is your rate",
@@ -175,12 +179,26 @@ class Workspace(db.Model):
         return out
 
     def get_filter_keywords(self):
-        """Auto-detection keyword sets, merged: defaults for built-ins overlaid by
-        any stored (custom or overridden) entries."""
+        """Auto-detection keyword sets. For built-in filters the stored set is
+        UNIONed with the current defaults — otherwise a config saved before a
+        release would silently shadow every keyword improvement shipped since
+        (the cost: a deliberately deleted default keyword resurrects, which is
+        far rarer/safer than missing new detection rules). Custom filters and
+        stored confidences are taken as-is."""
         config = self.pipeline_config or {}
         merged = {k: dict(v) for k, v in PIPELINE_DEFAULT_FILTER_KEYWORDS.items()}
         for k, v in (config.get('filter_keywords') or {}).items():
-            if isinstance(v, dict):
+            if not isinstance(v, dict):
+                continue
+            if k in PIPELINE_DEFAULT_FILTER_KEYWORDS:
+                stored = [str(w).lower() for w in (v.get('keywords') or [])]
+                defaults = [str(w).lower() for w in PIPELINE_DEFAULT_FILTER_KEYWORDS[k].get('keywords', [])]
+                merged[k] = {
+                    'keywords': stored + [w for w in defaults if w not in stored],
+                    'confidence': v.get('confidence',
+                                        PIPELINE_DEFAULT_FILTER_KEYWORDS[k].get('confidence', 0.8)),
+                }
+            else:
                 merged[k] = v
         return merged
 

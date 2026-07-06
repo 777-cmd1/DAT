@@ -78,7 +78,9 @@ PIPELINE_DEFAULT_REPLY_FILTERS = [
     {"key": "gave_info",      "label": "Gave info",                       "color": "#37b24c", "emoji": "📦", "auto_advance_to": 2,    "order": 8, "is_custom": False, "category": "gave_info"},
     {"key": "auto_reply",     "label": "Auto-reply / OOO",                "color": "#868e96", "emoji": "🤖", "auto_advance_to": None, "order": 9, "is_custom": False, "category": "auto_reply"},
     {"key": "declined",       "label": "Not interested",                  "color": "#e03131", "emoji": "🙅", "auto_advance_to": None, "order": 10, "is_custom": False, "category": "negative"},
-    {"key": "mc_request",     "label": "MC request",                      "color": "#0ea5e9", "emoji": "🪪", "auto_advance_to": 2,    "order": 11, "is_custom": False, "category": "rate_request"},
+    # MC asks are skip-worthy per user workflow: recommended action is Ignore,
+    # they count under the Negative chip and never advance the pipeline.
+    {"key": "mc_request",     "label": "MC request",                      "color": "#0ea5e9", "emoji": "🪪", "auto_advance_to": None, "order": 11, "is_custom": False, "category": "negative"},
 ]
 
 # Keyword sets for auto-detection (matched case-insensitively over subject+body).

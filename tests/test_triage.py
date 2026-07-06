@@ -61,14 +61,17 @@ def test_typographic_apostrophe_matches():
     res = _classify('', 'Sorry, we don’t use Landstar at all')
     assert res and res['category'] == 'negative'
 
-def test_whats_your_mc_is_rate_request():
+def test_whats_your_mc_is_skippable_negative():
+    """Per user workflow MC asks are skip-worthy: Ignore recommendation, no
+    pipeline advance — they group under the Negative chip."""
     res = _classify('', "What's your MC? ##TSK_ID##1d4fd0fb## Truly Carrier Sales Representative")
-    assert res and res['category'] == 'rate_request'
+    assert res and res['category'] == 'negative'
     assert res['filter_key'] == 'mc_request'
 
-def test_bare_mc_question_is_rate_request():
+def test_bare_mc_question_is_skippable_negative():
     res = _classify('', 'MC? On Wed, Jun 17, 2026 at 12:35 PM <x@y.com> wrote: > Hello')
-    assert res and res['category'] == 'rate_request'
+    assert res and res['category'] == 'negative'
+    assert res['filter_key'] == 'mc_request'
 
 def test_cant_work_with_your_mc_is_negative():
     res = _classify('', "Thanks for checking, but we can't work with your MC at this time. ##TSK_ID##x##")

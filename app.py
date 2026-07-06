@@ -717,6 +717,27 @@ _TRIAGE_INFO_SIGNALS = [
 # for it without having to flip the whole category to 'suggest').
 TRIAGE_AUTO_MIN_CONF = {'negative': 0.85, 'auto_reply': 0.85, 'gave_info': 0.7, 'rate_request': 0.7}
 
+# Quoted-mail markers: everything from the first marker on is the sender's own
+# outreach echoed back (full of lane/date/rate signals) — never classify it.
+_QUOTE_MARKERS = [
+    re.compile(r'(?im)^\s*-{2,}\s*original message\s*-{2,}'),
+    re.compile(r'(?im)^\s*-{2,}\s*forwarded message\s*-{2,}'),
+    re.compile(r'(?im)^on .{0,120}wrote:'),
+    re.compile(r'(?im)^from:\s.+@'),
+    re.compile(r'(?im)^sent from my '),
+]
+
+
+def _strip_quoted(body):
+    """Return only the reply's own text — cut at the first quoted-mail marker."""
+    t = body or ''
+    cut = len(t)
+    for rx in _QUOTE_MARKERS:
+        mm = rx.search(t)
+        if mm:
+            cut = min(cut, mm.start())
+    return t[:cut]
+
 
 def classify_reply_text(subject, body, filters, keywords):
     """Pure triage classifier over subject+body.
@@ -724,9 +745,11 @@ def classify_reply_text(subject, body, filters, keywords):
     Returns {'category', 'confidence', 'filter_key', 'signals'} or None (unknown).
     Precedence: auto_reply > negative > rate_request > gave_info — an opt-out
     buried in a load dump must still win, and a quoted $-rate means the carrier
-    *gave* a rate rather than asked for one.
+    *gave* a rate rather than asked for one. Quoted original mail is stripped
+    from the body first so the user's own outreach never counts as signals.
     """
-    text = ((subject or '') + ' ' + (body or '')).strip()
+    own_body = _strip_quoted(body)
+    text = ((subject or '') + ' ' + own_body).strip()
     if not text:
         return None
     matches = _match_reply_filters(text, filters, keywords)
@@ -740,7 +763,11 @@ def classify_reply_text(subject, body, filters, keywords):
             return {'category': cat, 'confidence': m['confidence'],
                     'filter_key': m['key'], 'signals': []}
 
-    signals = [name for name, rx in _TRIAGE_INFO_SIGNALS if rx.search(text)]
+    # Structural signals never come from a Re:/Fwd: subject — that's an echo of
+    # the user's own outreach (lane, date, footage), not carrier-provided info.
+    sig_text = own_body if re.match(r'(?i)\s*(?:re|fwd?)\s*:', subject or '') \
+        else ((subject or '') + ' ' + own_body).strip()
+    signals = [name for name, rx in _TRIAGE_INFO_SIGNALS if rx.search(sig_text)]
     has_money = 'rate_amount' in signals
 
     if 'rate_request' in by_cat and not has_money:
@@ -869,11 +896,13 @@ def _auto_triage_new_replies(uid, msg_ids):
 def _backfill_triage(uid, limit=500):
     """Classify-only pass (no auto-actions) over:
     - never-classified replies (pre-existing backlog), and
-    - still-pending replies with no category — re-scanned on every Check Gmail
-      so keyword tuning applies to the current queue without manual work.
+    - the whole live queue (status new/viewed) — re-scanned on every Check Gmail
+      and OVERWRITTEN, so classifier/keyword improvements both pick up untagged
+      replies and correct previously mis-tagged ones without manual work.
+    Auto-processed replies are never touched (their action already happened).
     """
     from app.models import Reply, Workspace
-    from sqlalchemy import or_, and_
+    from sqlalchemy import or_
     ws = Workspace.query.filter_by(owner_id=uid).first()
     if not ws:
         return 0
@@ -881,8 +910,7 @@ def _backfill_triage(uid, limit=500):
         Reply.user_id == uid,
         or_(
             Reply.classified_at.is_(None),
-            and_(Reply.triage_category.is_(None),
-                 Reply.status.in_(['new', 'viewed'])),
+            Reply.status.in_(['new', 'viewed']),
         ),
     ).order_by(Reply.received_at.desc()).limit(limit).all()
     if not rows:
@@ -892,13 +920,20 @@ def _backfill_triage(uid, limit=500):
     now = _utcnow()
     n = 0
     for r in rows:
-        res = classify_reply_text(r.subject, r.body, filters, kws)
         r.classified_at = now
+        if r.auto_processed:
+            continue
+        res = classify_reply_text(r.subject, r.body, filters, kws)
         if res:
             r.triage_category = res['category']
             r.triage_confidence = res['confidence']
-            r.reply_filter_key = r.reply_filter_key or res.get('filter_key')
+            r.reply_filter_key = res.get('filter_key')
             n += 1
+        elif r.status in ('new', 'viewed'):
+            # stale tag from an older ruleset — clear rather than mislead
+            r.triage_category = None
+            r.triage_confidence = None
+            r.reply_filter_key = None
     db.session.commit()
     return n
 

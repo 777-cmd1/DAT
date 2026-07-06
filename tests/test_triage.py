@@ -85,9 +85,48 @@ def test_nothing_this_week_is_negative():
     res = _classify('', 'Nothing this week Best regards, Siri Carrion Logistics Coordinator')
     assert res and res['category'] == 'negative'
 
-def test_lane_subject_with_generic_footage_is_gave_info():
-    res = _classify('Re: Grinnell, IA to Galesville, WI, 6/18, 26 ft', '')
+def test_reply_echo_subject_gives_no_structural_signals():
+    """'Re: <lane>' is an echo of the user's own outreach — an empty reply with
+    only that subject must NOT classify as gave_info."""
+    assert _classify('Re: Grinnell, IA to Galesville, WI, 6/18, 26 ft', '') is None
+
+def test_fresh_subject_with_lane_still_counts():
+    res = _classify('Grinnell, IA to Galesville, WI, 6/18, 26 ft', '')
     assert res and res['category'] == 'gave_info'
+
+def test_quoted_outreach_does_not_classify():
+    """Signals that appear only inside the quoted original message are ignored."""
+    body = ("Got it, thanks!\n\n-----Original Message-----\n"
+            "From: bogdan@ofcagent.com <bogdan@ofcagent.com>\n"
+            "Subject: Seabrook, TX to Aurora, CO, 6/18, 20 ft\n")
+    assert _classify('', body) is None
+
+def test_negative_wins_over_quoted_signals():
+    body = ("Sorry Bogdon, we don't use Landstar\n\n-----Original Message-----\n"
+            "From: bogdan@ofcagent.com <bogdan@ofcagent.com>\n"
+            "Sent: Wednesday, June 17, 2026 4:00 PM\n"
+            "Subject: Seabrook, TX to Aurora, CO, 6/18, 20 ft\n")
+    res = _classify('', body)
+    assert res and res['category'] == 'negative'
+    assert res['filter_key'] == 'no_landstar'
+
+def test_cant_use_you_family_is_negative():
+    for phrase in ("we can't use you", "We cannot use you at this time",
+                   "sorry, won't use you guys", "we don't use you"):
+        res = _classify('', phrase)
+        assert res and res['category'] == 'negative', phrase
+
+def test_stored_old_keywords_do_not_shadow_new_defaults(app, db):
+    """A workspace config saved before a release must still get keyword
+    improvements — stored built-in sets are unioned with current defaults."""
+    user, ws = _make_user_ws(db)
+    ws.pipeline_config = {'filter_keywords': {'no_landstar': {
+        'keywords': ["can not use landstar", "cannot use landstar", "can't use landstar"],
+        'confidence': 0.9}}}
+    db.session.commit()
+    kws = ws.get_filter_keywords()['no_landstar']['keywords']
+    assert "we don't use landstar" in kws          # new default present
+    assert "can not use landstar" in kws           # stored kept
 
 
 # ── Classifier: auto-reply / OOO ─────────────────────────────────────────────
@@ -280,8 +319,11 @@ def test_backfill_classifies_without_actions(app, db):
     assert r.triage_category == 'negative'
     assert r.status == 'new'                 # backfill never auto-actions
     assert r.classified_at is not None
-    # second pass skips already-classified rows
-    assert _app._backfill_triage(user.id) == 0
+    # queued replies are re-scanned each pass (so keyword tuning self-heals the
+    # queue) and the verdict stays stable
+    assert _app._backfill_triage(user.id) == 1
+    db.session.refresh(r)
+    assert r.triage_category == 'negative'
 
 
 # ── API: bulk triage + undo ──────────────────────────────────────────────────

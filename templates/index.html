@@ -6400,10 +6400,10 @@ function renderTouchPanel() {
   const el = document.getElementById('fuTouchPanel');
   if (!el) return;
   const eod = new Date(); eod.setHours(23, 59, 59, 999);
+  // A set date is a commitment no matter which engine set it — flags only gate auto-sends
   const due = (fuContacts || []).filter(c => c.state === 'active' && (
     c.attention_at ||
-    ((c.is_followup_enabled || c.touch_enabled) && c.next_followup_at &&
-      new Date(c.next_followup_at) <= eod)
+    (c.next_followup_at && new Date(c.next_followup_at) <= eod)
   ));
   if (!due.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   due.sort((a, b) =>
@@ -6413,6 +6413,8 @@ function renderTouchPanel() {
   const now = new Date();
   const rows = due.slice(0, 30).map(c => {
     const late = c.next_followup_at && new Date(c.next_followup_at) < now;
+    // drip contacts advance the FU1-3 sequence; everyone else gets a cadence touch
+    const sendAction = /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send';
     return `<div class="fu-touch-row${c.attention_at ? ' hot' : ''}">` +
       `<span>${c.attention_at ? '🔥' : (late ? '⏰' : '📅')}</span>` +
       `<span class="ft-who"><b>${esc(c.contact_name || c.company_name || c.contact_email)}</b>` +
@@ -6420,7 +6422,7 @@ function renderTouchPanel() {
       `<span class="ft-stage">${esc(stageName(c.pipeline_stage))}</span>` +
       (c.current_route ? `<span class="ft-route">${esc(c.current_route)}</span>` : '') +
       `<span class="ft-actions">` +
-        `<button class="fu-btn-primary" onclick="fuAction('${c.id}','free-send')">Send touch</button>` +
+        `<button class="fu-btn-primary" onclick="fuAction('${c.id}','${sendAction}')">Send touch</button>` +
         `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',1)">+1d</button>` +
         `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',3)">+3d</button>` +
         `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',7)">+7d</button>` +

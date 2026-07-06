@@ -4367,15 +4367,14 @@ def api_followups_list():
     if special == 'needs_action':
         q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
     elif special == 'overdue':
-        q = q.filter(FollowupContact.next_followup_at < now, FollowupContact.state == 'active',
-                     db.or_(FollowupContact.is_followup_enabled == True,
-                            FollowupContact.touch_enabled == True))
+        # a set date is a commitment regardless of which engine set it (drip,
+        # cadence touch or manual schedule) — enabled flags only gate auto-sends
+        q = q.filter(FollowupContact.next_followup_at < now,
+                     FollowupContact.state == 'active')
     elif special == 'due_today':
         q = q.filter(FollowupContact.next_followup_at <= end_of_day,
                      FollowupContact.next_followup_at >= now,
-                     FollowupContact.state == 'active',
-                     db.or_(FollowupContact.is_followup_enabled == True,
-                            FollowupContact.touch_enabled == True))
+                     FollowupContact.state == 'active')
     elif special == 'scheduled':
         q = q.filter(FollowupContact.scheduled_once == True,
                      FollowupContact.next_followup_at > now)
@@ -4391,8 +4390,8 @@ def api_followups_list():
         func.count(case((FollowupContact.state == 'blocked', 1))).label('blocked'),
         func.count(case((FollowupContact.state == 'closed', 1))).label('closed'),
         func.count(case(((FollowupContact.stage == 'completed_fu3') & (FollowupContact.state == 'active'), 1))).label('needs_action'),
-        func.count(case(((FollowupContact.next_followup_at < now) & (FollowupContact.state == 'active') & ((FollowupContact.is_followup_enabled == True) | (FollowupContact.touch_enabled == True)), 1))).label('overdue'),
-        func.count(case(((FollowupContact.next_followup_at <= end_of_day) & (FollowupContact.next_followup_at >= now) & (FollowupContact.state == 'active') & ((FollowupContact.is_followup_enabled == True) | (FollowupContact.touch_enabled == True)), 1))).label('due_today'),
+        func.count(case(((FollowupContact.next_followup_at < now) & (FollowupContact.state == 'active'), 1))).label('overdue'),
+        func.count(case(((FollowupContact.next_followup_at <= end_of_day) & (FollowupContact.next_followup_at >= now) & (FollowupContact.state == 'active'), 1))).label('due_today'),
         func.count(case((FollowupContact.attention_at.isnot(None) & (FollowupContact.state == 'active'), 1))).label('attention'),
         func.count(case(((FollowupContact.scheduled_once == True) & (FollowupContact.next_followup_at > now), 1))).label('scheduled'),
     ).filter(FollowupContact.user_id == uid).first()

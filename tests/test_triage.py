@@ -51,6 +51,45 @@ def test_negative_beats_gave_info():
     assert res and res['category'] == 'negative'
 
 
+# ── Classifier: real-world queue texts (user-reported misses) ────────────────
+
+def test_we_dont_use_landstar_is_negative():
+    res = _classify('', "Sorry Bogdon, we don't use Landstar -----Original Message----- From: x@y.com")
+    assert res and res['category'] == 'negative'
+
+def test_typographic_apostrophe_matches():
+    res = _classify('', 'Sorry, we don’t use Landstar at all')
+    assert res and res['category'] == 'negative'
+
+def test_whats_your_mc_is_skippable_negative():
+    """Per user workflow MC asks are skip-worthy: Ignore recommendation, no
+    pipeline advance — they group under the Negative chip."""
+    res = _classify('', "What's your MC? ##TSK_ID##1d4fd0fb## Truly Carrier Sales Representative")
+    assert res and res['category'] == 'negative'
+    assert res['filter_key'] == 'mc_request'
+
+def test_bare_mc_question_is_skippable_negative():
+    res = _classify('', 'MC? On Wed, Jun 17, 2026 at 12:35 PM <x@y.com> wrote: > Hello')
+    assert res and res['category'] == 'negative'
+    assert res['filter_key'] == 'mc_request'
+
+def test_cant_work_with_your_mc_is_negative():
+    res = _classify('', "Thanks for checking, but we can't work with your MC at this time. ##TSK_ID##x##")
+    assert res and res['category'] == 'negative'
+
+def test_not_at_this_time_is_negative():
+    res = _classify('', 'Not at this time Boone Almquist [cid:image001]')
+    assert res and res['category'] == 'negative'
+
+def test_nothing_this_week_is_negative():
+    res = _classify('', 'Nothing this week Best regards, Siri Carrion Logistics Coordinator')
+    assert res and res['category'] == 'negative'
+
+def test_lane_subject_with_generic_footage_is_gave_info():
+    res = _classify('Re: Grinnell, IA to Galesville, WI, 6/18, 26 ft', '')
+    assert res and res['category'] == 'gave_info'
+
+
 # ── Classifier: auto-reply / OOO ─────────────────────────────────────────────
 
 def test_out_of_office_subject():

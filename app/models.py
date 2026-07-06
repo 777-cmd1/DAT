@@ -77,12 +77,18 @@ PIPELINE_DEFAULT_REPLY_FILTERS = [
     {"key": "rate_request",   "label": "Rate request",                    "color": "#f59f00", "emoji": "💰", "auto_advance_to": 2,    "order": 7, "is_custom": False, "category": "rate_request"},
     {"key": "gave_info",      "label": "Gave info",                       "color": "#37b24c", "emoji": "📦", "auto_advance_to": 2,    "order": 8, "is_custom": False, "category": "gave_info"},
     {"key": "auto_reply",     "label": "Auto-reply / OOO",                "color": "#868e96", "emoji": "🤖", "auto_advance_to": None, "order": 9, "is_custom": False, "category": "auto_reply"},
+    {"key": "declined",       "label": "Not interested",                  "color": "#e03131", "emoji": "🙅", "auto_advance_to": None, "order": 10, "is_custom": False, "category": "negative"},
+    # MC asks are skip-worthy per user workflow: recommended action is Ignore,
+    # they count under the Negative chip and never advance the pipeline.
+    {"key": "mc_request",     "label": "MC request",                      "color": "#0ea5e9", "emoji": "🪪", "auto_advance_to": None, "order": 11, "is_custom": False, "category": "negative"},
 ]
 
 # Keyword sets for auto-detection (matched case-insensitively over subject+body).
 PIPELINE_DEFAULT_FILTER_KEYWORDS = {
     "can_use":        {"keywords": ["we can use you", "can use you", "we can use"],                 "confidence": 0.85},
-    "no_landstar":    {"keywords": ["can not use landstar", "cannot use landstar", "can't use landstar"], "confidence": 0.9},
+    "no_landstar":    {"keywords": ["can not use landstar", "cannot use landstar", "can't use landstar",
+                                    "we don't use landstar", "we dont use landstar", "don't use landstar",
+                                    "dont use landstar", "we do not use landstar", "not able to book with landstar"], "confidence": 0.9},
     "no_landstar_v2": {"keywords": ["no landstar"],                                                 "confidence": 0.8},
     "dnu":            {"keywords": ["dnu", "do not use", "do not contact"],                         "confidence": 0.95},
     "no_contact":     {"keywords": ["don't contact me", "do not contact me", "stop contacting", "remove me", "unsubscribe", "take me off"], "confidence": 0.9},
@@ -98,6 +104,16 @@ PIPELINE_DEFAULT_FILTER_KEYWORDS = {
                                     "on vacation", "on holiday", "maternity leave",
                                     "undeliverable", "delivery status notification",
                                     "away from the office"],                                        "confidence": 0.9},
+    # Real-world soft declines ("not now" rather than "never") — confidence kept
+    # below the negative auto-threshold so even in auto mode they only suggest.
+    "declined":       {"keywords": ["not interested", "not at this time", "nothing this week",
+                                    "no loads this week", "nothing right now", "nothing at this time",
+                                    "can't work with your mc", "cannot work with your mc",
+                                    "can not work with your mc", "we are covered", "we're covered",
+                                    "all covered", "load is covered", "it's covered", "already covered"], "confidence": 0.8},
+    "mc_request":     {"keywords": ["what's your mc", "whats your mc", "what is your mc",
+                                    "your mc number", "send your mc", "send me your mc",
+                                    "mc?", "mc #?", "mc number?"],                                  "confidence": 0.8},
 }
 
 # Built-in keys are editable (color/emoji/label/keywords/auto-advance) but never deletable.

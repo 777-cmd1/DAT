@@ -5618,9 +5618,14 @@ function tqCard(msgs) {
   // recommended action button (ignore for negative/auto-reply, FU for info/rate)
   const triCat = TRIAGE_CATS[latest.triage_category] || null;
   const rec = triCat ? triCat.action : '';
+  // Prefer the matched filter's label ("MC request") over the generic category
+  const fMeta = latest.reply_filter_key
+    ? (pipelineReplyFilters || []).find(f => f.key === latest.reply_filter_key) : null;
+  const badgeTxt = fMeta ? (fMeta.emoji || '') + ' ' + fMeta.label
+                         : (triCat ? triCat.emoji + ' ' + triCat.label : '');
   const catBadge = triCat
     ? '<span class="tq-cat-badge" style="border-color:' + triCat.color + ';color:' + triCat.color + ';background:' + triCat.color + '14">' +
-        triCat.emoji + ' ' + triCat.label + '</span>'
+        badgeTxt + '</span>'
     : '';
 
   // Right column: show actions only for unprocessed states; otherwise show reset

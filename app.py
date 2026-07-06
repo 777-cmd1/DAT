@@ -666,7 +666,7 @@ def _norm_hex_color(c, fallback='#888888'):
 def _kw_in_text(kw, t):
     """Word-boundary keyword match: 'dnu' must not fire inside 'sandnut'.
     Both args lowercase; kw may be a multi-word phrase or carry punctuation."""
-    kw = str(kw or '').lower().strip()
+    kw = str(kw or '').lower().replace('’', "'").strip()
     if not kw:
         return False
     return re.search(r'(?<!\w)' + re.escape(kw) + r'(?!\w)', t) is not None
@@ -675,8 +675,9 @@ def _kw_in_text(kw, t):
 def _match_reply_filters(text, filters, keywords):
     """Reply-filters whose keywords appear in text (case-insensitive, word-boundary),
     sorted by confidence desc. Pure: filters/keywords are passed in so callers can
-    load workspace config once per request."""
-    t = (text or '').lower()
+    load workspace config once per request. Typographic apostrophes are normalized
+    so "don’t" in real mail matches a "don't" keyword."""
+    t = (text or '').lower().replace('’', "'")
     if not t.strip():
         return []
     out = []
@@ -706,8 +707,8 @@ _TRIAGE_INFO_SIGNALS = [
     ('fcfs',        re.compile(r'(?i)\bfcfs\b')),
     ('city_state',  re.compile(r'\b[A-Z][a-zA-Z .]+,\s*[A-Z]{2}\b')),
     ('date',        re.compile(r'(?i)\b(?:mon|tues?|wed(?:nes)?|thur?s?|fri|sat(?:ur)?|sun)(?:day)?\b|\b\d{1,2}/\d{1,2}\b')),
-    # bare "53"/"48" must carry a length marker (' or ft) so plain numbers don't count
-    ('equipment',   re.compile(r"(?i)\b(?:dry\s?van|reefer|flatbed|step\s?deck|hazmat|53\s?(?:ft\b|')|48\s?(?:ft\b|'))")),
+    # bare numbers must carry a length marker (' or ft) so plain digits don't count
+    ('equipment',   re.compile(r"(?i)\b(?:dry\s?van|reefer|flatbed|step\s?deck|hazmat|conestoga|hotshot|\d{2,3}\s?(?:ft\b|'))")),
 ]
 
 # Minimum confidence for an 'auto' mode to actually fire — below it we only suggest.
@@ -821,6 +822,10 @@ def _auto_triage_new_replies(uid, msg_ids):
             continue
         r.triage_category = res['category']
         r.triage_confidence = res['confidence']
+        # invisible system tag: persist the matched filter even in suggest mode so
+        # the card badge can show the specific label ("MC request", not just the
+        # category) and bulk follow-up knows the stage target
+        r.reply_filter_key = r.reply_filter_key or res.get('filter_key')
         out['classified'] += 1
 
         if r.status != 'new':
@@ -832,7 +837,6 @@ def _auto_triage_new_replies(uid, msg_ids):
             out['detected'][cat] = out['detected'].get(cat, 0) + 1
             continue
 
-        r.reply_filter_key = res.get('filter_key') or r.reply_filter_key
         r.auto_processed = True
 
         if cat in ('negative', 'auto_reply'):
@@ -863,15 +867,23 @@ def _auto_triage_new_replies(uid, msg_ids):
 
 
 def _backfill_triage(uid, limit=500):
-    """Classify-only pass over never-classified replies (no auto-actions), so the
-    pre-existing backlog gets category counts/sections after one Check Gmail."""
+    """Classify-only pass (no auto-actions) over:
+    - never-classified replies (pre-existing backlog), and
+    - still-pending replies with no category — re-scanned on every Check Gmail
+      so keyword tuning applies to the current queue without manual work.
+    """
     from app.models import Reply, Workspace
+    from sqlalchemy import or_, and_
     ws = Workspace.query.filter_by(owner_id=uid).first()
     if not ws:
         return 0
     rows = Reply.query.filter(
         Reply.user_id == uid,
-        Reply.classified_at.is_(None),
+        or_(
+            Reply.classified_at.is_(None),
+            and_(Reply.triage_category.is_(None),
+                 Reply.status.in_(['new', 'viewed'])),
+        ),
     ).order_by(Reply.received_at.desc()).limit(limit).all()
     if not rows:
         return 0
@@ -885,6 +897,7 @@ def _backfill_triage(uid, limit=500):
         if res:
             r.triage_category = res['category']
             r.triage_confidence = res['confidence']
+            r.reply_filter_key = r.reply_filter_key or res.get('filter_key')
             n += 1
     db.session.commit()
     return n

@@ -3404,6 +3404,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
               <div style="margin-bottom:10px">
                 <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Body</label>
                 <textarea id="newFuTmplBody" rows="4" placeholder="Hi,&#10;&#10;Just following up…&#10;&#10;{name}&#10;{company} | {phone}" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--text);font-family:inherit;resize:vertical"></textarea>
+                <div style="font-size:11px;color:var(--text3);margin-top:5px">Variables: <code>{contact_name}</code> <code>{contact_company}</code> <code>{last_route}</code> <code>{last_rate}</code> <code>{days_since_reply}</code> — filled from the contact's last reply; plus <code>{name}</code> <code>{company}</code> <code>{phone}</code> (yours) and <code>{origin}</code> <code>{destination}</code>.</div>
               </div>
               <div style="display:flex;gap:8px">
                 <button class="btn btn-primary btn-sm" onclick="saveNewFuTmpl()">Add Template</button>

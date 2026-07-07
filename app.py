@@ -4283,6 +4283,36 @@ def err_500(e):
 
 # ─── FOLLOW-UPS ───────────────────────────────────────────────────────────────
 
+def _contact_template_vars(email, uid):
+    """Contact-side template variables for follow-up/touch sends:
+    {contact_name} {contact_company} {last_rate} {days_since_reply}."""
+    out = {'contact_name': '', 'contact_company': '', 'last_rate': '', 'days_since_reply': ''}
+    if not (email and uid):
+        return out
+    try:
+        from app.models import Reply, Workspace
+        ws = Workspace.query.filter_by(owner_id=uid).first()
+        fc = _fc_by_email(ws.id, email) if ws else None
+        if fc:
+            raw = (fc.contact_name or '').split('<')[0].strip()
+            out['contact_name'] = raw.split(' ')[0].strip('"') if raw else ''
+            out['contact_company'] = fc.company_name or ''
+            if fc.last_reply_at:
+                out['days_since_reply'] = str(max(0, (_utcnow() - fc.last_reply_at).days))
+        last = Reply.query.filter(
+            Reply.user_id == uid,
+            db.func.lower(Reply.from_email) == email.lower()
+        ).order_by(Reply.received_at.desc()).first()
+        if last:
+            rate_rx = dict((n, rx) for n, rx in _TRIAGE_INFO_SIGNALS)['rate_amount']
+            m = rate_rx.search(_strip_quoted(last.body or ''))
+            if m:
+                out['last_rate'] = m.group(0).strip()
+    except Exception:
+        pass   # personalization must never block a send
+    return out
+
+
 def send_followup_email(fu, template_text, cfg, uid=None):
     try:
         to_email = fu.get('contact_email') or fu.get('email', '')
@@ -4303,8 +4333,10 @@ def send_followup_email(fu, template_text, cfg, uid=None):
             'company': cfg.get('your_company', '') or cfg.get('company', ''),
             'phone': cfg.get('your_phone', '') or cfg.get('phone', ''),
             'route': route,
+            'last_route': route,
             'origin': route.split('→')[0].strip() if '→' in route else '',
             'destination': route.split('→')[1].strip() if '→' in route else '',
+            **_contact_template_vars(to_email, _uid_for_stop),
         })
         # Try Gmail API OAuth first
         _uid = uid or current_user_id()

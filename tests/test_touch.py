@@ -259,3 +259,41 @@ def test_ooo_from_unknown_sender_is_noop(app, db):
     db.session.add(r); db.session.commit()
     out = _app._auto_triage_new_replies(user.id, [r.msg_id])
     assert out.get('ooo_paused', 0) == 0
+
+
+# ── Smart template variables (Wave B) ─────────────────────────────────────────
+
+def test_contact_template_vars(app, db):
+    from app.models import Reply
+    user, ws = _mk(db)
+    fc = _fc(db, user, ws, stage=2)
+    fc.contact_name = 'John Smith <john@x.com>'
+    fc.company_name = 'JS Freight'
+    fc.last_reply_at = _app._utcnow() - timedelta(days=2)
+    db.session.commit()
+    db.session.add(Reply(user_id=user.id, msg_id=f'<tv-{uuid.uuid4().hex}@t>',
+                         from_email=fc.contact_email,
+                         body='We can do it for $1,500 PU Friday', status='follow_up'))
+    db.session.commit()
+    v = _app._contact_template_vars(fc.contact_email, user.id)
+    assert v['contact_name'] == 'John'
+    assert v['contact_company'] == 'JS Freight'
+    assert v['last_rate'] == '$1,500'
+    assert v['days_since_reply'] == '2'
+
+def test_template_vars_rate_ignores_quoted_outreach(app, db):
+    from app.models import Reply
+    user, ws = _mk(db)
+    fc = _fc(db, user, ws, stage=2)
+    db.session.add(Reply(user_id=user.id, msg_id=f'<tv2-{uuid.uuid4().hex}@t>',
+                         from_email=fc.contact_email,
+                         body='ok\n-----Original Message-----\nFrom: me@x.com <me@x.com>\nRATE $900',
+                         status='new'))
+    db.session.commit()
+    v = _app._contact_template_vars(fc.contact_email, user.id)
+    assert v['last_rate'] == ''      # $900 was our own quoted text
+
+def test_template_vars_unknown_contact_safe(app, db):
+    user, _ = _mk(db)
+    v = _app._contact_template_vars('ghost@x.com', user.id)
+    assert v == {'contact_name': '', 'contact_company': '', 'last_rate': '', 'days_since_reply': ''}

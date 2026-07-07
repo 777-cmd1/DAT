@@ -214,3 +214,48 @@ def test_dashboard_endpoint_shape(app, db, client):
     assert {'sent', 'replied', 'got_info', 'repeat', 'booked'} <= set(data['funnel']['30'].keys())
     assert len(data['activity']) == 14
     assert 'no_next_step' in data['health'] and 'rotting' in data['health']
+
+
+# ── OOO auto-pause (Wave A) ───────────────────────────────────────────────────
+
+def test_ooo_reply_pushes_next_touch_a_week(app, db):
+    from app.models import Reply
+    user, ws = _mk(db)
+    fc = _fc(db, user, ws, stage=2)
+    fc.next_followup_at = _app._utcnow() + timedelta(days=1)
+    fc.attention_at = _app._utcnow()
+    db.session.commit()
+    r = Reply(user_id=user.id, msg_id=f'<ooo-{uuid.uuid4().hex}@t>',
+              from_email=fc.contact_email, from_name='X',
+              subject='Automatic reply: RE: load', body='Out of office until Monday',
+              status='new')
+    db.session.add(r); db.session.commit()
+    out = _app._auto_triage_new_replies(user.id, [r.msg_id])
+    db.session.refresh(fc)
+    assert out.get('ooo_paused') == 1
+    assert fc.next_followup_at > _app._utcnow() + timedelta(days=6)
+    assert fc.attention_at is None           # a bounce needs no answer
+
+def test_ooo_never_pulls_touch_closer(app, db):
+    from app.models import Reply
+    user, ws = _mk(db)
+    fc = _fc(db, user, ws, stage=2)
+    far = _app._utcnow() + timedelta(days=21)
+    fc.next_followup_at = far; db.session.commit()
+    r = Reply(user_id=user.id, msg_id=f'<ooo2-{uuid.uuid4().hex}@t>',
+              from_email=fc.contact_email, subject='Automatic reply', body='on vacation',
+              status='new')
+    db.session.add(r); db.session.commit()
+    _app._auto_triage_new_replies(user.id, [r.msg_id])
+    db.session.refresh(fc)
+    assert fc.next_followup_at == far        # kept, not pulled closer
+
+def test_ooo_from_unknown_sender_is_noop(app, db):
+    from app.models import Reply
+    user, ws = _mk(db)
+    r = Reply(user_id=user.id, msg_id=f'<ooo3-{uuid.uuid4().hex}@t>',
+              from_email='stranger@x.com', subject='Automatic reply', body='out of office',
+              status='new')
+    db.session.add(r); db.session.commit()
+    out = _app._auto_triage_new_replies(user.id, [r.msg_id])
+    assert out.get('ooo_paused', 0) == 0

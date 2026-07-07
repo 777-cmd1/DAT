@@ -825,6 +825,24 @@ def _sync_crm_stage(reply, stage):
         app.logger.exception('CRM stage sync failed for reply %s', reply.msg_id)
 
 
+def _ooo_pause_contact(ws, reply, days=7):
+    """An auto-reply/OOO from a pipeline contact: push their next touch out by
+    ~a week (never pull it closer) and clear any 🔥 — a bounce needs no answer."""
+    fc = _fc_by_email(ws.id, reply.from_email)
+    if not fc or fc.state != 'active':
+        return False
+    target = _utcnow() + timedelta(days=days)
+    fc.attention_at = None
+    if fc.next_followup_at is None or fc.next_followup_at < target:
+        fc.next_followup_at = target
+        if not fc.is_followup_enabled:
+            fc.touch_enabled = True
+        _record_event(fc, 'ooo_pause', actor_type='system',
+                      notes=f'auto-reply detected — next touch pushed +{days}d')
+        return True
+    return False
+
+
 def _auto_triage_new_replies(uid, msg_ids):
     """Classify freshly ingested replies and apply the workspace's auto-actions.
 
@@ -863,6 +881,15 @@ def _auto_triage_new_replies(uid, msg_ids):
         # category) and bulk follow-up knows the stage target
         r.reply_filter_key = r.reply_filter_key or res.get('filter_key')
         out['classified'] += 1
+
+        # OOO pause fires on detection alone — the contact's schedule shifts no
+        # matter what happens to the reply itself in the queue
+        if res['category'] == 'auto_reply':
+            try:
+                if _ooo_pause_contact(ws, r):
+                    out['ooo_paused'] = out.get('ooo_paused', 0) + 1
+            except Exception:
+                db.session.rollback()
 
         if r.status != 'new':
             continue
@@ -2745,6 +2772,7 @@ def fetch_replies_from_gmail():
     return {'new': len(new_replies), 'total': len(all_replies),
             'auto_ignored': triage.get('auto_ignored', 0),
             'auto_followup': triage.get('auto_followup', 0),
+            'ooo_paused': triage.get('ooo_paused', 0),
             'detected': triage.get('detected', {})}
 
 

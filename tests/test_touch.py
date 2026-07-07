@@ -197,3 +197,20 @@ def test_put_cadence_roundtrip_and_sweep(app, db, client):
     assert cad['3'] == {'days': 7, 'mode': 'manual'}
     db.session.refresh(fc)
     assert fc.touch_enabled is True and fc.next_followup_at is not None   # sweep ran
+
+
+# ── Dashboard endpoint ────────────────────────────────────────────────────────
+
+def test_dashboard_endpoint_shape(app, db, client):
+    user, ws = _mk(db, client)
+    fc = _fc(db, user, ws, stage=2)
+    fc.attention_at = _app._utcnow()
+    fc.next_followup_at = _app._utcnow()
+    db.session.commit()
+    data = client.get('/api/dashboard').get_json()
+    assert data['touches']['due_today'] >= 1
+    assert data['attention'] == 1
+    assert set(data['funnel'].keys()) == {'7', '30'}
+    assert {'sent', 'replied', 'got_info', 'repeat', 'booked'} <= set(data['funnel']['30'].keys())
+    assert len(data['activity']) == 14
+    assert 'no_next_step' in data['health'] and 'rotting' in data['health']

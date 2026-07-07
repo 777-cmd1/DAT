@@ -1689,6 +1689,12 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-kanban-card-foot { font-size:10px; color:var(--text3); margin-top:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fu-kanban-card-menu { position:absolute; top:6px; right:6px; border:none; background:transparent; color:var(--text3); font-size:14px; line-height:1; cursor:pointer; padding:2px 4px; border-radius:4px; }
 .fu-kanban-card-menu:hover { background:var(--surface2); color:var(--text); }
+.fu-kanban-qa { display:flex; gap:4px; margin-top:7px; opacity:0; transition:opacity .12s; }
+.fu-kanban-card:hover .fu-kanban-qa { opacity:1; }
+.fu-qa-btn { font-size:10px; font-weight:700; padding:2px 7px; border-radius:7px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; line-height:1.5; }
+.fu-qa-btn:hover { border-color:var(--accent); color:var(--accent); }
+.fu-qa-btn.fu-qa-send { border-color:var(--accent); color:var(--accent); }
+@media (hover:none) { .fu-kanban-qa { opacity:1; } }
 /* Pipeline config editor (Settings) */
 .pl-cfg-subhead { font-size:12px; font-weight:800; color:var(--text2); margin:6px 0 8px; text-transform:uppercase; letter-spacing:.05em; }
 .pl-cfg-hint { font-size:11px; font-weight:500; color:var(--text3); text-transform:none; letter-spacing:0; margin-left:6px; }
@@ -5566,6 +5572,7 @@ async function fetchReplies(silent) {
       const det = data.detected || {};
       const detParts = Object.keys(det).map(k => (TRIAGE_CATS[k]?.emoji || '🏷️') + det[k]);
       if (detParts.length) toast('🔍 Detected: ' + detParts.join(' ') + ' — check the filters');
+      if (data.ooo_paused) toast('⏸ ' + data.ooo_paused + ' contact' + (data.ooo_paused > 1 ? 's' : '') + ' paused (out of office)');
       await loadReplies();
       loadAutoStrip();
     }
@@ -6661,6 +6668,13 @@ function fuKanbanCard(c) {
     <div class="fu-kanban-card-email">${email}</div>
     <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
     <div class="fu-kanban-card-foot">⏰ ${lastAct}${route}</div>
+    <div class="fu-kanban-qa" onclick="event.stopPropagation()">
+      <button class="fu-qa-btn fu-qa-send" onclick="fuAction('${c.id}','${/^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send'}')" title="Send touch now">⚡ Send</button>
+      <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',1)" title="Snooze 1 day">+1</button>
+      <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',3)" title="Snooze 3 days">+3</button>
+      <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',7)" title="Snooze 7 days">+7</button>
+      <button class="fu-qa-btn" onclick="fuTouch('${c.id}','skip')" title="Skip — reschedule by cadence">↷</button>
+    </div>
   </div>`;
 }
 

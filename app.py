@@ -5388,6 +5388,56 @@ def api_dashboard():
     )
 
 
+@app.route('/api/followups/timeline')
+@login_required
+def api_followups_timeline():
+    """Full history of one contact merged chronologically: outreach sends,
+    their replies (with text), pipeline/stage events, notes — newest first."""
+    from app.models import FollowupContact, FollowupEvent, Reply, Send, Workspace
+    uid = _current_user_id()
+    fc = db.session.get(FollowupContact, request.args.get('id'))
+    if not fc or fc.user_id != uid:
+        return jsonify(error='Not found'), 404
+    email = (fc.contact_email or '').lower()
+    items = []
+
+    for s in Send.query.filter(Send.user_id == uid,
+                               db.func.lower(Send.recipient_email) == email
+                               ).order_by(Send.sent_at.desc()).limit(50).all():
+        items.append({'at': s.sent_at.isoformat() if s.sent_at else None, 'kind': 'send',
+                      'title': 'Outreach sent' if s.status == 'sent' else f'Send {s.status}',
+                      'detail': f'{s.origin} → {s.destination}'.strip(' →') or ''})
+
+    for r in Reply.query.filter(Reply.user_id == uid,
+                                db.func.lower(Reply.from_email) == email
+                                ).order_by(Reply.received_at.desc()).limit(50).all():
+        items.append({'at': r.received_at.isoformat() if r.received_at else None, 'kind': 'reply',
+                      'title': 'Reply' + (f' · {r.triage_category}' if r.triage_category else ''),
+                      'detail': (r.body or r.subject or '')[:400]})
+
+    stage_names = {}
+    if fc.workspace_id:
+        ws = db.session.get(Workspace, fc.workspace_id)
+        if ws:
+            stage_names = {str(s['id']): s['name'] for s in ws.get_stages()}
+    _ev_titles = {'created': 'Added to pipeline', 'pipeline_move': 'Stage moved',
+                  'reply_detected': 'Reply detected — drip stopped', 'manual_send': 'Follow-up sent',
+                  'free_send': 'Touch sent', 'touch_sent': 'Auto touch sent',
+                  'recurring_sent': 'Recurring follow-up sent', 'scheduled_once_sent': 'Scheduled send',
+                  'touch_snoozed': 'Snoozed', 'touch_skipped': 'Skipped',
+                  'ooo_pause': 'Paused — out of office', 'note_added': 'Note'}
+    for e in FollowupEvent.query.filter_by(followup_contact_id=fc.id
+                                           ).order_by(FollowupEvent.event_at.desc()).limit(100).all():
+        detail = e.notes or ''
+        if e.event_type == 'pipeline_move' and e.from_stage and e.to_stage:
+            detail = f"{stage_names.get(e.from_stage, e.from_stage)} → {stage_names.get(e.to_stage, e.to_stage)}"
+        items.append({'at': e.event_at.isoformat() if e.event_at else None, 'kind': 'event',
+                      'title': _ev_titles.get(e.event_type, e.event_type), 'detail': detail[:400]})
+
+    items.sort(key=lambda x: x['at'] or '', reverse=True)
+    return jsonify(contact=fc.to_dict(), items=items[:120], notes=fc.notes or '')
+
+
 @app.route('/api/followups/touch', methods=['POST'])
 @login_required
 @limiter.limit("120 per minute")

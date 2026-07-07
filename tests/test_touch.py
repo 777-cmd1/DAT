@@ -259,3 +259,27 @@ def test_ooo_from_unknown_sender_is_noop(app, db):
     db.session.add(r); db.session.commit()
     out = _app._auto_triage_new_replies(user.id, [r.msg_id])
     assert out.get('ooo_paused', 0) == 0
+
+
+# ── Contact timeline (Wave C) ─────────────────────────────────────────────────
+
+def test_timeline_merges_sends_replies_events(app, db, client):
+    from app.models import Reply, Send
+    user, ws = _mk(db, client)
+    fc = _fc(db, user, ws, stage=2)
+    fc.notes = 'good guy, has reefers'
+    db.session.add(Send(user_id=user.id, workspace_id=ws.id, recipient_email=fc.contact_email,
+                        origin='Laredo, TX', destination='SLC, UT', status='sent'))
+    db.session.add(Reply(user_id=user.id, msg_id=f'<tl-{uuid.uuid4().hex}@t>',
+                         from_email=fc.contact_email, body='Still available $1,500',
+                         status='follow_up', triage_category='gave_info'))
+    db.session.commit()
+    _app._apply_pipeline_stage(fc, 3, actor_user_id=user.id)   # generates an event
+    db.session.commit()
+    data = client.get(f'/api/followups/timeline?id={fc.id}').get_json()
+    kinds = {i['kind'] for i in data['items']}
+    assert {'send', 'reply', 'event'} <= kinds
+    assert data['notes'] == 'good guy, has reefers'
+    ev = next(i for i in data['items'] if i['title'] == 'Stage moved')
+    assert 'Got info' in ev['detail']                          # stage names resolved
+    assert client.get('/api/followups/timeline?id=nope').status_code == 404

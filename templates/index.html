@@ -1778,6 +1778,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
 /* ── Today's touches panel (Follow-up cadence engine) ── */
 .fu-touch-panel { border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:10px 14px; margin-bottom:12px; }
 .fu-touch-head { font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.fu-touch-list { max-height:300px; overflow-y:auto; overscroll-behavior:contain; }
 .fu-touch-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px dashed var(--border); font-size:12px; color:var(--text2); }
 .fu-touch-row.hot { background:linear-gradient(90deg, #f59f0018, transparent); border-radius:8px; }
 .fu-touch-row .ft-who { min-width:0; flex:1 1 220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -6591,11 +6592,15 @@ function renderTouchPanel() {
         `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','skip')" title="Skip — push by stage cadence">Skip</button>` +
       `</span></div>`;
   }).join('');
-  el.innerHTML = `<div class="fu-touch-head">📋 Today's touches <b>${due.length}</b>` +
-    (due.length > 30 ? ' <span style="font-weight:400;color:var(--text3)">(showing first 30)</span>' : '') +
-    `</div>` + rows;
+  // Compact: header toggles, list scrolls inside — the panel must never push
+  // the table/kanban below the fold
+  el.innerHTML = `<div class="fu-touch-head" style="cursor:pointer" onclick="_touchOpen=!_touchOpen;renderTouchPanel()">` +
+    `📋 Today's touches <b>${due.length}</b>` +
+    `<span style="float:right;font-weight:600;color:var(--text3)">${_touchOpen ? '▴ Hide' : '▾ Show'}</span></div>` +
+    (_touchOpen ? `<div class="fu-touch-list">${rows}</div>` : '');
   el.style.display = 'block';
 }
+let _touchOpen = true;
 
 async function fuTouch(id, action, days) {
   try {

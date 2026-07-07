@@ -1779,6 +1779,22 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-touch-panel { border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:10px 14px; margin-bottom:12px; }
 .fu-touch-head { font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:6px; }
 .fu-touch-list { max-height:300px; overflow-y:auto; overscroll-behavior:contain; }
+/* ── Contact timeline drawer ── */
+.fu-tl-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:998; }
+.fu-tl { position:fixed; top:0; right:0; bottom:0; width:440px; max-width:94vw; background:var(--surface); border-left:1px solid var(--border); z-index:999; overflow-y:auto; padding:18px 20px; box-shadow:-16px 0 48px rgba(0,0,0,.25); }
+.fu-tl-close { position:absolute; top:12px; right:14px; border:none; background:var(--surface2); color:var(--text2); width:28px; height:28px; border-radius:8px; cursor:pointer; font-size:14px; }
+.fu-tl-name { font-size:16px; font-weight:800; margin:0 24px 2px 0; color:var(--text); }
+.fu-tl-sub { font-size:12px; color:var(--text3); margin-bottom:10px; word-break:break-all; }
+.fu-tl-meta { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.fu-tl-chip { font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:9px; background:var(--surface2); border:1px solid var(--border); color:var(--text2); }
+.fu-tl-notes { font-size:12px; color:var(--text2); background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:8px 11px; margin-bottom:14px; white-space:pre-wrap; }
+.fu-tl-item { display:flex; gap:10px; padding:9px 0; border-top:1px dashed var(--border); }
+.fu-tl-ico { flex:0 0 auto; font-size:14px; line-height:1.4; }
+.fu-tl-body { min-width:0; }
+.fu-tl-title { font-size:12.5px; font-weight:700; color:var(--text); }
+.fu-tl-when { font-size:10.5px; color:var(--text3); margin-left:6px; font-weight:500; }
+.fu-tl-detail { font-size:12px; color:var(--text2); white-space:pre-wrap; word-break:break-word; margin-top:2px; max-height:120px; overflow-y:auto; }
+.fu-tl-item.reply { background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent); border-radius:8px; }
 .fu-touch-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px dashed var(--border); font-size:12px; color:var(--text2); }
 .fu-touch-row.hot { background:linear-gradient(90deg, #f59f0018, transparent); border-radius:8px; }
 .fu-touch-row .ft-who { min-width:0; flex:1 1 220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -6359,7 +6375,7 @@ function renderFuContacts() {
       <td class="fu-col-select">
         <input type="checkbox" class="fu-checkbox" id="fu-cb-${c.id}" ${selectedFuIds.has(c.id)?'checked':''} onclick="toggleFuSelect('${c.id}',event)">
       </td>
-      <td class="fu-contact-cell">
+      <td class="fu-contact-cell" onclick="openTimeline('${c.id}')" style="cursor:pointer" title="Open history">
         <div class="fu-contact-primary">${c.attention_at ? '🔥 ' : ''}${company}</div>
         <div class="fu-contact-secondary">${email}</div>
       </td>
@@ -6580,7 +6596,7 @@ function renderTouchPanel() {
     const sendAction = /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send';
     return `<div class="fu-touch-row${c.attention_at ? ' hot' : ''}">` +
       `<span>${c.attention_at ? '🔥' : (late ? '⏰' : '📅')}</span>` +
-      `<span class="ft-who"><b>${esc(c.contact_name || c.company_name || c.contact_email)}</b>` +
+      `<span class="ft-who" style="cursor:pointer" onclick="openTimeline('${c.id}')" title="Open history"><b>${esc(c.contact_name || c.company_name || c.contact_email)}</b>` +
         `<span class="ft-email">${esc(c.contact_email)}</span></span>` +
       `<span class="ft-stage">${esc(stageName(c.pipeline_stage))}</span>` +
       (c.current_route ? `<span class="ft-route">${esc(c.current_route)}</span>` : '') +
@@ -6601,6 +6617,49 @@ function renderTouchPanel() {
   el.style.display = 'block';
 }
 let _touchOpen = true;
+
+// ── Contact timeline drawer ───────────────────────────────────────────────────
+async function openTimeline(id) {
+  let d;
+  try { d = await (await fetch('/api/followups/timeline?id=' + encodeURIComponent(id))).json(); }
+  catch (e) { toast('Failed to load history'); return; }
+  if (d.error) { toast(d.error); return; }
+  const c = d.contact;
+  const stageName = (pipelineStages.find(s => s.id === c.pipeline_stage) || {}).name || '';
+  const icons = { send: '📤', reply: '📩', event: '⚙️' };
+  const items = (d.items || []).map(it => {
+    const when = (it.at || '').replace('T', ' ').slice(0, 16);
+    return `<div class="fu-tl-item ${it.kind}"><span class="fu-tl-ico">${icons[it.kind] || '•'}</span>` +
+      `<div class="fu-tl-body"><div class="fu-tl-title">${esc(it.title)}<span class="fu-tl-when">${esc(when)}</span></div>` +
+      (it.detail ? `<div class="fu-tl-detail">${esc(it.detail)}</div>` : '') + `</div></div>`;
+  }).join('') || '<div class="dash-hint">No history yet</div>';
+  const ov = document.createElement('div');
+  ov.className = 'fu-tl-overlay'; ov.id = 'fuTlOverlay';
+  ov.onclick = e => { if (e.target === ov) closeTimeline(); };
+  ov.innerHTML = `<div class="fu-tl" role="dialog" aria-label="Contact history">` +
+    `<button class="fu-tl-close" onclick="closeTimeline()" aria-label="Close">✕</button>` +
+    `<div class="fu-tl-name">${c.attention_at ? '🔥 ' : ''}${esc(c.contact_name || c.company_name || c.contact_email)}</div>` +
+    `<div class="fu-tl-sub">${esc(c.contact_email)}</div>` +
+    `<div class="fu-tl-meta">` +
+      (stageName ? `<span class="fu-tl-chip">${esc(stageName)}</span>` : '') +
+      `<span class="fu-tl-chip">${esc(c.state)}</span>` +
+      (c.current_route ? `<span class="fu-tl-chip">${esc(c.current_route)}</span>` : '') +
+      (c.next_followup_at ? `<span class="fu-tl-chip">next: ${esc(c.next_followup_at)}</span>` : '') +
+    `</div>` +
+    (d.notes ? `<div class="fu-tl-notes">📝 ${esc(d.notes)}</div>` : '') +
+    `<div style="display:flex;gap:6px;margin-bottom:10px">` +
+      `<button class="fu-btn-primary" onclick="closeTimeline();fuAction('${c.id}','${/^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send'}')">⚡ Send touch</button>` +
+      `<button class="tq-auto-undo" onclick="closeTimeline();fuTouch('${c.id}','snooze',3)">+3d</button>` +
+      `<button class="tq-auto-undo" onclick="closeTimeline();fuTouch('${c.id}','snooze',7)">+7d</button>` +
+    `</div>` + items + `</div>`;
+  document.body.appendChild(ov);
+  document.addEventListener('keydown', _tlEsc);
+}
+function _tlEsc(e) { if (e.key === 'Escape') closeTimeline(); }
+function closeTimeline() {
+  document.getElementById('fuTlOverlay')?.remove();
+  document.removeEventListener('keydown', _tlEsc);
+}
 
 async function fuTouch(id, action, days) {
   try {
@@ -6679,6 +6738,7 @@ function fuKanbanCard(c) {
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',3)" title="Snooze 3 days">+3</button>
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',7)" title="Snooze 7 days">+7</button>
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','skip')" title="Skip — reschedule by cadence">↷</button>
+      <button class="fu-qa-btn" onclick="openTimeline('${c.id}')" title="History">🕘</button>
     </div>
   </div>`;
 }

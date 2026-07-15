@@ -1572,6 +1572,11 @@ html:not([data-theme="dark"]) .send-cta-bar {
   color:var(--text); font-size:12px; padding:6px 10px; font-family:inherit;
 }
 .fu-select:focus { outline:none; border-color:var(--accent); }
+/* Advanced filters: hidden behind the "Filters" toggle — one slim toolbar row */
+.fu-adv-filters { display:none; align-items:center; gap:8px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:8px 12px; margin-top:8px; }
+.fu-adv-filters.open { display:flex; }
+.fu-adv-filters .fu-select { min-width:0; width:auto; max-width:170px; flex:0 0 auto; }
+.fu-toolbar { align-items:center; }
 .fu-summary-strip { display:flex; gap:8px; flex-wrap:wrap; }
 .fu-summary-card {
   background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:999px; padding:8px 12px;
@@ -2965,6 +2970,10 @@ html:not([data-theme="dark"]) .send-cta-bar {
               </div>
             </div>
             <div class="fu-toolbar-side">
+              <button class="btn btn-outline btn-sm" onclick="document.getElementById('fuAdvFilters').classList.toggle('open')">⚙ Filters</button>
+            </div>
+          </div>
+          <div id="fuAdvFilters" class="fu-adv-filters">
               <select class="fu-select" id="fuStateSelect" onchange="setFuStateFilter(this.value)">
                 <option value="">All states</option>
                 <option value="active">Active</option>
@@ -2988,7 +2997,6 @@ html:not([data-theme="dark"]) .send-cta-bar {
                 <option value="yesterday">Sent yesterday</option>
               </select>
               <button class="btn btn-outline btn-sm" onclick="resetFuFilters()">Clear</button>
-            </div>
           </div>
 
           <div id="fuTouchPanel" class="fu-touch-panel" style="display:none"></div>

@@ -1572,6 +1572,11 @@ html:not([data-theme="dark"]) .send-cta-bar {
   color:var(--text); font-size:12px; padding:6px 10px; font-family:inherit;
 }
 .fu-select:focus { outline:none; border-color:var(--accent); }
+/* Advanced filters: hidden behind the "Filters" toggle — one slim toolbar row */
+.fu-adv-filters { display:none; align-items:center; gap:8px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:8px 12px; margin-top:8px; }
+.fu-adv-filters.open { display:flex; }
+.fu-adv-filters .fu-select { min-width:0; width:auto; max-width:170px; flex:0 0 auto; }
+.fu-toolbar { align-items:center; }
 .fu-summary-strip { display:flex; gap:8px; flex-wrap:wrap; }
 .fu-summary-card {
   background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:999px; padding:8px 12px;
@@ -2965,6 +2970,10 @@ html:not([data-theme="dark"]) .send-cta-bar {
               </div>
             </div>
             <div class="fu-toolbar-side">
+              <button class="btn btn-outline btn-sm" onclick="document.getElementById('fuAdvFilters').classList.toggle('open')">⚙ Filters</button>
+            </div>
+          </div>
+          <div id="fuAdvFilters" class="fu-adv-filters">
               <select class="fu-select" id="fuStateSelect" onchange="setFuStateFilter(this.value)">
                 <option value="">All states</option>
                 <option value="active">Active</option>
@@ -2988,7 +2997,6 @@ html:not([data-theme="dark"]) .send-cta-bar {
                 <option value="yesterday">Sent yesterday</option>
               </select>
               <button class="btn btn-outline btn-sm" onclick="resetFuFilters()">Clear</button>
-            </div>
           </div>
 
           <div id="fuTouchPanel" class="fu-touch-panel" style="display:none"></div>
@@ -5941,6 +5949,8 @@ let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_adva
 let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
 let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
 let pipelineCadence = {};         // {stage_id(str): {days, mode:'manual'|'auto'|'off'}}
+let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (UTC hour for cadence touches)
+let pipelineDigest = true;        // weekly digest email on Mondays
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -6424,6 +6434,8 @@ async function loadPipelineConfig() {
     pipelineFilterKeywords = data.filter_keywords || {};
     pipelineTriageModes = data.triage_modes || {};
     pipelineCadence = data.cadence || {};
+    pipelineTouchHour = data.touch_hour ?? 'auto';
+    pipelineDigest = data.digest_enabled !== false;
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -6892,7 +6904,15 @@ function renderPipelineCadenceEditor() {
         `<option value="manual" ${c.mode === 'manual' ? 'selected' : ''}>Manual — Today's touches</option>` +
         `<option value="auto" ${c.mode === 'auto' ? 'selected' : ''}>Auto-send template</option>` +
       `</select></div>`;
-  }).join('');
+  }).join('') +
+  `<div class="pl-cad-row"><span class="pl-cad-name">Touch send hour (UTC)</span>` +
+    `<select id="plTouchHour"><option value="auto" ${pipelineTouchHour === 'auto' ? 'selected' : ''}>Auto — best reply hour</option>` +
+    Array.from({length: 24}, (_, h) =>
+      `<option value="${h}" ${String(pipelineTouchHour) === String(h) ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('') +
+    `</select></div>` +
+  `<div class="pl-cad-row"><span class="pl-cad-name">Weekly digest email</span>` +
+    `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
+    `<input type="checkbox" id="plDigest" ${pipelineDigest ? 'checked' : ''}> Mondays — week summary to your inbox</label></div>`;
 }
 
 async function savePipelineConfig() {
@@ -6920,7 +6940,9 @@ async function savePipelineConfig() {
   try {
     const res = await fetch('/api/followups/pipeline-config', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ stages, reply_filters, cadence })
+      body: JSON.stringify({ stages, reply_filters, cadence,
+        touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
+        digest_enabled: !!document.getElementById('plDigest')?.checked })
     });
     const data = await res.json();
     if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
@@ -6928,6 +6950,8 @@ async function savePipelineConfig() {
     pipelineReplyFilters = data.reply_filters || [];
     pipelineFilterKeywords = data.filter_keywords || {};
     pipelineCadence = data.cadence || {};
+    pipelineTouchHour = data.touch_hour ?? 'auto';
+    pipelineDigest = data.digest_enabled !== false;
     renderPipelineConfigEditor();
     toast('Pipeline config saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {

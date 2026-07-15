@@ -283,3 +283,45 @@ def test_timeline_merges_sends_replies_events(app, db, client):
     ev = next(i for i in data['items'] if i['title'] == 'Stage moved')
     assert 'Got info' in ev['detail']                          # stage names resolved
     assert client.get('/api/followups/timeline?id=nope').status_code == 404
+
+
+# ── Wave D: best touch hour + weekly digest ───────────────────────────────────
+
+def test_touch_lands_at_configured_hour(app, db):
+    user, ws = _mk(db)
+    ws.pipeline_config = {'touch_hour': 15}
+    db.session.commit()
+    fc = _fc(db, user, ws, stage=2)
+    assert _app._schedule_touch(fc, ws, force=True) is True
+    assert fc.next_followup_at.hour == 15 and fc.next_followup_at.minute == 0
+
+def test_best_reply_hour_fallback_with_little_data(app, db):
+    user, _ = _mk(db)
+    _app._BEST_HOUR_CACHE.clear()
+    assert _app._best_reply_hour(user.id) == 14   # <5 replies → fallback
+
+def test_config_roundtrip_touch_hour_digest(app, db, client):
+    user, _ = _mk(db, client)
+    res = client.put('/api/followups/pipeline-config',
+                     json={'touch_hour': 9, 'digest_enabled': False})
+    d = res.get_json()
+    assert d['touch_hour'] == 9 and d['digest_enabled'] is False
+    res = client.put('/api/followups/pipeline-config', json={'touch_hour': 'auto'})
+    assert res.get_json()['touch_hour'] == 'auto'
+
+def test_digest_compose_and_dedupe(app, db, monkeypatch):
+    from datetime import datetime
+    user, ws = _mk(db)
+    _fc(db, user, ws, stage=2)
+    text = _app._compose_digest(user.id)
+    assert 'Your DAT Mailer week' in text and 'Touches due today' in text
+
+    sent = []
+    monkeypatch.setattr(_app, '_send_self_email', lambda uid, s, b: (sent.append(uid), (True, None))[1])
+    monday = datetime(2026, 7, 6, 8, 0)          # a Monday, 08:00 UTC
+    assert _app._maybe_send_digests(monday) >= 1
+    n = len(sent)
+    assert _app._maybe_send_digests(monday) == 0  # deduped by date
+    assert len(sent) == n
+    tuesday = datetime(2026, 7, 7, 8, 0)
+    assert _app._maybe_send_digests(tuesday) == 0  # not a Monday

@@ -1012,6 +1012,28 @@ def _cadence_for_stage(ws, stage_id):
     return cad.get(str(stage_id or 1), {'days': 0, 'mode': 'off'})
 
 
+_BEST_HOUR_CACHE = {}   # uid -> (hour, computed_at)
+
+def _best_reply_hour(uid):
+    """Most common hour (UTC) carriers reply at, from this user's reply history.
+    Cached ~1h per user; falls back to 14:00 UTC (~9am US Central) with little data."""
+    import time as _t
+    hit = _BEST_HOUR_CACHE.get(uid)
+    if hit and _t.time() - hit[1] < 3600:
+        return hit[0]
+    from app.models import Reply
+    from sqlalchemy import func
+    try:
+        rows = db.session.query(func.extract('hour', Reply.received_at), func.count()).filter(
+            Reply.user_id == uid, Reply.received_at.isnot(None)
+        ).group_by(func.extract('hour', Reply.received_at)).order_by(func.count().desc()).limit(1).all()
+        hour = int(rows[0][0]) if rows and rows[0][1] >= 5 else 14
+    except Exception:
+        hour = 14
+    _BEST_HOUR_CACHE[uid] = (hour, _t.time())
+    return hour
+
+
 def _schedule_touch(fc, ws=None, force=False, stagger=False):
     """Iron rule: an active contact whose FU drip is not running always carries a
     next stage-cadence touch (or touch_enabled=False when the stage mode is off).
@@ -1041,7 +1063,16 @@ def _schedule_touch(fc, ws=None, force=False, stagger=False):
         except (ValueError, TypeError):
             pass
     fc.touch_enabled = True
-    fc.next_followup_at = _utcnow() + timedelta(days=days)
+    nxt = _utcnow() + timedelta(days=days)
+    # Land the touch at the hour carriers actually answer (config: 'auto' =
+    # computed from reply history, or a fixed 0-23 UTC hour)
+    try:
+        hour_cfg = (ws.pipeline_config or {}).get('touch_hour', 'auto') if ws else 'auto'
+        hour = _best_reply_hour(fc.user_id) if hour_cfg == 'auto' else int(hour_cfg)
+        nxt = nxt.replace(hour=max(0, min(23, hour)), minute=0, second=0, microsecond=0)
+    except Exception:
+        pass
+    fc.next_followup_at = nxt
     return True
 
 
@@ -4909,8 +4940,11 @@ def api_followups_pipeline_config():
     modes = ws.get_triage_modes() if ws else dict(TRIAGE_DEFAULT_MODES)
     from app.models import PIPELINE_DEFAULT_CADENCE as _DC
     cadence = ws.get_cadence() if ws else {k: dict(v) for k, v in _DC.items()}
+    _cfg = (ws.pipeline_config or {}) if ws else {}
     return jsonify(stages=stages, reply_filters=filters, filter_keywords=keywords,
                    triage_modes=modes, cadence=cadence,
+                   touch_hour=_cfg.get('touch_hour', 'auto'),
+                   digest_enabled=bool(_cfg.get('digest_enabled', True)),
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -5097,6 +5131,18 @@ def api_followups_pipeline_config_save():
         cfg['cadence'] = merged_cad
         cadence_changed = True
 
+    th = data.get('touch_hour')
+    if th is not None:
+        if th == 'auto':
+            cfg['touch_hour'] = 'auto'
+        else:
+            try:
+                cfg['touch_hour'] = max(0, min(23, int(th)))
+            except (TypeError, ValueError):
+                pass
+    if isinstance(data.get('digest_enabled'), bool):
+        cfg['digest_enabled'] = data['digest_enabled']
+
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
     db.session.commit()
 
@@ -5113,7 +5159,9 @@ def api_followups_pipeline_config_save():
                    reply_filters=ws.get_reply_filters(),
                    filter_keywords=ws.get_filter_keywords(),
                    triage_modes=ws.get_triage_modes(),
-                   cadence=ws.get_cadence())
+                   cadence=ws.get_cadence(),
+                   touch_hour=(ws.pipeline_config or {}).get('touch_hour', 'auto'),
+                   digest_enabled=bool((ws.pipeline_config or {}).get('digest_enabled', True)))
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])
@@ -5282,14 +5330,11 @@ def api_replies_undo_auto():
     return jsonify(ok=True, contact_removed=contact_removed)
 
 
-@app.route('/api/dashboard')
-@login_required
-def api_dashboard():
-    """All main-page dashboard blocks in one call: today's actions, funnel,
-    base health, 14-day activity, top lanes."""
+def _dashboard_data(uid):
+    """All main-page dashboard blocks: today's actions, funnel, base health,
+    14-day activity, top lanes. Shared by the API and the weekly digest."""
     from app.models import Reply, Send, FollowupContact, FollowupEvent, Workspace
     from sqlalchemy import func, case, distinct
-    uid = _current_user_id()
     now = _utcnow()
     sod = now.replace(hour=0, minute=0, second=0, microsecond=0)
     eod = now.replace(hour=23, minute=59, second=59)
@@ -5373,7 +5418,7 @@ def api_dashboard():
     ).group_by(Reply.route).order_by(func.count().desc()).limit(5).all()
     top_lanes = [{'lane': l, 'replies': n, 'gave_info': g} for l, n, g in lane_rows]
 
-    return jsonify(
+    return dict(
         touches={'due_today': due_today, 'done_today': done_today,
                  'next': ({'name': nxt.contact_name or nxt.contact_email,
                            'route': nxt.current_route or ''} if nxt else None)},
@@ -5386,6 +5431,12 @@ def api_dashboard():
         activity=activity,
         top_lanes=top_lanes,
     )
+
+
+@app.route('/api/dashboard')
+@login_required
+def api_dashboard():
+    return jsonify(**_dashboard_data(_current_user_id()))
 
 
 @app.route('/api/followups/timeline')
@@ -6192,7 +6243,91 @@ def _run_scheduled_followups():
         if touch_total:
             app.logger.info(f'FU scheduler: sent {touch_total} cadence touches')
 
+        # ── Path 4: Weekly digest emails (Mondays, after 06:00 UTC) ──────────
+        try:
+            _maybe_send_digests(now)
+        except Exception as e:
+            app.logger.error(f'digest error: {e}')
+
         return sent_total + rec_total + touch_total
+
+def _compose_digest(uid):
+    """Weekly digest text from the same aggregates the dashboard shows."""
+    d = _dashboard_data(uid)
+    f7, h, t = d['funnel']['7'], d['health'], d['touches']
+    lines = [
+        'Your DAT Mailer week:',
+        '',
+        f"  Sent {f7['sent']} · Replied {f7['replied']} · Got info {f7['got_info']} · Booked {f7['booked']}",
+        f"  Reply rate (30d): {h['reply_rate'] if h['reply_rate'] is not None else '-'}%",
+        '',
+        'Right now:',
+        f"  Touches due today: {t['due_today']}",
+        f"  Warm replies waiting for an answer: {d['attention']}",
+        f"  Replies pending triage: {d['replies_pending']['total']}",
+        f"  Rotting warm contacts (14d+): {h['rotting']}",
+    ]
+    if d['top_lanes']:
+        top = d['top_lanes'][0]
+        lines += ['', f"Top lane: {top['lane']} — {top['replies']} replies, {top['gave_info']} gave info"]
+    lines += ['', 'Open the dashboard to act on it.']
+    return '\n'.join(lines)
+
+
+def _send_self_email(uid, subject, body):
+    """Send a plain email to the user's own connected Gmail address."""
+    from app.models import EmailAccount
+    acct = EmailAccount.query.filter_by(user_id=uid).first()
+    if not acct or not acct.gmail_address:
+        return False, 'no email account'
+    try:
+        try:
+            service = _get_gmail_service(uid)
+            mime_msg = MIMEText(body, 'plain')
+            mime_msg['to'] = acct.gmail_address
+            mime_msg['from'] = acct.gmail_address
+            mime_msg['subject'] = subject
+            import base64 as _b64
+            raw = _b64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
+            _gmail_send_with_retry(service, raw)
+            return True, None
+        except RuntimeError as _e:
+            if 'not connected' not in str(_e).lower():
+                raise
+        msg = MIMEMultipart()
+        msg['From'] = acct.gmail_address; msg['To'] = acct.gmail_address
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        _smtp_send_with_retry(msg, acct.gmail_address, acct.gmail_address, acct.gmail_password or '')
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def _maybe_send_digests(now):
+    """Mondays after 06:00 UTC: one digest per workspace owner, deduped by date."""
+    from app.models import Workspace
+    if now.weekday() != 0 or now.hour < 6:
+        return 0
+    today = now.strftime('%Y-%m-%d')
+    sent = 0
+    for ws in Workspace.query.all():
+        cfg = dict(ws.pipeline_config or {})
+        if not cfg.get('digest_enabled', True):
+            continue
+        if cfg.get('last_digest_at') == today:
+            continue
+        ok, _err = _send_self_email(ws.owner_id, 'Your weekly DAT Mailer digest',
+                                    _compose_digest(ws.owner_id))
+        if ok:
+            cfg['last_digest_at'] = today
+            ws.pipeline_config = cfg
+            db.session.commit()
+            sent += 1
+    if sent:
+        app.logger.info(f'digest: sent {sent} weekly digests')
+    return sent
+
 
 def scheduled_followup_worker():
     """Daemon thread: checks for due follow-ups every 15 minutes."""

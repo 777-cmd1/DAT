@@ -2076,12 +2076,33 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .rbtn-stop { background:transparent; color:var(--text2); border-color:var(--border2); }
 .rbtn-reset{ background:transparent; color:var(--text3); border-color:var(--border); font-size:11px; }
 
-/* ── TOAST UPGRADE ─────────────────────────────────────────────────── */
+/* ── TOAST ─────────────────────────────────────────────────────────── */
+/* Base rule was lost in the v1→v2 port: without position/visibility the
+   toast rendered as plain text below the fold, so every success/error
+   message in the app was invisible. */
 .toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 9999;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(0,0,0,.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
   background: var(--glass) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.error { color: var(--red); border-color: rgba(248,113,113,.35); }
 
 /* ── ANALYTICS REDESIGN ─────────────────────────────────── */
 .analytics-period-tabs {

@@ -4365,7 +4365,10 @@ def send_followup_email(fu, template_text, cfg, uid=None):
         msg.attach(MIMEText(body, 'plain'))
         _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, cfg.get('gmail_app_password', ''))
         return True, None
-    except Exception as e: return False, str(e)
+    except Exception as e:
+        app.logger.error('send_followup_email failed (to=%s): %s',
+                         fu.get('contact_email') or fu.get('email', ''), e)
+        return False, str(e)
 
 DEFAULT_FU_TEMPLATES = {
     'FU1': "Hi,\n\nJust wanted to follow up — are you working on any loads this week?\n\nThank you,\n{name}\n{company} | {phone}",

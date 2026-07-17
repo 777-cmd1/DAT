@@ -3888,6 +3888,7 @@ def api_send():
     stale_cutoff = _utcnow() - timedelta(minutes=30)
     stale = SendJob.query.filter(
         SendJob.user_id == uid,
+        SendJob.kind == 'outreach',
         SendJob.status.in_(['queued', 'running']),
         db.or_(
             SendJob.started_at < stale_cutoff,
@@ -3903,6 +3904,7 @@ def api_send():
         app.logger.warning(f'api_send: auto-recovered {len(stale)} stale job(s) for uid={uid}')
     active_job = SendJob.query.filter(
         SendJob.user_id == uid,
+        SendJob.kind == 'outreach',
         SendJob.status.in_(['queued', 'running'])
     ).order_by(SendJob.started_at.desc()).first()
     if active_job:
@@ -3944,6 +3946,7 @@ def api_send_reset():
     from app.models import SendJob
     stuck = SendJob.query.filter(
         SendJob.user_id == uid,
+        SendJob.kind == 'outreach',
         SendJob.status.in_(['queued', 'running'])
     ).all()
     for j in stuck:
@@ -3963,7 +3966,7 @@ def api_send_status():
     uid = current_user_id()
     state = _user_send_state(uid)
     from app.models import SendJob
-    job = SendJob.query.filter_by(user_id=uid).order_by(SendJob.started_at.desc()).first()
+    job = SendJob.query.filter_by(user_id=uid, kind='outreach').order_by(SendJob.started_at.desc()).first()
     if not job:
         return jsonify(state)
 
@@ -4558,6 +4561,70 @@ def api_followups_add():
     return jsonify(ok=True, contact=fc.to_dict()), 201
 
 
+def _followup_send_now_core(fc, uid):
+    """Send the scheduled follow-up for one contact and advance its stage.
+
+    Shared by the single 'send-now' action and the bulk follow-up worker so
+    both paths get identical eligibility, dedupe and bookkeeping.
+    Commits on success/failure. Returns (status, detail):
+      'sent'      → detail = None
+      'skip'      → detail = human reason (not eligible)
+      'duplicate' → detail = 24h-guard message
+      'error'     → detail = reason (no template / no account / send failure)
+    """
+    from app.models import EmailAccount
+    if fc.state != 'active':
+        return 'skip', 'Contact must be active to send'
+    if fc.stage not in STAGE_TO_TEMPLATE:
+        return 'skip', 'No scheduled follow-up to send'
+    dup = _recent_followup_block(fc)
+    if dup:
+        return 'duplicate', dup
+
+    template_text = _get_fu_template_for_stage(uid, fc.stage)
+    if not template_text:
+        return 'error', 'No active follow-up templates. Add at least one before sending.'
+    acct = EmailAccount.query.filter_by(user_id=uid).first()
+    if not acct:
+        return 'error', 'No email account configured'
+
+    cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+           'phone': acct.your_phone or '', 'route': fc.current_route or '',
+           'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
+    fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
+               'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+               'source_thread_id': fc.source_thread_id or ''}
+    ok, err = send_followup_email(fu_dict, template_text, cfg, uid=uid)
+    if not ok:
+        _record_event(fc, 'manual_send', actor_user_id=uid,
+                      metadata_json=json.dumps({'error': err}), notes='Send failed')
+        db.session.commit()
+        return 'error', f'Send failed: {err}'
+
+    now = _utcnow()
+    old_stage = fc.stage
+    setattr(fc, STAGE_SENT_FIELD[fc.stage], now)
+    fc.last_followup_sent_at = now
+    fc.last_activity_at = now
+
+    sent_stage, next_scheduled = STAGE_PROGRESSION[fc.stage]
+    if next_scheduled:
+        settings = _get_fu_settings(fc.workspace_id)
+        fc.stage = next_scheduled
+        fc.next_followup_at = now + _get_stage_delay(next_scheduled, settings)
+    else:
+        fc.stage = 'completed_fu3'
+        fc.is_followup_enabled = False
+        fc.next_followup_at = None
+        fc.completed_fu3_at = now
+        _schedule_touch(fc, force=True)   # drip done → cadence takes over
+
+    _record_event(fc, 'manual_send', actor_user_id=uid,
+                  from_stage=old_stage, to_stage=fc.stage)
+    db.session.commit()
+    return 'sent', None
+
+
 @app.route('/api/followups/action', methods=['POST'])
 @login_required
 @limiter.limit("60 per minute")
@@ -4575,55 +4642,14 @@ def api_followups_action():
         return jsonify(error='Not found'), 404
 
     if action == 'send-now':
-        if fc.state != 'active':
-            return jsonify(error='Contact must be active to send', skip=True), 400
-        if fc.stage not in STAGE_TO_TEMPLATE:
-            return jsonify(error='No scheduled follow-up to send', skip=True), 400
-        dup = _recent_followup_block(fc)
-        if dup:
-            return jsonify(error=dup, duplicate=True), 409
-
-        template_text = _get_fu_template_for_stage(uid, fc.stage)
-        if not template_text:
-            return jsonify(error='No active follow-up templates. Add at least one before sending.'), 400
-        acct = EmailAccount.query.filter_by(user_id=uid).first()
-        if not acct:
-            return jsonify(error='No email account configured'), 400
-
-        cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-               'phone': acct.your_phone or '', 'route': fc.current_route or '',
-               'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
-        fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                   'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
-                   'source_thread_id': fc.source_thread_id or ''}
-        ok, err = send_followup_email(fu_dict, template_text, cfg, uid=uid)
-        if not ok:
-            _record_event(fc, 'manual_send', actor_user_id=uid,
-                          metadata_json=json.dumps({'error': err}), notes='Send failed')
-            db.session.commit()
-            return jsonify(error=f'Send failed: {err}'), 500
-
-        now = _utcnow()
-        old_stage = fc.stage
-        setattr(fc, STAGE_SENT_FIELD[fc.stage], now)
-        fc.last_followup_sent_at = now
-        fc.last_activity_at = now
-
-        sent_stage, next_scheduled = STAGE_PROGRESSION[fc.stage]
-        if next_scheduled:
-            settings = _get_fu_settings(fc.workspace_id)
-            fc.stage = next_scheduled
-            fc.next_followup_at = now + _get_stage_delay(next_scheduled, settings)
-        else:
-            fc.stage = 'completed_fu3'
-            fc.is_followup_enabled = False
-            fc.next_followup_at = None
-            fc.completed_fu3_at = now
-            _schedule_touch(fc, force=True)   # drip done → cadence takes over
-
-        _record_event(fc, 'manual_send', actor_user_id=uid,
-                      from_stage=old_stage, to_stage=fc.stage)
-        db.session.commit()
+        status, detail = _followup_send_now_core(fc, uid)
+        if status == 'skip':
+            return jsonify(error=detail, skip=True), 400
+        if status == 'duplicate':
+            return jsonify(error=detail, duplicate=True), 409
+        if status == 'error':
+            code = 500 if detail.startswith('Send failed') else 400
+            return jsonify(error=detail), code
         return jsonify(ok=True, contact=fc.to_dict())
 
     elif action == 'free-send':
@@ -4779,49 +4805,17 @@ def api_followups_bulk_action():
             results.append({'id': cid, 'ok': ok, 'error': err})
 
         elif action == 'send-now':
-            if fc.state != 'active' or fc.stage not in STAGE_TO_TEMPLATE:
-                results.append({'id': cid, 'ok': False, 'skip': True, 'error': 'Not eligible for sequence send'})
-                continue
-            dup = _recent_followup_block(fc)
-            if dup:
-                results.append({'id': cid, 'ok': False, 'skip': True, 'duplicate': True, 'error': dup})
-                continue
-            template_text = _get_fu_template_for_stage(fc.user_id, fc.stage)
-            if not template_text:
-                results.append({'id': cid, 'ok': False, 'error': 'No active templates'})
-                continue
-            acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
-            if not acct:
-                results.append({'id': cid, 'ok': False, 'error': 'No email account'})
-                continue
-            cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-                   'phone': acct.your_phone or '', 'route': fc.current_route or '',
-                   'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
-            fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                       'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
-                       'source_thread_id': fc.source_thread_id or ''}
-            ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
-            if ok:
-                now_dt = _utcnow()
-                old_stage = fc.stage
-                setattr(fc, STAGE_SENT_FIELD[fc.stage], now_dt)
-                fc.last_followup_sent_at = now_dt
-                fc.last_activity_at = now_dt
-                sent_stage, next_scheduled = STAGE_PROGRESSION[fc.stage]
-                if next_scheduled:
-                    settings = _get_fu_settings(fc.workspace_id)
-                    fc.stage = next_scheduled
-                    fc.next_followup_at = now_dt + _get_stage_delay(next_scheduled, settings)
-                else:
-                    fc.stage = 'completed_fu3'
-                    fc.is_followup_enabled = False
-                    fc.next_followup_at = None
-                    fc.completed_fu3_at = now_dt
-                _record_event(fc, 'manual_send', actor_user_id=uid,
-                              from_stage=old_stage, to_stage=fc.stage)
+            # Same core as the single action — incl. _schedule_touch after FU3
+            # (the old inline copy skipped it, stranding contacts without a next step).
+            status, detail = _followup_send_now_core(fc, uid)
+            if status == 'sent':
                 results.append({'id': cid, 'ok': True})
+            elif status == 'duplicate':
+                results.append({'id': cid, 'ok': False, 'skip': True, 'duplicate': True, 'error': detail})
+            elif status == 'skip':
+                results.append({'id': cid, 'ok': False, 'skip': True, 'error': detail})
             else:
-                results.append({'id': cid, 'ok': False, 'error': err})
+                results.append({'id': cid, 'ok': False, 'error': detail})
 
         elif action == 'free-send':
             if fc.state in ('blocked', 'closed'):
@@ -4923,6 +4917,176 @@ def api_followups_bulk_action():
     skip_count   = sum(1 for r in results if not r.get('ok') and r.get('skip'))
     failed_count = sum(1 for r in results if not r.get('ok') and not r.get('skip'))
     return jsonify(results=results, sent=ok_count, skipped=skip_count, failed=failed_count)
+
+
+# ── BULK FOLLOW-UP SEND (background job, SendJob kind='followup_bulk') ────────
+# Mirrors the outreach run_send_job pattern: one HTTP request creates the job,
+# a daemon thread does the sends server-side (no 60/min action-route limit, no
+# open-tab requirement), progress lives in memory + DB, the UI polls status.
+# Single gunicorn worker (see Procfile) keeps the in-memory state coherent.
+
+_fu_bulk_states = {}
+
+def _user_fu_bulk_state(uid):
+    return _fu_bulk_states.setdefault(uid, {})
+
+FU_BULK_LOG_CAP = 300   # keep the per-contact problem list bounded
+
+def run_followup_bulk_job(job_id, ids, uid):
+    """Send scheduled follow-ups for the given contact ids in a worker thread."""
+    state = _user_fu_bulk_state(uid)
+    state.update({'running': True, 'done': False, 'job_id': job_id,
+                  'total': len(ids), 'current': 0,
+                  'sent': 0, 'skipped': 0, 'failed': 0, 'failures': []})
+    with app.app_context():
+        from app.models import SendJob, FollowupContact
+        try:
+            job = db.session.get(SendJob, job_id)
+            if not job:
+                state.update({'running': False, 'done': True})
+                return
+            job.status = 'running'
+            job.started_at = _utcnow()
+            db.session.commit()
+
+            for i, cid in enumerate(ids):
+                state['current'] = i + 1
+                fc = db.session.get(FollowupContact, cid)
+                if not fc or fc.user_id != uid:
+                    state['skipped'] += 1
+                    _fu_bulk_note(state, cid, '(unknown)', 'skipped', 'Not found')
+                else:
+                    try:
+                        status, detail = _followup_send_now_core(fc, uid)
+                    except Exception as e:
+                        db.session.rollback()
+                        app.logger.error('bulk follow-up send crashed on %s: %s', cid, e)
+                        status, detail = 'error', str(e)
+                    if status == 'sent':
+                        state['sent'] += 1
+                    elif status in ('skip', 'duplicate'):
+                        state['skipped'] += 1
+                        _fu_bulk_note(state, cid, fc.contact_email, 'skipped', detail)
+                    else:
+                        state['failed'] += 1
+                        _fu_bulk_note(state, cid, fc.contact_email, 'failed', detail)
+                if (i + 1) % 10 == 0:
+                    _fu_bulk_persist(job, state, final=False)
+
+            _fu_bulk_persist(job, state, final=True)
+            state.update({'running': False, 'done': True})
+            audit_log('followup_bulk_send', resource_type='followup', uid=uid, detail={
+                'total': state['total'], 'sent': state['sent'],
+                'skipped': state['skipped'], 'failed': state['failed'],
+            })
+        except Exception as job_err:
+            import traceback as _tb
+            app.logger.error('run_followup_bulk_job crashed uid=%s job=%s: %s\n%s',
+                             uid, job_id, job_err, _tb.format_exc())
+            state.update({'running': False, 'done': True})
+            try:
+                db.session.rollback()
+                j = db.session.get(SendJob, job_id)
+                if j and j.status != 'done':
+                    j.status = 'error'
+                    j.error_msg = f'Bulk follow-up job crashed: {job_err}'[:480]
+                    j.finished_at = _utcnow()
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+def _fu_bulk_note(state, cid, email, kind, reason):
+    if len(state['failures']) < FU_BULK_LOG_CAP:
+        state['failures'].append({'id': cid, 'email': email, 'kind': kind,
+                                  'reason': (reason or '')[:300]})
+
+def _fu_bulk_persist(job, state, final):
+    try:
+        job.sent = state['sent']
+        job.errors = state['failed']
+        job.skipped = state['skipped']
+        job.log_json = json.dumps(state['failures'])
+        if final:
+            job.status = 'done'
+            job.finished_at = _utcnow()
+        db.session.commit()
+    except Exception as pe:
+        app.logger.warning('followup bulk job progress update failed: %s', pe)
+        db.session.rollback()
+
+
+@app.route('/api/followups/bulk-send', methods=['POST'])
+@login_required
+@limiter.limit("5 per minute")   # one job at a time; guards runaway loops
+@csrf_protected
+def api_followups_bulk_send():
+    from app.models import SendJob
+    uid = _current_user_id()
+    ids = [str(i) for i in ((request.get_json() or {}).get('ids') or []) if i]
+    if not ids:
+        return jsonify(error='No contacts selected'), 400
+
+    # Auto-recover jobs stranded by a server restart/crash (mirrors api_send)
+    stale_cutoff = _utcnow() - timedelta(minutes=60)
+    stale = SendJob.query.filter(
+        SendJob.user_id == uid,
+        SendJob.kind == 'followup_bulk',
+        SendJob.status.in_(['queued', 'running']),
+        db.or_(SendJob.started_at < stale_cutoff, SendJob.started_at == None)
+    ).all()
+    for s in stale:
+        s.status = 'error'
+        s.error_msg = 'Stale job auto-recovered after server restart'
+        s.finished_at = _utcnow()
+    if stale:
+        db.session.commit()
+
+    active = SendJob.query.filter(
+        SendJob.user_id == uid,
+        SendJob.kind == 'followup_bulk',
+        SendJob.status.in_(['queued', 'running'])
+    ).first()
+    if active:
+        return jsonify(error='Bulk send already running', job_id=active.id), 409
+
+    job = SendJob(user_id=uid, kind='followup_bulk', status='queued', total=len(ids))
+    db.session.add(job)
+    db.session.commit()
+    t = threading.Thread(target=run_followup_bulk_job, args=(job.id, ids, uid),
+                         daemon=True, name='fu-bulk-send')
+    t.start()
+    return jsonify(ok=True, job_id=job.id, total=len(ids))
+
+
+@app.route('/api/followups/bulk-send/status')
+@login_required
+@limiter.limit("120 per minute")
+def api_followups_bulk_send_status():
+    from app.models import SendJob
+    uid = _current_user_id()
+    job = SendJob.query.filter_by(user_id=uid, kind='followup_bulk') \
+                       .order_by(SendJob.started_at.desc()).first()
+    if not job:
+        return jsonify(exists=False, running=False, done=False)
+
+    state = _user_fu_bulk_state(uid)
+    if state.get('job_id') == job.id and state.get('running'):
+        return jsonify(exists=True, job_id=job.id, running=True, done=False,
+                       total=state['total'], current=state['current'],
+                       sent=state['sent'], skipped=state['skipped'],
+                       failed=state['failed'], failures=state['failures'])
+
+    try:
+        failures = json.loads(job.log_json) if job.log_json else []
+    except ValueError:
+        failures = []
+    return jsonify(exists=True, job_id=job.id,
+                   running=job.status in ('queued', 'running'),
+                   done=job.status == 'done',
+                   error=job.error_msg,
+                   total=job.total, current=job.sent + job.errors + job.skipped,
+                   sent=job.sent, skipped=job.skipped, failed=job.errors,
+                   failures=failures)
 
 
 # ── PIPELINE / KANBAN (shared data with the Follow-up table) ──────────────────

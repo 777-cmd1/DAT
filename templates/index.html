@@ -5225,16 +5225,21 @@ async function loadExtraFuTmpls() {
   } catch(e) { console.error('loadExtraFuTmpls:', e); }
 }
 
+let _fuTmplSaving = false;
 async function saveNewFuTmpl() {
+  if (_fuTmplSaving) return;   // double-click guard — each Add used to create a row
   const level = (document.getElementById('newFuTmplLevel').value || 'General').trim();
   const name = (document.getElementById('newFuTmplName').value||'').trim();
   const body = (document.getElementById('newFuTmplBody').value||'').trim();
   if (!body) { toast('Template body is required', true); return; }
-  const res = await fetch('/api/fu-templates/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, level, body})});
-  if (!res.ok) { const d=await res.json(); toast(d.error||'Error', true); return; }
-  toast('Template added');
-  toggleAddFuTmplForm();
-  await loadExtraFuTmpls();
+  _fuTmplSaving = true;
+  try {
+    const res = await fetch('/api/fu-templates/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, level, body})});
+    if (!res.ok) { const d=await res.json().catch(()=>({})); toast(d.error||'Error', true); return; }
+    toast('Template added');
+    toggleAddFuTmplForm();
+    await loadExtraFuTmpls();
+  } finally { _fuTmplSaving = false; }
 }
 
 async function toggleFuTmplActive(id, active) {
@@ -5244,8 +5249,15 @@ async function toggleFuTmplActive(id, active) {
 
 async function deleteFuTmpl(id) {
   if (!await showConfirm('Delete this template? This cannot be undone.', { okText: 'Delete' })) return;
-  await fetch(`/api/fu-templates/${id}`, {method:'DELETE'});
-  toast('Template deleted');
+  try {
+    const res = await fetch(`/api/fu-templates/${id}`, {method:'DELETE'});
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast('Delete failed: ' + (d.error || res.status), true);
+      return;
+    }
+    toast('Template deleted');
+  } catch(e) { toast('Delete failed: ' + e.message, true); return; }
   await loadExtraFuTmpls();
 }
 

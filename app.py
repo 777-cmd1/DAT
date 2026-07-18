@@ -5909,6 +5909,13 @@ def api_add_fu_template():
     body = (data.get('body') or '').strip()
     if not body:
         return jsonify({'error': 'Template body is required'}), 400
+    # Exact duplicates used to pile up via repeated/double-clicked Add while
+    # Delete silently did nothing — reject them with a clear message instead.
+    dup = Template.query.filter_by(user_id=uid, type='followup', level=level,
+                                   name=name or level, body=body).first()
+    if dup:
+        return jsonify({'error': 'An identical template already exists',
+                        'duplicate': True, 'template': dup.to_dict()}), 409
     tmpl = Template(user_id=uid, type='followup', level=level, name=name or level, body=body)
     db.session.add(tmpl)
     db.session.commit()
@@ -5942,13 +5949,23 @@ def api_update_fu_template(tmpl_id):
 @limiter.limit("30 per minute")
 @csrf_protected
 def api_delete_fu_template(tmpl_id):
+    # Real delete. The old soft-delete (is_active=False) combined with an
+    # unfiltered /list left the row visible forever — "Delete does nothing".
+    # Nothing references templates.id (no FKs; follow-up sends resolve the
+    # template text by stage at send time), so a hard delete cannot orphan
+    # anything; the keep-but-disable use case is the ACTIVE toggle.
     uid = current_user_id()
     if not uid: return jsonify({'error': 'Not authenticated'}), 401
     from app.models import Template
     tmpl = Template.query.filter_by(id=tmpl_id, user_id=uid, type='followup').first_or_404()
-    tmpl.is_active = False
-    db.session.commit()
-    return jsonify({'ok': True})
+    try:
+        db.session.delete(tmpl)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error('template delete failed id=%s uid=%s: %s', tmpl_id, uid, e)
+        return jsonify({'error': f'Delete failed: {e}'}), 500
+    return jsonify({'ok': True, 'deleted': tmpl_id})
 
 # ── PIPELINE ──────────────────────────────────────────────────────────────────
 STAGES = ['new_lead', 'contacted', 'replied', 'interested', 'deal', 'lost']

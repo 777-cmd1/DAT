@@ -325,3 +325,87 @@ def test_digest_compose_and_dedupe(app, db, monkeypatch):
     assert len(sent) == n
     tuesday = datetime(2026, 7, 7, 8, 0)
     assert _app._maybe_send_digests(tuesday) == 0  # not a Monday
+
+
+# ── "Send touch" (free-send) from the Today's touches panel ──────────────────
+
+def _seed_send_prereqs(db, user, ws):
+    """Email account + one active follow-up template (free-send needs both)."""
+    from app.models import EmailAccount, Template
+    db.session.add(EmailAccount(user_id=user.id, workspace_id=ws.id,
+                                gmail_address='me@test.com', your_name='Me'))
+    db.session.add(Template(user_id=user.id, workspace_id=ws.id, type='followup',
+                            level='General', name='General', body='Hi {name}',
+                            is_active=True))
+    db.session.commit()
+
+
+def test_free_send_calls_send_and_reschedules(app, db, client, monkeypatch):
+    from app.models import FollowupEvent
+    user, ws = _mk(db, client)
+    _seed_send_prereqs(db, user, ws)
+    fc = _fc(db, user, ws, stage=2)              # completed_fu3 → free-send path
+    fc.attention_at = _app._utcnow()             # 🔥 pending
+    db.session.commit()
+
+    calls = []
+    monkeypatch.setattr(_app, 'send_followup_email',
+                        lambda fu, tpl, cfg, uid=None: (calls.append((fu, tpl, cfg, uid)), (True, None))[1])
+
+    res = client.post('/api/followups/action', json={'id': fc.id, 'action': 'free-send'})
+    assert res.status_code == 200, res.get_json()
+    assert res.get_json()['ok'] is True
+
+    # send function got the real contact + template
+    assert len(calls) == 1
+    fu, tpl, cfg, uid = calls[0]
+    assert fu['contact_email'] == fc.contact_email
+    assert tpl and uid == user.id
+
+    db.session.refresh(fc)
+    assert fc.attention_at is None               # 🔥 resolved
+    assert fc.last_followup_sent_at is not None
+    assert fc.next_followup_at is not None       # cadence re-scheduled the next touch
+    assert fc.touch_enabled is True
+    ev = FollowupEvent.query.filter_by(followup_contact_id=fc.id,
+                                       event_type='free_send').all()
+    assert len(ev) == 1
+
+
+def test_free_send_failure_returns_visible_error(app, db, client, monkeypatch):
+    from app.models import FollowupEvent
+    user, ws = _mk(db, client)
+    _seed_send_prereqs(db, user, ws)
+    fc = _fc(db, user, ws, stage=2)
+    db.session.commit()
+
+    monkeypatch.setattr(_app, 'send_followup_email',
+                        lambda *a, **k: (False, 'SMTP 535 bad credentials'))
+
+    res = client.post('/api/followups/action', json={'id': fc.id, 'action': 'free-send'})
+    assert res.status_code == 500
+    assert 'SMTP 535 bad credentials' in res.get_json()['error']
+
+    db.session.refresh(fc)
+    assert fc.last_followup_sent_at is None      # nothing recorded as sent
+    ev = FollowupEvent.query.filter_by(followup_contact_id=fc.id,
+                                       event_type='free_send').first()
+    assert ev is not None and ev.notes == 'Send failed'
+
+
+def test_free_send_blocked_or_missing_prereqs(app, db, client, monkeypatch):
+    user, ws = _mk(db, client)
+    fc = _fc(db, user, ws, stage=2)
+
+    # No email account / templates yet → clear 400, not a crash
+    monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **k: (True, None))
+    res = client.post('/api/followups/action', json={'id': fc.id, 'action': 'free-send'})
+    assert res.status_code == 400
+    # default templates fall back, so the missing email account is what blocks
+    assert 'email account' in res.get_json()['error'].lower()
+
+    # Blocked contact → refused
+    fc.state = 'blocked'
+    db.session.commit()
+    res = client.post('/api/followups/action', json={'id': fc.id, 'action': 'free-send'})
+    assert res.status_code == 400

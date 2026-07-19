@@ -96,8 +96,35 @@ URL: `/admin`
 - Invite User → Send Invite → копіюй посилання з Copy Link
 - Управління юзерами, статистика, акаунти
 
+## Reply triage (напівавтомат) — додано 2026-07
+- `classify_reply_text()` в app.py: категорії negative/gave_info/rate_request/auto_reply;
+  цитати відрізаються (`_strip_quoted`), Re:-теми не дають сигналів; keywords —
+  workspace-конфіг, stored НАБОРИ обʼєднуються з дефолтами (`get_filter_keywords`).
+- Режими off/suggest/auto на категорію (`get_triage_modes`, дефолт suggest, OOO=auto).
+- Block — тільки вручну. Check Gmail пересканує всю живу чергу (самолікування словника).
+
+## Follow-up каденс — додано 2026-07
+- Залізне правило: активний контакт завжди має next_followup_at (`_schedule_touch`,
+  хуки в reply-stop / stage-move / normalize-sweep). Лічильники Overdue/Today рахують
+  БУДЬ-ЯКИЙ активний контакт з датою (enabled-прапорці гейтять лише авто-відправку).
+- `Workspace.get_cadence()`: {stage_id: {days, mode}}; touch_hour ('auto' = найкраща
+  година відповідей); шедулер Path 3 = авто-дотики, Path 4 = тижневий дайджест (Пн).
+- 🔥 attention_at: відповідь від контакта стадії ≥2; OOO-автопауза: +7 днів.
+- UI: Today's touches панель, швидкі дії на канбані, таймлайн (`/api/followups/timeline`).
+
+## Dashboard
+Головна сторінка: `/api/dashboard` (спільне `_dashboard_data` з дайджестом) —
+дії дня, воронка 7/30д з івент-логу, здоровʼя бази, activity 14д, top lanes.
+
+## Процес деплою (конвенція цього репо)
+- Розробка на робочій гілці → тести → пуш → **деплой у main ТІЛЬКИ після апрува юзера**.
+- Перед деплоєм створюється rollback-гілка `rollback/<name>`; відкат = force-push її в main.
+- Запарковано: `wave/b-smart-templates` (змінні шаблонів {contact_name}/{last_rate}/...).
+- Повний контекст для нових сесій/інших моделей: **docs/PROJECT_OVERVIEW.md**.
+
 ## Тести
 ```bash
-python -m pytest tests/test_parser.py -q
+python -m pytest tests/test_parser.py tests/test_triage.py tests/test_touch.py tests/test_pipeline_kanban.py -q
 ```
-Тестують `parse_dat_text()` — DAT і Truckstop формати, дедуплікацію, edge cases.
+Пофайлово зелені (~100). Повний прогін `tests/` має передіснуючі флейки ізоляції —
+ганяти пофайлово. JS: `node --check` на витягнутих <script> з index.html.

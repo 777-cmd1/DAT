@@ -1658,6 +1658,13 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-progress-count { font-family:'JetBrains Mono',monospace; }
 .fu-progress-track { height:8px; background:var(--surface2); border-radius:6px; overflow:hidden; }
 .fu-progress-fill { height:100%; width:0%; background:var(--accent); border-radius:6px; transition:width .2s ease; }
+.fu-progress-close { background:transparent; border:none; color:var(--text3); cursor:pointer; font-size:12px; margin-left:8px; padding:2px 4px; }
+.fu-progress-close:hover { color:var(--text); }
+.fu-progress-issues { max-height:160px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; font-size:12px; border-top:1px solid var(--border); padding-top:8px; }
+.fu-progress-issue { display:flex; gap:8px; align-items:baseline; }
+.fu-progress-issue .fpi-email { font-family:'JetBrains Mono',monospace; color:var(--text2); white-space:nowrap; }
+.fu-progress-issue .fpi-reason { color:var(--text3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fu-progress-issue.failed .fpi-email { color:var(--red); }
 /* View toggle (Table / Kanban) */
 .fu-viewbar { display:flex; justify-content:flex-start; }
 .fu-view-toggle { display:inline-flex; gap:2px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:3px; }
@@ -2076,12 +2083,33 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .rbtn-stop { background:transparent; color:var(--text2); border-color:var(--border2); }
 .rbtn-reset{ background:transparent; color:var(--text3); border-color:var(--border); font-size:11px; }
 
-/* ── TOAST UPGRADE ─────────────────────────────────────────────────── */
+/* ── TOAST ─────────────────────────────────────────────────────────── */
+/* Base rule was lost in the v1→v2 port: without position/visibility the
+   toast rendered as plain text below the fold, so every success/error
+   message in the app was invisible. */
 .toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 9999;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(0,0,0,.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
   background: var(--glass) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.error { color: var(--red); border-color: rgba(248,113,113,.35); }
 
 /* ── ANALYTICS REDESIGN ─────────────────────────────────── */
 .analytics-period-tabs {
@@ -3026,9 +3054,14 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <div class="fu-progress" id="fuProgress" style="display:none">
             <div class="fu-progress-head">
               <span id="fuProgressLabel">Sending follow-ups…</span>
-              <span id="fuProgressCount">0/0</span>
+              <span>
+                <span id="fuProgressCount">0/0</span>
+                <button class="fu-progress-close" id="fuProgressClose" style="display:none"
+                        onclick="hideFuBulkProgress()" title="Dismiss">✕</button>
+              </span>
             </div>
             <div class="fu-progress-track"><div class="fu-progress-fill" id="fuProgressFill"></div></div>
+            <div class="fu-progress-issues" id="fuProgressIssues" style="display:none"></div>
           </div>
 
 
@@ -3790,7 +3823,7 @@ function nav(page, el) {
   if (page === 'settings')      loadSettings();
   if (page === 'replies')       initReplies();
   if (page === 'dashboard')     loadDashboard();
-  if (page === 'followup')      loadFollowups();
+  if (page === 'followup')      { loadFollowups(); resumeFuBulkIfRunning(); }
   if (page === 'pipeline')      loadPipeline();
   if (page === 'intelligence')  loadIntelligence();
   const titles = { send:'Send', replies:'Replies', followup:'Follow-up', stats:'Analytics',
@@ -5192,16 +5225,21 @@ async function loadExtraFuTmpls() {
   } catch(e) { console.error('loadExtraFuTmpls:', e); }
 }
 
+let _fuTmplSaving = false;
 async function saveNewFuTmpl() {
+  if (_fuTmplSaving) return;   // double-click guard — each Add used to create a row
   const level = (document.getElementById('newFuTmplLevel').value || 'General').trim();
   const name = (document.getElementById('newFuTmplName').value||'').trim();
   const body = (document.getElementById('newFuTmplBody').value||'').trim();
   if (!body) { toast('Template body is required', true); return; }
-  const res = await fetch('/api/fu-templates/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, level, body})});
-  if (!res.ok) { const d=await res.json(); toast(d.error||'Error', true); return; }
-  toast('Template added');
-  toggleAddFuTmplForm();
-  await loadExtraFuTmpls();
+  _fuTmplSaving = true;
+  try {
+    const res = await fetch('/api/fu-templates/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, level, body})});
+    if (!res.ok) { const d=await res.json().catch(()=>({})); toast(d.error||'Error', true); return; }
+    toast('Template added');
+    toggleAddFuTmplForm();
+    await loadExtraFuTmpls();
+  } finally { _fuTmplSaving = false; }
 }
 
 async function toggleFuTmplActive(id, active) {
@@ -5211,8 +5249,15 @@ async function toggleFuTmplActive(id, active) {
 
 async function deleteFuTmpl(id) {
   if (!await showConfirm('Delete this template? This cannot be undone.', { okText: 'Delete' })) return;
-  await fetch(`/api/fu-templates/${id}`, {method:'DELETE'});
-  toast('Template deleted');
+  try {
+    const res = await fetch(`/api/fu-templates/${id}`, {method:'DELETE'});
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast('Delete failed: ' + (d.error || res.status), true);
+      return;
+    }
+    toast('Template deleted');
+  } catch(e) { toast('Delete failed: ' + e.message, true); return; }
   await loadExtraFuTmpls();
 }
 
@@ -7034,58 +7079,131 @@ async function bulkFuAction(action, extraPayload) {
   } catch(e) { toast('Error: '+e.message, true); }
 }
 
-// Batch "Send Now" with a live progress bar. Sends sequentially via the single
-// /action endpoint so each contact is processed (and deduped) independently.
+// Batch "Send Now" as a server-side background job (SendJob kind='followup_bulk').
+// One request starts the job; the worker thread does the sends, so the batch
+// survives tab refresh/close and never trips the per-action rate limit. The UI
+// polls /api/followups/bulk-send/status for the live progress bar + summary.
 let _fuBatchSending = false;
+const _fuSleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function bulkSendNowWithProgress() {
   if (_fuBatchSending) return;            // ignore re-entry / double-click
   const ids = [...selectedFuIds];
   if (!ids.length) return;
-  _fuBatchSending = true;
+  try {
+    const res = await fetch('/api/followups/bulk-send', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ids})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 409) {           // a job is already running — attach to it
+        toast('Bulk send already running — showing its progress', true);
+        trackFuBulkJob();
+        return;
+      }
+      toast('Error: ' + (data.error || 'unknown'), true);
+      return;
+    }
+    clearFuSelection();
+    trackFuBulkJob();
+  } catch(e) { toast('Error: '+e.message, true); }
+}
 
+// Re-attach to a running job after a page refresh / navigation.
+async function resumeFuBulkIfRunning() {
+  if (_fuBatchSending) return;
+  try {
+    const s = await (await fetch('/api/followups/bulk-send/status')).json();
+    if (s.running) trackFuBulkJob();
+  } catch(e) { /* status probe only */ }
+}
+
+async function trackFuBulkJob() {
+  if (_fuBatchSending) return;
+  _fuBatchSending = true;
   const prog    = document.getElementById('fuProgress');
   const fill    = document.getElementById('fuProgressFill');
   const countEl = document.getElementById('fuProgressCount');
   const labelEl = document.getElementById('fuProgressLabel');
+  const issues  = document.getElementById('fuProgressIssues');
+  const closeBtn = document.getElementById('fuProgressClose');
   const bulkBtns = document.querySelectorAll('#fuBulkBar button');
   bulkBtns.forEach(b => b.disabled = true);
   if (prog) prog.style.display = '';
-  if (countEl) { countEl.className = 'fu-progress-count'; countEl.textContent = '0/' + ids.length; }
+  if (issues) { issues.style.display = 'none'; issues.replaceChildren(); }
+  if (closeBtn) closeBtn.style.display = 'none';
   if (labelEl) labelEl.textContent = 'Sending follow-ups…';
   if (fill) fill.style.width = '0%';
+  if (countEl) countEl.textContent = '…';
 
-  let sent = 0, skipped = 0, failed = 0, done = 0;
-  for (const id of ids) {
-    try {
-      const res = await fetch('/api/followups/action', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({id, action:'send-now'})
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) sent++;
-      else if (res.status === 409 || data.duplicate) skipped++;  // already sent recently
-      else if (data.skip) skipped++;                              // not eligible (state/stage)
-      else failed++;
-    } catch(e) { failed++; }
-    done++;
-    if (countEl) countEl.textContent = done + '/' + ids.length;
-    if (fill) fill.style.width = Math.round(done / ids.length * 100) + '%';
+  let last = null;
+  try {
+    while (true) {
+      try {
+        const res = await fetch('/api/followups/bulk-send/status');
+        if (res.ok) {
+          last = await res.json();
+          const total = last.total || 0, cur = Math.min(last.current || 0, total);
+          if (countEl) countEl.textContent = cur + '/' + total;
+          if (fill && total) fill.style.width = Math.round(cur / total * 100) + '%';
+          if (!last.running) break;
+        }
+      } catch(e) { /* transient network error — keep polling */ }
+      await _fuSleep(1000);
+    }
+  } finally {
+    _fuBatchSending = false;
+    bulkBtns.forEach(b => b.disabled = false);
   }
+  _renderFuBulkSummary(last || {});
+  await loadFollowups();
+}
 
-  if (labelEl) labelEl.textContent = '✓ Finished';
+function _renderFuBulkSummary(s) {
+  const fill    = document.getElementById('fuProgressFill');
+  const labelEl = document.getElementById('fuProgressLabel');
+  const issues  = document.getElementById('fuProgressIssues');
+  const closeBtn = document.getElementById('fuProgressClose');
+  const sent = s.sent || 0, skipped = s.skipped || 0, failed = s.failed || 0;
   let msg = sent > 0 ? `Sent ${sent}` : 'Nothing sent';
   if (skipped) msg += ` — ${skipped} skipped`;
   if (failed)  msg += ` — ${failed} failed`;
-  toast(msg, failed > 0 && sent === 0);
+  if (s.error) msg += ` — ${s.error}`;
+  if (labelEl) labelEl.textContent = (failed || s.error ? '⚠ ' : '✓ ') + msg;
+  toast(msg, (failed > 0 && sent === 0) || !!s.error);
 
-  bulkBtns.forEach(b => b.disabled = false);
-  setTimeout(() => {
-    if (prog) prog.style.display = 'none';
-    if (fill) fill.style.width = '0%';
-  }, 1400);
-  _fuBatchSending = false;
-  clearFuSelection();
-  await loadFollowups();
+  const problems = s.failures || [];
+  if (problems.length && issues) {
+    issues.replaceChildren(...problems.map(p => {
+      const row = document.createElement('div');
+      row.className = 'fu-progress-issue' + (p.kind === 'failed' ? ' failed' : '');
+      const em = document.createElement('span');
+      em.className = 'fpi-email';
+      em.textContent = p.email || '';
+      const why = document.createElement('span');
+      why.className = 'fpi-reason';
+      why.textContent = (p.kind === 'failed' ? '' : 'skipped: ') + (p.reason || '');
+      row.append(em, why);
+      return row;
+    }));
+    issues.style.display = '';
+    if (closeBtn) closeBtn.style.display = '';   // keep panel open until dismissed
+  } else {
+    setTimeout(hideFuBulkProgress, 1800);
+  }
+  if (fill) fill.style.width = '100%';
+}
+
+function hideFuBulkProgress() {
+  const prog = document.getElementById('fuProgress');
+  const fill = document.getElementById('fuProgressFill');
+  const issues = document.getElementById('fuProgressIssues');
+  const closeBtn = document.getElementById('fuProgressClose');
+  if (prog) prog.style.display = 'none';
+  if (fill) fill.style.width = '0%';
+  if (issues) { issues.style.display = 'none'; issues.replaceChildren(); }
+  if (closeBtn) closeBtn.style.display = 'none';
 }
 
 // ── Schedule modal ────────────────────────────────────────────────────────────

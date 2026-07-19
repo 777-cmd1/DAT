@@ -718,6 +718,8 @@ class SendJob(db.Model):
 
     id          = db.Column(db.String(36), primary_key=True, default=_uuid)
     user_id     = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    kind        = db.Column(db.String(20), default='outreach', nullable=False,
+                            server_default='outreach')  # outreach|followup_bulk
     status      = db.Column(db.String(20), default='queued')  # queued|running|done|interrupted
     total       = db.Column(db.Integer, default=0)
     sent        = db.Column(db.Integer, default=0)
@@ -726,6 +728,7 @@ class SendJob(db.Model):
     started_at  = db.Column(db.DateTime, default=_utcnow)
     finished_at = db.Column(db.DateTime, nullable=True)
     error_msg   = db.Column(db.Text, nullable=True)
+    log_json    = db.Column(db.Text, nullable=True)  # per-contact failures/skips (bulk follow-up)
 
 
 class SystemLease(db.Model):

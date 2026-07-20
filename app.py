@@ -6584,6 +6584,12 @@ with app.app_context():
         # Follow-up cadence engine (Today's touches)
         ('followup_contacts', 'touch_enabled',       'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('followup_contacts', 'attention_at',        'TIMESTAMP'),
+        # Bulk follow-up send jobs (SendJob kind discriminator + per-contact log).
+        # Inline delivery is REQUIRED: prod schema changes only apply here — the
+        # Alembic releaseCommand does not run against the live DB (a3b4c5d6e7f8
+        # exists for fresh installs only).
+        ('send_jobs',         'kind',                "VARCHAR(20) NOT NULL DEFAULT 'outreach'"),
+        ('send_jobs',         'log_json',            'TEXT'),
     ]
     try:
         with db.engine.connect() as _conn:

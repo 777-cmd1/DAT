@@ -5112,6 +5112,7 @@ def api_followups_pipeline_config():
                    triage_modes=modes, cadence=cadence,
                    touch_hour=_cfg.get('touch_hour', 'auto'),
                    digest_enabled=bool(_cfg.get('digest_enabled', True)),
+                   drip_auto_enabled=bool(ws.fu_auto_enabled) if ws else True,
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -5309,6 +5310,8 @@ def api_followups_pipeline_config_save():
                 pass
     if isinstance(data.get('digest_enabled'), bool):
         cfg['digest_enabled'] = data['digest_enabled']
+    if isinstance(data.get('drip_auto_enabled'), bool):
+        ws.fu_auto_enabled = data['drip_auto_enabled']   # scheduler drip kill switch
 
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
     db.session.commit()
@@ -5328,7 +5331,8 @@ def api_followups_pipeline_config_save():
                    triage_modes=ws.get_triage_modes(),
                    cadence=ws.get_cadence(),
                    touch_hour=(ws.pipeline_config or {}).get('touch_hour', 'auto'),
-                   digest_enabled=bool((ws.pipeline_config or {}).get('digest_enabled', True)))
+                   digest_enabled=bool((ws.pipeline_config or {}).get('digest_enabled', True)),
+                   drip_auto_enabled=bool(ws.fu_auto_enabled))
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])
@@ -6159,11 +6163,18 @@ def _next_recurring_datetime(recurring_days, recurring_time):
 def _run_scheduled_followups():
     """Process due follow-up contacts and send emails. Called from daemon thread.
     Uses SELECT FOR UPDATE SKIP LOCKED on PostgreSQL to prevent duplicate sends."""
-    from app.models import FollowupContact, EmailAccount
+    from app.models import FollowupContact, EmailAccount, Workspace
     now = _utcnow()
     with app.app_context():
         try:
-            q = FollowupContact.query.filter(
+            # Workspace kill switch: with fu_auto_enabled off, due drip contacts
+            # stay in Overdue/Today's touches for manual sending — the scheduler
+            # must never email them. (Incident 2026-07-25: 249 auto-FU2s went out
+            # because this path had no gate at all.)
+            q = FollowupContact.query.join(
+                Workspace, Workspace.id == FollowupContact.workspace_id
+            ).filter(
+                Workspace.fu_auto_enabled == True,
                 FollowupContact.state == 'active',
                 FollowupContact.is_followup_enabled == True,
                 FollowupContact.scheduled_once == False,
@@ -6171,7 +6182,7 @@ def _run_scheduled_followups():
                 FollowupContact.stage.in_(['fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled']),
             )
             try:
-                contacts = q.with_for_update(skip_locked=True).all()
+                contacts = q.with_for_update(skip_locked=True, of=FollowupContact).all()
             except Exception:
                 contacts = q.all()
         except Exception as e:

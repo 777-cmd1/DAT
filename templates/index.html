@@ -5996,6 +5996,7 @@ let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
 let pipelineCadence = {};         // {stage_id(str): {days, mode:'manual'|'auto'|'off'}}
 let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (UTC hour for cadence touches)
 let pipelineDigest = true;        // weekly digest email on Mondays
+let pipelineDripAuto = true;      // scheduler auto-sends the FU1–FU3 drip sequence
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -6481,6 +6482,7 @@ async function loadPipelineConfig() {
     pipelineCadence = data.cadence || {};
     pipelineTouchHour = data.touch_hour ?? 'auto';
     pipelineDigest = data.digest_enabled !== false;
+    pipelineDripAuto = data.drip_auto_enabled !== false;
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -6957,7 +6959,11 @@ function renderPipelineCadenceEditor() {
     `</select></div>` +
   `<div class="pl-cad-row"><span class="pl-cad-name">Weekly digest email</span>` +
     `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
-    `<input type="checkbox" id="plDigest" ${pipelineDigest ? 'checked' : ''}> Mondays — week summary to your inbox</label></div>`;
+    `<input type="checkbox" id="plDigest" ${pipelineDigest ? 'checked' : ''}> Mondays — week summary to your inbox</label></div>` +
+  `<div class="pl-cad-row"><span class="pl-cad-name">Auto-send FU1–FU3 drip</span>` +
+    `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
+    `<input type="checkbox" id="plDripAuto" ${pipelineDripAuto ? 'checked' : ''}> ` +
+    `Scheduler emails due FU1–FU3 automatically. Off = they wait in Overdue / Today's touches for manual send</label></div>`;
 }
 
 async function savePipelineConfig() {
@@ -6977,9 +6983,10 @@ async function savePipelineConfig() {
   })).filter(f => f.label);
   const cadence = {};
   document.querySelectorAll('#pipelineCadenceEditor .pl-cad-row').forEach(r => {
+    if (!r.dataset.sid) return;   // skip non-stage rows (touch hour, digest, drip toggle)
     cadence[r.dataset.sid] = {
-      days: parseInt(r.querySelector('.pl-cad-days').value) || 3,
-      mode: r.querySelector('.pl-cad-mode').value,
+      days: parseInt(r.querySelector('.pl-cad-days')?.value) || 3,
+      mode: r.querySelector('.pl-cad-mode')?.value || 'off',
     };
   });
   try {
@@ -6987,7 +6994,8 @@ async function savePipelineConfig() {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ stages, reply_filters, cadence,
         touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
-        digest_enabled: !!document.getElementById('plDigest')?.checked })
+        digest_enabled: !!document.getElementById('plDigest')?.checked,
+        drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked })
     });
     const data = await res.json();
     if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
@@ -6997,6 +7005,7 @@ async function savePipelineConfig() {
     pipelineCadence = data.cadence || {};
     pipelineTouchHour = data.touch_hour ?? 'auto';
     pipelineDigest = data.digest_enabled !== false;
+    pipelineDripAuto = data.drip_auto_enabled !== false;
     renderPipelineConfigEditor();
     toast('Pipeline config saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {

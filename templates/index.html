@@ -7384,9 +7384,14 @@ async function fuDropdownAction(action) {
     toast('Deleted'); await loadFollowups(); return;
   }
   if (action==='note') {
-    const txt = prompt('Add note:'); if (txt===null) return;
-    await fetch('/api/followups/notes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, notes:txt})});
-    toast('Note saved'); return;
+    const txt = prompt('Add note (added under existing notes):');
+    if (txt===null || !txt.trim()) return;
+    const res = await fetch('/api/followups/notes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, notes:txt, append:true})});
+    if (!res.ok) { toast('Could not save note', true); return; }
+    const d = await res.json();
+    const c = (fuContacts || []).find(x => x.id === id);
+    if (c) c.notes = d.notes;
+    toast('Note added'); return;
   }
   if (action==='schedule-once') { openFuScheduleModal(id, 'once'); return; }
   if (action==='set-recurring')  { openFuScheduleModal(id, 'recurring'); return; }

@@ -1274,7 +1274,7 @@ def get_user(email):
     from app.models import User
     u = User.query.filter(User.email == email.strip().lower()).first()
     if not u: return None
-    return {'email': u.email, 'name': u.name, 'password': u.password,
+    return {'id': u.id, 'email': u.email, 'name': u.name, 'password': u.password,
             'invited_by': u.invited_by}
 
 def load_invites():
@@ -5726,11 +5726,21 @@ def api_followups_notes():
     fc = db.session.get(FollowupContact, data.get('id'))
     if not fc or fc.user_id != uid:
         return jsonify(error='Not found'), 404
-    fc.notes = data.get('notes', '')
+    text = (data.get('notes') or '').strip()[:2000]
+    if data.get('append'):
+        # Add a dated line under the existing notes instead of replacing them
+        if not text:
+            return jsonify(error='Note is empty'), 400
+        line = f"[{_utcnow().strftime('%Y-%m-%d')}] {text}"
+        fc.notes = f"{fc.notes.rstrip()}\n{line}" if (fc.notes or '').strip() else line
+        logged = text
+    else:
+        fc.notes = text
+        logged = fc.notes
     fc.updated_at = _utcnow()
-    _record_event(fc, 'note_added', actor_user_id=uid, notes=fc.notes[:100])
+    _record_event(fc, 'note_added', actor_user_id=uid, notes=logged[:100])
     db.session.commit()
-    return jsonify(ok=True)
+    return jsonify(ok=True, notes=fc.notes)
 
 
 @app.route('/api/followups/candidates')

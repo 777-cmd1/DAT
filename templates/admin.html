@@ -1073,7 +1073,9 @@ async function sendInvite() {
   });
   const data = await res.json();
   btn.disabled = false; btn.textContent = 'Send Invite';
-  if (res.ok) {
+  if (res.ok && data.user_exists) {
+    toast(data.detail || `${email} already has an account`, 'green');
+  } else if (res.ok) {
     toast(`Invite sent to ${email}`, 'green');
     document.getElementById('inviteEmail').value = '';
     const urlEl = document.getElementById('inviteUrl');
@@ -1134,6 +1136,7 @@ async function reinviteUser(email) {
   });
   const data = await res.json();
   if (!res.ok) { toast(data.error || 'Failed', 'red'); return; }
+  if (data.user_exists) { toast(data.detail || `${email} already has an account`, 'green'); return; }
   const url = data.invite_url || data.url || (data.token ? `${location.origin}/register/${data.token}` : null);
   if (url) {
     navigator.clipboard.writeText(url).then(() => {

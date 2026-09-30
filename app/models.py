@@ -28,6 +28,9 @@ class User(db.Model):
     role         = db.Column(db.String(20), default='user')    # 'admin' | 'user'
     invited_by   = db.Column(db.String(255))
     followup_view_mode = db.Column(db.String(20), default='table', server_default='table')  # 'table' | 'kanban'
+    # Bumped on logout / password reset; a session cookie carrying an older
+    # value is rejected, so a stolen cookie dies with the next logout.
+    session_version = db.Column(db.Integer, default=0, nullable=False, server_default='0')
     created_at   = db.Column(db.DateTime, default=_utcnow)
     last_login   = db.Column(db.DateTime)
 

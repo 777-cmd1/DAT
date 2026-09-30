@@ -58,6 +58,27 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
+
+
+def _proxy_hops(env=os.environ):
+    """Reverse proxies to trust for X-Forwarded-For/-Proto. Railway fronts the
+    app with one edge proxy; with no proxy (local) trust none, or clients could
+    spoof their IP past the rate limiter. PROXY_HOPS overrides."""
+    raw = (env.get('PROXY_HOPS') or '').strip()
+    if raw.isdigit():
+        return int(raw)
+    railway = ('RAILWAY_ENVIRONMENT_NAME', 'RAILWAY_ENVIRONMENT', 'RAILWAY_PROJECT_ID', 'RAILWAY_SERVICE_ID')
+    return 1 if any(env.get(k) for k in railway) else 0
+
+
+def _apply_proxy_fix(flask_app, hops):
+    if hops:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_for=hops, x_proto=hops)
+
+
+_apply_proxy_fix(app, _proxy_hops())
+
 _is_prod_env = bool(os.environ.get('DATABASE_URL')) or os.environ.get('FLASK_ENV') == 'production'
 _secret_key = os.environ.get('SECRET_KEY')
 if not _secret_key:
@@ -1275,7 +1296,7 @@ def get_user(email):
     u = User.query.filter(User.email == email.strip().lower()).first()
     if not u: return None
     return {'id': u.id, 'email': u.email, 'name': u.name, 'password': u.password,
-            'invited_by': u.invited_by}
+            'invited_by': u.invited_by, 'session_version': u.session_version or 0}
 
 def load_invites():
     from app.models import Invitation
@@ -1300,10 +1321,30 @@ def save_invites(invites):
             ))
     db.session.commit()
 
+def _session_user():
+    """The logged-in User for this request, or None. A session whose user was
+    deleted, or whose version predates the latest logout / password reset, is
+    cleared and treated as logged out."""
+    email = session.get('user_email')
+    if not email:
+        return None
+    from app.models import User as _U
+    u = _U.query.filter_by(email=email.lower()).first()
+    if not u or session.get('sv', 0) != (u.session_version or 0):
+        session.clear()
+        return None
+    return u
+
+
+def _bump_session_version(user):
+    """End every existing session of this user (all devices)."""
+    user.session_version = (user.session_version or 0) + 1
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'user_email' not in session:
+        if not _session_user():
             if request.is_json:
                 return jsonify({'error': 'Not authenticated'}), 401
             return redirect(url_for('login_page'))
@@ -1367,12 +1408,17 @@ def api_login():
     session.clear()   # prevent session fixation
     session['user_email'] = user['email']
     session['user_name'] = user.get('name', email)
+    session['sv'] = user.get('session_version', 0)
     audit_log('login', resource_type='user', detail={'email': email})
     return jsonify({'ok': True, 'name': user.get('name', email)})
 
 @app.route('/api/auth/logout', methods=['POST'])
 @csrf_protected
 def api_logout():
+    u = _session_user()
+    if u:
+        _bump_session_version(u)
+        db.session.commit()
     session.clear()
     return jsonify({'ok': True})
 
@@ -1394,7 +1440,16 @@ def reset_password_page():
     return render_template('reset_password.html', mode='request', csrf_token=_get_csrf_token())
 
 
+def _reset_email_key():
+    """Rate-limit bucket per target address, so one inbox can't be flooded
+    from many IPs."""
+    email = ((request.get_json(silent=True) or {}).get('email') or '').strip().lower()
+    return f'reset-email:{email}'
+
+
 @app.route('/api/auth/reset-request', methods=['POST'])
+@limiter.limit("5 per hour")
+@limiter.limit("3 per hour", key_func=_reset_email_key)
 @csrf_protected
 def api_reset_request():
     """Create a reset token and email it via the admin's Gmail account."""
@@ -1470,6 +1525,7 @@ def api_reset_confirm():
         return jsonify({'error': 'Account not found'}), 400
 
     user.password = hash_password(password)
+    _bump_session_version(user)
     pr.used_at = _utcnow()
     db.session.commit()
 
@@ -1477,7 +1533,7 @@ def api_reset_confirm():
 
 @app.route('/api/auth/me', methods=['GET'])
 def api_me():
-    if 'user_email' not in session:
+    if not _session_user():
         return jsonify({'authenticated': False}), 401
     return jsonify({'authenticated': True, 'email': session['user_email'], 'name': session.get('user_name'), 'is_admin': _is_admin_user()})
 
@@ -1543,6 +1599,7 @@ def api_register():
     session.clear()   # prevent session fixation
     session['user_email'] = email
     session['user_name'] = name or email
+    session['sv'] = user.session_version or 0
     return jsonify({'ok': True})
 
 # ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
@@ -3616,10 +3673,14 @@ def api_gmail_callback():
     if error:
         return redirect(f'/?gmail_error={urllib.parse.quote(error)}')
 
+    # The state must match the one this browser's session issued — a missing
+    # value on either side is a mismatch, never a match.
     state = request.args.get('state', '')
-    if state != session.get('oauth_state', ''):
+    expected = session.pop('oauth_state', None)
+    if not state or not expected or not secrets.compare_digest(state, expected):
         return redirect('/?gmail_error=state_mismatch')
-    session.pop('oauth_state', None)
+    if not _session_user():
+        return redirect(url_for('login_page'))
 
     code         = request.args.get('code', '')
     client_id    = os.environ.get('GOOGLE_CLIENT_ID', '')
@@ -4287,7 +4348,6 @@ def health():
         'db':        db_ok,
         'scheduler': scheduler_ok,
         'scheduler_enabled': _scheduler_enabled,
-        'rate_limit_store': _limiter_storage,
         'rate_limit_shared': _limiter_shared,
     }), 200 if ok else 503
 
@@ -6605,6 +6665,7 @@ with app.app_context():
         # Follow-up cadence engine (Today's touches)
         ('followup_contacts', 'touch_enabled',       'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('followup_contacts', 'attention_at',        'TIMESTAMP'),
+        ('users',             'session_version',     'INTEGER NOT NULL DEFAULT 0'),
         # Bulk follow-up send jobs (SendJob kind discriminator + per-contact log).
         # Inline delivery is REQUIRED: prod schema changes only apply here — the
         # Alembic releaseCommand does not run against the live DB (a3b4c5d6e7f8

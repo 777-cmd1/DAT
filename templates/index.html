@@ -5643,6 +5643,7 @@ async function fetchReplies(silent) {
       const detParts = Object.keys(det).map(k => (TRIAGE_CATS[k]?.emoji || '🏷️') + det[k]);
       if (detParts.length) toast('🔍 Detected: ' + detParts.join(' ') + ' — check the filters');
       if (data.ooo_paused) toast('⏸ ' + data.ooo_paused + ' contact' + (data.ooo_paused > 1 ? 's' : '') + ' paused (out of office)');
+      if (data.bounced) toast('📭 ' + data.bounced + ' bounced address' + (data.bounced > 1 ? 'es' : '') + ' added to Stop List');
       await loadReplies();
       loadAutoStrip();
     }
@@ -5997,6 +5998,7 @@ let pipelineCadence = {};         // {stage_id(str): {days, mode:'manual'|'auto'
 let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (UTC hour for cadence touches)
 let pipelineDigest = true;        // weekly digest email on Mondays
 let pipelineDripAuto = true;      // scheduler auto-sends the FU1–FU3 drip sequence
+let pipelineAutoSend = true;      // master switch over every automatic send path
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -6483,6 +6485,7 @@ async function loadPipelineConfig() {
     pipelineTouchHour = data.touch_hour ?? 'auto';
     pipelineDigest = data.digest_enabled !== false;
     pipelineDripAuto = data.drip_auto_enabled !== false;
+    pipelineAutoSend = data.auto_send_enabled !== false;
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -6960,6 +6963,10 @@ function renderPipelineCadenceEditor() {
   `<div class="pl-cad-row"><span class="pl-cad-name">Weekly digest email</span>` +
     `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
     `<input type="checkbox" id="plDigest" ${pipelineDigest ? 'checked' : ''}> Mondays — week summary to your inbox</label></div>` +
+  `<div class="pl-cad-row"><span class="pl-cad-name">All automatic sending</span>` +
+    `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
+    `<input type="checkbox" id="plAutoSend" ${pipelineAutoSend ? 'checked' : ''}> ` +
+    `Master switch. Off = the scheduler sends nothing on its own (drip, scheduled, recurring, auto touches); everything waits for your click</label></div>` +
   `<div class="pl-cad-row"><span class="pl-cad-name">Auto-send FU1–FU3 drip</span>` +
     `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
     `<input type="checkbox" id="plDripAuto" ${pipelineDripAuto ? 'checked' : ''}> ` +
@@ -6995,7 +7002,8 @@ async function savePipelineConfig() {
       body: JSON.stringify({ stages, reply_filters, cadence,
         touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
         digest_enabled: !!document.getElementById('plDigest')?.checked,
-        drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked })
+        drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked,
+        auto_send_enabled: !!document.getElementById('plAutoSend')?.checked })
     });
     const data = await res.json();
     if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
@@ -7006,6 +7014,7 @@ async function savePipelineConfig() {
     pipelineTouchHour = data.touch_hour ?? 'auto';
     pipelineDigest = data.digest_enabled !== false;
     pipelineDripAuto = data.drip_auto_enabled !== false;
+    pipelineAutoSend = data.auto_send_enabled !== false;
     renderPipelineConfigEditor();
     toast('Pipeline config saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {

@@ -2310,6 +2310,44 @@ def load_stop_list(uid=None):
     _cache_set(cache_key, result)
     return result
 
+
+def _add_to_stop_list(uid, email, reason=''):
+    """Add one address to the user's Stop List (no-op if already there).
+    Flushes only — the caller commits."""
+    from app.models import StopListEntry, Workspace
+    email = (email or '').strip().lower()
+    if not uid or not email:
+        return False
+    if StopListEntry.query.filter_by(user_id=uid, type='email', value=email).first():
+        return False
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    db.session.add(StopListEntry(user_id=uid, workspace_id=ws.id if ws else None,
+                                 type='email', value=email, reason=(reason or '')[:255]))
+    db.session.flush()
+    _cache_del(f'stop_list:{uid}')
+    return True
+
+
+def _remove_from_stop_list(uid, email):
+    from app.models import StopListEntry
+    email = (email or '').strip().lower()
+    n = StopListEntry.query.filter_by(user_id=uid, type='email', value=email).delete()
+    if n:
+        _cache_del(f'stop_list:{uid}')
+    return bool(n)
+
+
+def _block_followup_contact(uid, email, reason):
+    """Move the user's pipeline contact for this address to 'blocked' so no
+    automatic or queued follow-up can reach it. Returns True if it changed."""
+    from app.models import Workspace
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    fc = _fc_by_email(ws.id, email) if ws else None
+    if not fc or fc.state not in ('active', 'paused'):
+        return False
+    ok, _err = _transition_state(fc, 'blocked', reason=reason, actor_user_id=uid)
+    return ok
+
 def get_stop_list_raw():
     uid = current_user_id()
     if not uid: return []
@@ -2473,8 +2511,8 @@ def get_log_page(page=1, per_page=100, search='', status='', date_from='', date_
         'per_page': per_page,
     }
 
-def load_replies():
-    uid = current_user_id()
+def load_replies(uid=None):
+    uid = uid or current_user_id()
     if not uid: return []
     from app.models import Reply
     rows = db.session.query(
@@ -2634,9 +2672,9 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
     items = [grouped[email] for email in email_keys if email in grouped]
     return {'items': items, 'counts': counts, 'total': total, 'page': page, 'pages': pages}
 
-def save_replies(replies):
+def save_replies(replies, uid=None):
     """Upsert reply list — used by legacy code paths."""
-    uid = current_user_id()
+    uid = uid or current_user_id()
     if not uid: return
     from app.models import Reply
     for r in replies:
@@ -2680,8 +2718,8 @@ def get_email_body(msg):
         clean.append(line)
     return '\n'.join(clean).strip()[:1000]
 
-def get_known_emails():
-    uid = current_user_id()
+def get_known_emails(uid=None):
+    uid = uid or current_user_id()
     if not uid: return set()
     from app.models import Send
     rows = db.session.query(Send.recipient_email).filter_by(user_id=uid).distinct().all()
@@ -2721,20 +2759,46 @@ def _bulk_routes_for_emails(uid, emails):
 
 _last_fetch_times: dict = {}   # per-user IMAP throttle: {user_id: timestamp}
 
-def fetch_replies_from_gmail():
-    uid = current_user_id()
-    # Rate-limit: once per 60 s per user
-    now = time.time()
-    last = _last_fetch_times.get(uid, 0)
-    if now - last < 60:
-        wait = int(60 - (now - last))
-        return {'error': f'Please wait {wait}s before checking again', 'rate_limited': True}
-    _last_fetch_times[uid] = now
+_BOUNCE_SENDERS = ('mailer-daemon@', 'postmaster@')
+_PERMANENT_FAILURE_RE = re.compile(
+    r'(?i)\b5\.\d\.\d{1,3}\b|\b55[0-4]\b|address not found|does not exist|user unknown|'
+    r'no such user|recipient (?:address )?rejected|mailbox unavailable|account (?:is )?disabled')
 
-    known        = get_known_emails()
-    existing     = load_replies()
+
+def _bounced_recipient(from_addr, headers, body, known):
+    """Address that hard-bounced, if this message is a permanent-failure notice
+    for one of our recipients; else None. Delay notices are ignored."""
+    sender = (from_addr or '').lower()
+    failed_hdr = headers.get('X-Failed-Recipients', '')
+    if not failed_hdr and not any(b in sender for b in _BOUNCE_SENDERS):
+        return None
+    if 'delay' in (headers.get('Subject', '') or '').lower():
+        return None
+    if not failed_hdr and not _PERMANENT_FAILURE_RE.search(body or ''):
+        return None
+    for addr in re.findall(r'[\w.+\-]+@[\w.\-]+\.\w+', f'{failed_hdr} {body or ""}'):
+        if addr.lower() in known:
+            return addr.lower()
+    return None
+
+
+def fetch_replies_from_gmail(uid=None, rate_limit=True):
+    uid = uid or current_user_id()
+    # Rate-limit manual checks: once per 60 s per user. The scheduler's pre-send
+    # check passes rate_limit=False so it never makes the user's button wait.
+    if rate_limit:
+        now = time.time()
+        last = _last_fetch_times.get(uid, 0)
+        if now - last < 60:
+            wait = int(60 - (now - last))
+            return {'error': f'Please wait {wait}s before checking again', 'rate_limited': True}
+        _last_fetch_times[uid] = now
+
+    known        = get_known_emails(uid)
+    existing     = load_replies(uid)
     existing_ids = {r['msg_id'] for r in existing}
     new_replies  = []
+    bounced      = set()
 
     try:
         service = _get_gmail_service(uid)
@@ -2768,6 +2832,11 @@ def fetch_replies_from_gmail():
                     continue
                 sender = em.group().lower()
                 if sender not in known:
+                    if any(b in sender for b in _BOUNCE_SENDERS) or headers.get('X-Failed-Recipients'):
+                        failed = _bounced_recipient(from_addr, headers,
+                                                    _gmail_get_body(msg_data.get('payload', {})), known)
+                        if failed:
+                            bounced.add(failed)
                     continue
 
                 body = _gmail_get_body(msg_data.get('payload', {}))
@@ -2828,7 +2897,24 @@ def fetch_replies_from_gmail():
         return {'error': str(e)}
 
     all_replies = new_replies + existing
-    save_replies(all_replies)
+    save_replies(all_replies, uid)
+
+    # Hard bounces: the address can never be reached — stop-list it and stop
+    # its follow-ups so nothing keeps retrying a dead mailbox.
+    bounced_added = 0
+    if bounced and uid:
+        be, _bd = load_stop_list(uid)
+        for addr in sorted(bounced):
+            if addr in be:
+                continue
+            try:
+                if _add_to_stop_list(uid, addr, reason='bounced'):
+                    bounced_added += 1
+                _block_followup_contact(uid, addr, 'bounced')
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception('bounce handling failed for %s', addr)
 
     # Auto-stop follow-ups for contacts who replied
     if new_replies and uid:
@@ -2861,6 +2947,7 @@ def fetch_replies_from_gmail():
             'auto_ignored': triage.get('auto_ignored', 0),
             'auto_followup': triage.get('auto_followup', 0),
             'ooo_paused': triage.get('ooo_paused', 0),
+            'bounced': bounced_added,
             'detected': triage.get('detected', {})}
 
 
@@ -4315,14 +4402,13 @@ def api_reply_status():
         uid = current_user_id()
         em = reply_obj.get('email','')
         if uid and em:
-            from app.models import StopListEntry
-            from sqlalchemy.exc import IntegrityError
             try:
-                db.session.add(StopListEntry(user_id=uid, type='email', value=em.lower()))
+                _add_to_stop_list(uid, em, reason='blocked from Replies')
+                _block_followup_contact(uid, em, 'blocked from Replies')
                 db.session.commit()
-                _cache_del(f'stop_list:{uid}')  # invalidate so next parse sees updated list
-            except IntegrityError:
+            except Exception:
                 db.session.rollback()
+                app.logger.exception('block from Replies failed for %s', em)
     audit_log('mark_reply', resource_type='reply',
               detail={'msg_id': msg_id, 'status': status, 'email': reply_obj.get('email') if reply_obj else None})
     return jsonify({'ok': True})
@@ -4820,10 +4906,15 @@ def api_followups_action():
         ok, err = _transition_state(fc, 'loads', actor_user_id=uid)
     elif action == 'block':
         ok, err = _transition_state(fc, 'blocked', reason=reason, actor_user_id=uid)
+        if ok:
+            _add_to_stop_list(uid, fc.contact_email, reason='blocked from Follow-up')
     elif action == 'close':
         ok, err = _transition_state(fc, 'closed', reason=reason, actor_user_id=uid)
     elif action == 'restart-fu1':
+        was_blocked = fc.state == 'blocked'
         ok, err = _restart_contact_from_fu1(fc, actor_user_id=uid)
+        if ok and was_blocked:
+            _remove_from_stop_list(uid, fc.contact_email)
     elif action == 'set-pipeline-stage':
         ok, err = _apply_pipeline_stage(fc, data.get('pipeline_stage'),
                                         actor_user_id=uid, reason=reason or 'manual')
@@ -4858,10 +4949,15 @@ def api_followups_bulk_action():
         if action in ('pause', 'resume', 'warm', 'loads', 'block', 'close'):
             target = 'active' if action == 'resume' else ('blocked' if action == 'block' else action)
             ok, err = _transition_state(fc, target, reason=reason, actor_user_id=uid)
+            if ok and target == 'blocked':
+                _add_to_stop_list(uid, fc.contact_email, reason='blocked from Follow-up')
             results.append({'id': cid, 'ok': ok, 'error': err})
 
         elif action == 'restart-fu1':
+            was_blocked = fc.state == 'blocked'
             ok, err = _restart_contact_from_fu1(fc, actor_user_id=uid)
+            if ok and was_blocked:
+                _remove_from_stop_list(uid, fc.contact_email)
             results.append({'id': cid, 'ok': ok, 'error': err})
 
         elif action == 'send-now':
@@ -5172,7 +5268,8 @@ def api_followups_pipeline_config():
                    triage_modes=modes, cadence=cadence,
                    touch_hour=_cfg.get('touch_hour', 'auto'),
                    digest_enabled=bool(_cfg.get('digest_enabled', True)),
-                   drip_auto_enabled=bool(ws.fu_auto_enabled) if ws else True,
+                   drip_auto_enabled=bool(ws.fu_auto_enabled) if ws else False,
+                   auto_send_enabled=bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True)),
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -5372,6 +5469,8 @@ def api_followups_pipeline_config_save():
         cfg['digest_enabled'] = data['digest_enabled']
     if isinstance(data.get('drip_auto_enabled'), bool):
         ws.fu_auto_enabled = data['drip_auto_enabled']   # scheduler drip kill switch
+    if isinstance(data.get('auto_send_enabled'), bool):
+        cfg['auto_send_enabled'] = data['auto_send_enabled']   # master switch, all auto paths
 
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
     db.session.commit()
@@ -5392,7 +5491,8 @@ def api_followups_pipeline_config_save():
                    cadence=ws.get_cadence(),
                    touch_hour=(ws.pipeline_config or {}).get('touch_hour', 'auto'),
                    digest_enabled=bool((ws.pipeline_config or {}).get('digest_enabled', True)),
-                   drip_auto_enabled=bool(ws.fu_auto_enabled))
+                   drip_auto_enabled=bool(ws.fu_auto_enabled),
+                   auto_send_enabled=bool((ws.pipeline_config or {}).get('auto_send_enabled', True)))
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])
@@ -6178,6 +6278,8 @@ def _check_reply_stops_followup(reply_email, user_id):
         if not _schedule_touch(fc, ws, force=True):
             fc.next_followup_at = None
         _record_event(fc, 'reply_detected', actor_type='system', notes=f'Reply from {email}')
+    elif fc.touch_enabled and fc.state == 'active':
+        _schedule_touch(fc, ws, force=True)
 
 
 def _get_fu_templates_for_user(uid):
@@ -6230,12 +6332,81 @@ def _next_recurring_datetime(recurring_days, recurring_time):
             return candidate
     raise ValueError(f'No valid day found — unreachable with valid input: days={days}')
 
+def _auto_send_on(workspace_id, cache):
+    """Workspace master switch over every automatic send path (default on)."""
+    if workspace_id not in cache:
+        from app.models import Workspace
+        ws = db.session.get(Workspace, workspace_id) if workspace_id else None
+        cache[workspace_id] = bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True))
+    return cache[workspace_id]
+
+
+def _would_auto_send(fc, ws):
+    """True if the scheduler would email this due contact without a human click."""
+    if fc.scheduled_once or fc.recurring_enabled:
+        return True
+    if fc.is_followup_enabled:
+        return bool(ws and ws.fu_auto_enabled and fc.stage in ('fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled'))
+    if fc.touch_enabled:
+        return _cadence_for_stage(ws, fc.pipeline_stage or 1).get('mode') == 'auto'
+    return False
+
+
+def _prefetch_replies_before_sending(now):
+    """Pull fresh Gmail replies for every user about to get automatic sends in
+    this run, so a contact who already answered is stopped before we email
+    them. Returns the user ids whose reply check failed — their automatic
+    sends are held until the next run rather than risk emailing a replier."""
+    from app.models import FollowupContact, Workspace
+    due = FollowupContact.query.filter(
+        FollowupContact.state == 'active',
+        FollowupContact.next_followup_at <= now,
+        db.or_(FollowupContact.is_followup_enabled == True,
+               FollowupContact.scheduled_once == True,
+               FollowupContact.recurring_enabled == True,
+               FollowupContact.touch_enabled == True),
+    ).all()
+    gate, uids = {}, set()
+    for fc in due:
+        if fc.user_id in uids or not _auto_send_on(fc.workspace_id, gate):
+            continue
+        ws = db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None
+        if _would_auto_send(fc, ws):
+            uids.add(fc.user_id)
+    hold = set()
+    for uid in uids:
+        try:
+            res = fetch_replies_from_gmail(uid=uid, rate_limit=False) or {}
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('pre-send reply check crashed for uid=%s', uid)
+            hold.add(uid)
+            continue
+        err = str(res.get('error') or '')
+        # not connected = no Gmail API to check (legacy app-password accounts)
+        if err and 'not connected' not in err.lower():
+            app.logger.warning('pre-send reply check failed for uid=%s: %s — holding auto-sends', uid, err)
+            hold.add(uid)
+    return hold
+
+
 def _run_scheduled_followups():
     """Process due follow-up contacts and send emails. Called from daemon thread.
     Uses SELECT FOR UPDATE SKIP LOCKED on PostgreSQL to prevent duplicate sends."""
     from app.models import FollowupContact, EmailAccount, Workspace
     now = _utcnow()
     with app.app_context():
+        try:
+            hold_uids = _prefetch_replies_before_sending(now)
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('pre-send reply check failed — holding all auto-sends this run')
+            return 0
+        _gate = {}
+
+        def _allowed(c):
+            return c.user_id not in hold_uids and _auto_send_on(c.workspace_id, _gate)
+
         try:
             # Workspace kill switch: with fu_auto_enabled off, due drip contacts
             # stay in Overdue/Today's touches for manual sending — the scheduler
@@ -6262,6 +6433,8 @@ def _run_scheduled_followups():
         sent_total = 0
         for fc in contacts:
             try:
+                if not _allowed(fc):
+                    continue
                 if fc.state != 'active' or not fc.is_followup_enabled:
                     continue
                 if fc.stage not in STAGE_TO_TEMPLATE:
@@ -6336,7 +6509,7 @@ def _run_scheduled_followups():
 
         sched_total = 0
         for fc in sched_contacts:
-            if fc.id in processed_ids:
+            if fc.id in processed_ids or not _allowed(fc):
                 continue
             try:
                 if fc.state != 'active':
@@ -6394,8 +6567,8 @@ def _run_scheduled_followups():
 
         rec_total = 0
         for fc in recurring:
-            if fc.id in processed_ids:
-                continue  # already sent in Path 1 this run
+            if fc.id in processed_ids or not _allowed(fc):
+                continue  # already sent in Path 1 this run, or auto-send held/off
             try:
                 if fc.state != 'active' or not fc.recurring_enabled:
                     continue
@@ -6466,7 +6639,7 @@ def _run_scheduled_followups():
         from app.models import Workspace as _WS
         touch_total = 0
         for fc in touches:
-            if fc.id in processed_ids:
+            if fc.id in processed_ids or not _allowed(fc):
                 continue
             try:
                 ws = db.session.get(_WS, fc.workspace_id) if fc.workspace_id else None

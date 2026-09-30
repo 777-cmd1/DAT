@@ -168,7 +168,7 @@ class Workspace(db.Model):
     name             = db.Column(db.String(255), nullable=False)
     owner_id         = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     plan             = db.Column(db.String(20), default='free')  # 'free' | 'starter' | 'pro'
-    fu_auto_enabled  = db.Column(db.Boolean, default=True, nullable=False, server_default='1')
+    fu_auto_enabled  = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     pipeline_config  = db.Column(db.JSON, nullable=True)   # {stages: [...], reply_filters: [...]}
     created_at       = db.Column(db.DateTime, default=_utcnow)
 

@@ -5753,7 +5753,7 @@ def _dashboard_data(uid):
 
     return dict(
         touches={'due_today': due_today, 'done_today': done_today,
-                 'next': ({'name': nxt.contact_name or nxt.contact_email,
+                 'next': ({'name': nxt.display_name,
                            'route': nxt.current_route or ''} if nxt else None)},
         attention=attention,
         replies_pending=replies_pending,

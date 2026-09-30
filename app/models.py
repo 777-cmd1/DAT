@@ -512,6 +512,20 @@ class FollowupContact(db.Model):
         db.Index('ix_fc_user_state', 'user_id', 'state'),
     )
 
+    @property
+    def display_name(self):
+        """The one label used for this contact across the UI and the digest:
+        the person's name if known, else the company, else the email.
+        contact_name often holds a raw From header ("Laura Neal <laura@x.com>")
+        or a bare address, so only the name part counts."""
+        from email.utils import parseaddr
+        raw = (self.contact_name or '').strip()
+        name = parseaddr(raw)[0] if '<' in raw else raw
+        name = name.strip().strip('"\'').strip()
+        if '@' in name:
+            name = ''
+        return name or (self.company_name or '').strip() or (self.contact_email or '')
+
     def to_dict(self):
         fmt = lambda dt: dt.strftime('%Y-%m-%dT%H:%M:%SZ') if dt else None
         return {
@@ -519,6 +533,7 @@ class FollowupContact(db.Model):
             'contact_email': self.contact_email,
             'contact_name': self.contact_name or '',
             'company_name': self.company_name or '',
+            'display_name': self.display_name,
             'state': self.state,
             'stage': self.stage,
             'pipeline_stage': self.pipeline_stage or 1,

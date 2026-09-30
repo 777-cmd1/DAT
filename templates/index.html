@@ -1464,6 +1464,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-search:focus { outline:none; border-color:var(--accent); }
 /* Stats bar */
 .fu-stats-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+.fu-pstage { display:inline-flex; align-items:baseline; gap:6px; font-size:12px; font-weight:600; color:var(--text); line-height:1.3; min-width:90px; }
+.fu-pstage-dot { width:8px; height:8px; border-radius:50%; flex:none; transform:translateY(-1px); }
 .fu-stat-pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; background:var(--surface); border:1px solid var(--border); color:var(--text3); white-space:nowrap; }
 .fu-stat-pill .fu-stat-num { font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--text); margin-right:2px; }
 .fu-stat-pill.pill-active .fu-stat-num { color:var(--accent); }
@@ -3023,10 +3025,10 @@ html:not([data-theme="dark"]) .send-cta-bar {
               <input class="fu-search fu-search-wide" id="fuSearch" placeholder="Search company, contact, or email..." oninput="renderFuCurrentView(); renderFuSelection()">
               <div class="fu-segment" id="fuUrgencySegment">
                 <button class="fu-segment-btn active" id="fuf-special-all" onclick="setFuSpecialFilter('')">All</button>
-                <button class="fu-segment-btn" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')">Overdue <span id="fuOverdueCount"></span></button>
-                <button class="fu-segment-btn" id="fuf-special-due_today" onclick="setFuSpecialFilter('due_today')">Today</button>
-                <button class="fu-segment-btn" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')">Needs Action <span id="fuNeedsActionCount"></span></button>
-                <button class="fu-segment-btn" id="fuf-special-scheduled" onclick="setFuSpecialFilter('scheduled')">Scheduled <span id="fuScheduledCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')" title="Past due — needs action now">Overdue <span id="fuOverdueCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-due_today" onclick="setFuSpecialFilter('due_today')" title="Due later today">Today <span id="fuTodayCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')" title="FU1–FU3 sequence finished">Needs Action <span id="fuNeedsActionCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-scheduled" onclick="setFuSpecialFilter('scheduled')" title="One-time future sends">Scheduled <span id="fuScheduledCount"></span></button>
               </div>
             </div>
             <div class="fu-toolbar-side">
@@ -3061,7 +3063,6 @@ html:not([data-theme="dark"]) .send-cta-bar {
 
           <div id="fuTouchPanel" class="fu-touch-panel" style="display:none"></div>
 
-          <div class="fu-summary-strip" id="fuStatsBar"></div>
 
           <div class="fu-bulk-bar" id="fuBulkBar" style="display:none">
             <div class="fu-bulk-group">
@@ -3106,8 +3107,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
                   </th>
                   <th>Contact</th>
                   <th>State</th>
-                  <th>Stage</th>
-                  <th class="fu-th-sort" onclick="setFuSort('next_followup_at')" title="Sort by next follow-up">Next Follow-up <span class="fu-sort-arrow" id="fuSortArrow-next_followup_at"></span></th>
+                  <th title="Pipeline stage (FU1–FU3 step shown while the sequence runs)">Stage</th>
+                  <th class="fu-th-sort" onclick="setFuSort('next_followup_at')" title="Sort by next touch">Next touch <span class="fu-sort-arrow" id="fuSortArrow-next_followup_at"></span></th>
                   <th class="fu-th-sort" onclick="setFuSort('last_activity_at')" title="Sort by last activity">Last Activity <span class="fu-sort-arrow" id="fuSortArrow-last_activity_at"></span></th>
                   <th>Route</th>
                   <th>Action</th>
@@ -6303,28 +6304,15 @@ function updateFuBadge() {
   const na = document.getElementById('fuNeedsActionCount');
   const ov = document.getElementById('fuOverdueCount');
   const sc = document.getElementById('fuScheduledCount');
+  const td = document.getElementById('fuTodayCount');
+  if (td) td.textContent = fuCounts.due_today ? ` ${fuCounts.due_today}` : '';
   if (na) na.textContent = fuCounts.needs_action ? ` ${fuCounts.needs_action}` : '';
   if (ov) ov.textContent = fuCounts.overdue ? ` ${fuCounts.overdue}` : '';
   if (sc) sc.textContent = fuCounts.scheduled ? ` ${fuCounts.scheduled}` : '';
 }
 
+// Counts live on the urgency segment (updateFuBadge); this only syncs the controls.
 function renderFuStatsBar() {
-  const el = document.getElementById('fuStatsBar');
-  if (!el) return;
-  const c = fuCounts;
-  const cards = [
-    { key:'overdue', label:'Overdue', n:c.overdue||0, cls:'overdue', meta:'Needs action now' },
-    { key:'due_today', label:'Today', n:(c.due_today||0), cls:'today', meta:'Ready to send today' },
-    { key:'needs_action', label:'Needs Action', n:c.needs_action||0, cls:'needs-action', meta:'Completed sequence' },
-    { key:'scheduled', label:'Scheduled', n:c.scheduled||0, cls:'scheduled', meta:'One-time future sends' },
-  ];
-  el.innerHTML = cards.map(card =>
-    `<button class="fu-summary-card ${card.cls} ${fuSpecialFilter===card.key ? 'active' : ''}" onclick="setFuSpecialFilter('${card.key}')">
-      <span class="fu-summary-label">${card.label}</span>
-      <span class="fu-summary-value">${card.n}</span>
-      <span class="fu-summary-meta">${card.meta}</span>
-    </button>`
-  ).join('');
   syncFuFilterControls();
 }
 
@@ -6379,10 +6367,12 @@ function getFuUrgencyMeta(c) {
   const now = new Date();
   const next = c.next_followup_at ? new Date(c.next_followup_at) : null;
   const isNeedsAction = c.stage === 'completed_fu3' && c.state === 'active';
-  const isOverdue = next && next < now && c.state === 'active' && c.is_followup_enabled;
+  // Same rule as the server counts and Today's touches: a set date is a
+  // commitment whichever engine set it; enabled flags only gate auto-sends.
+  const isOverdue = next && next < now && c.state === 'active';
   const endOfDay = new Date(now);
   endOfDay.setHours(23, 59, 59, 999);
-  const isToday = next && next >= now && next <= endOfDay && c.state === 'active' && c.is_followup_enabled;
+  const isToday = next && next >= now && next <= endOfDay && c.state === 'active';
   const isScheduled = !!(c.scheduled_once && next && next > now);
   let rank = 4;
   if (isOverdue) rank = 0;
@@ -6412,6 +6402,48 @@ function getFuPrimaryActionButton(c) {
 }
 
 // ── Contact queue rendering ────────────────────────────────────────────────────
+// One label per contact everywhere (server display_name: person → company → email).
+function fuName(c) {
+  return c.display_name || c.contact_name || c.company_name || c.contact_email || '';
+}
+// Second line under the name: company (if it isn't the label already) · email.
+function fuSub(c) {
+  const name = fuName(c);
+  const co = (c.company_name || '').trim();
+  return [co && co !== name ? co : '', c.contact_email && c.contact_email !== name ? c.contact_email : '']
+    .filter(Boolean).join(' · ');
+}
+function fuPipelineStage(c) {
+  const id = c.pipeline_stage || 1;
+  const s = (pipelineStages || []).find(x => x.id === id);
+  return { name: s ? s.name : 'Stage ' + id, color: s ? s.color : 'var(--text3)' };
+}
+// What the next dated step is and whether it goes out on its own
+// (mirrors the scheduler's _would_auto_send + the Settings switches).
+function fuNextKind(c) {
+  let label, auto;
+  const fu = /^fu([123])_scheduled$/.exec(c.stage || '');
+  if (c.scheduled_once) { label = 'Scheduled send'; auto = true; }
+  else if (c.recurring_enabled) { label = 'Recurring'; auto = true; }
+  else if (fu) { label = 'FU' + fu[1]; auto = !!c.is_followup_enabled && pipelineDripAuto; }
+  else {
+    label = 'Touch';
+    auto = !c.is_followup_enabled && !!c.touch_enabled &&
+      (pipelineCadence[String(c.pipeline_stage || 1)] || {}).mode === 'auto';
+  }
+  return { label, auto: auto && pipelineAutoSend };
+}
+function fuNextTouch(c) {
+  if (['warm','loads','blocked','closed'].includes(c.state)) return { text: '—', sub: '', cls: '' };
+  if (c.state === 'paused') return { text: 'Paused', sub: 'resume to schedule', cls: '' };
+  const d = formatFuDate(c.next_followup_at);
+  if (!d) return { text: 'No next step', sub: 'pick a date', cls: 'overdue' };
+  const k = fuNextKind(c);
+  const late = new Date(c.next_followup_at) < new Date();
+  return { text: d.text, sub: `${k.label} · ${k.auto ? 'auto-send' : 'manual'}`,
+           cls: late ? 'overdue' : (d.text === 'Today' ? 'today' : '') };
+}
+
 function getFuStageInfo(stage) {
   const map = {
     fu1_scheduled:{label:'FU1',cls:'fu-stage-fu1'}, fu1_sent:{label:'FU1✓',cls:'fu-stage-fu1'},
@@ -6524,7 +6556,6 @@ function renderFuContacts() {
     const meta = getFuUrgencyMeta(c);
     const isTerminal = terminal.includes(c.state);
     const isMuted = c.state === 'paused';
-    const nextFu = formatFuDate(c.next_followup_at);
     const lastAct = formatFuRelative(c.last_activity_at);
     const sentRec = fuSentRecency(c.last_followup_sent_at);
     const sentBadge = sentRec === 'today'
@@ -6532,9 +6563,10 @@ function renderFuContacts() {
       : sentRec === 'yesterday'
       ? `<span class="fu-sent-badge yesterday" title="Follow-up sent yesterday">🟡 Sent yesterday</span>`
       : '';
-    const company = esc(c.company_name || c.contact_name || c.contact_email.split('@')[0]);
-    const email = esc(c.contact_email);
     const route = esc(c.current_route || '—');
+    const ps = fuPipelineStage(c);
+    const nt = fuNextTouch(c);
+    const inDrip = c.is_followup_enabled && /^fu[123]_(scheduled|sent)$/.test(c.stage || '');
     const rowCls = [
       'fu-table-row',
       meta.isOverdue ? 'overdue' : '',
@@ -6543,8 +6575,6 @@ function renderFuContacts() {
       isTerminal ? 'terminal' : '',
       selectedFuIds.has(c.id) ? 'selected' : ''
     ].filter(Boolean).join(' ');
-    const nextText = meta.isNeedsAction ? 'Needs review' : (nextFu ? nextFu.text : 'No schedule');
-    const nextCls = meta.isOverdue ? 'overdue' : (meta.isToday ? 'today' : '');
     const actionBtn = getFuPrimaryActionButton(c);
 
     return `<tr class="${rowCls}" id="fu-row-${c.id}">
@@ -6552,8 +6582,8 @@ function renderFuContacts() {
         <input type="checkbox" class="fu-checkbox" id="fu-cb-${c.id}" ${selectedFuIds.has(c.id)?'checked':''} onclick="toggleFuSelect('${c.id}',event)">
       </td>
       <td class="fu-contact-cell" onclick="openTimeline('${c.id}')" style="cursor:pointer" title="Open history">
-        <div class="fu-contact-primary">${c.attention_at ? '🔥 ' : ''}${company}</div>
-        <div class="fu-contact-secondary">${email}</div>
+        <div class="fu-contact-primary">${c.attention_at ? '🔥 ' : ''}${esc(fuName(c))}</div>
+        <div class="fu-contact-secondary">${esc(fuSub(c))}</div>
       </td>
       <td>
         <div class="fu-meta-stack">
@@ -6564,14 +6594,14 @@ function renderFuContacts() {
       </td>
       <td>
         <div class="fu-meta-stack">
-          <span class="fu-stage-badge ${si.cls}">${si.label}</span>
-          ${c.scheduled_once ? `<span class="fu-state-badge" style="background:rgba(124,108,248,.10);color:var(--accent)">Scheduled</span>` : ''}
+          <span class="fu-pstage"><span class="fu-pstage-dot" style="background:${esc(ps.color)}"></span>${esc(ps.name)}</span>
+          ${inDrip ? `<span class="fu-stage-badge ${si.cls}" title="Follow-up sequence step">${si.label}</span>` : ''}
         </div>
       </td>
       <td>
         <div class="fu-time-cell">
-          <span class="fu-time-main ${nextCls}">${nextText}</span>
-          <span class="fu-time-sub">${meta.isNeedsAction ? 'Sequence complete' : (c.next_followup_at ? 'UTC' : '—')}</span>
+          <span class="fu-time-main ${nt.cls}">${nt.text}</span>
+          <span class="fu-time-sub">${esc(nt.sub) || '—'}</span>
         </div>
       </td>
       <td>
@@ -6777,8 +6807,8 @@ function renderTouchPanel() {
     const sendAction = /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send';
     return `<div class="fu-touch-row${c.attention_at ? ' hot' : ''}">` +
       `<span>${c.attention_at ? '🔥' : (late ? '⏰' : '📅')}</span>` +
-      `<span class="ft-who" style="cursor:pointer" onclick="openTimeline('${c.id}')" title="Open history"><b>${esc(c.contact_name || c.company_name || c.contact_email)}</b>` +
-        `<span class="ft-email">${esc(c.contact_email)}</span></span>` +
+      `<span class="ft-who" style="cursor:pointer" onclick="openTimeline('${c.id}')" title="Open history"><b>${esc(fuName(c))}</b>` +
+        `<span class="ft-email">${esc(fuSub(c))}</span></span>` +
       `<span class="ft-stage">${esc(stageName(c.pipeline_stage))}</span>` +
       (c.current_route ? `<span class="ft-route">${esc(c.current_route)}</span>` : '') +
       `<span class="ft-actions">` +
@@ -6819,8 +6849,8 @@ async function openTimeline(id) {
   ov.onclick = e => { if (e.target === ov) closeTimeline(); };
   ov.innerHTML = `<div class="fu-tl" role="dialog" aria-label="Contact history">` +
     `<button class="fu-tl-close" onclick="closeTimeline()" aria-label="Close">✕</button>` +
-    `<div class="fu-tl-name">${c.attention_at ? '🔥 ' : ''}${esc(c.contact_name || c.company_name || c.contact_email)}</div>` +
-    `<div class="fu-tl-sub">${esc(c.contact_email)}</div>` +
+    `<div class="fu-tl-name">${c.attention_at ? '🔥 ' : ''}${esc(fuName(c))}</div>` +
+    `<div class="fu-tl-sub">${esc(fuSub(c))}</div>` +
     `<div class="fu-tl-meta">` +
       (stageName ? `<span class="fu-tl-chip">${esc(stageName)}</span>` : '') +
       `<span class="fu-tl-chip">${esc(c.state)}</span>` +
@@ -6881,24 +6911,18 @@ async function loadPipelineStats() {
 function renderPipelineStats() {
   const el = document.getElementById('fuPipelineStats');
   if (!el) return;
-  const bs = pipelineStats.by_stage || {};
   const tr = pipelineStats.transitions || {};
+  // Per-stage counts are on the column heads; here only the total and moves between stages.
   let html = `<div class="fu-pstat total"><span class="fu-pstat-label">Total</span><span class="fu-pstat-val">${pipelineStats.total || 0}</span></div>`;
-  html += pipelineStages.map(s => {
-    const cnt = bs[s.id] ?? bs[String(s.id)] ?? 0;
-    return `<div class="fu-pstat"><span class="fu-pstat-dot" style="background:${s.color}"></span><span class="fu-pstat-label">${esc(s.name)}</span><span class="fu-pstat-val">${cnt}</span></div>`;
-  }).join('');
   for (let i = 0; i < pipelineStages.length - 1; i++) {
-    const a = pipelineStages[i].id, b = pipelineStages[i+1].id;
-    const cnt = tr[`${a}_to_${b}`] || 0;
-    html += `<div class="fu-pstat trans"><span class="fu-pstat-label">${a}→${b}</span><span class="fu-pstat-val">${cnt}</span></div>`;
+    const a = pipelineStages[i], b = pipelineStages[i+1];
+    const cnt = tr[`${a.id}_to_${b.id}`] || 0;
+    html += `<div class="fu-pstat trans" title="Moved ${esc(a.name)} → ${esc(b.name)}"><span class="fu-pstat-label">${a.id}→${b.id}</span><span class="fu-pstat-val">${cnt}</span></div>`;
   }
   el.innerHTML = html;
 }
 
 function fuKanbanCard(c) {
-  const company = esc(c.company_name || c.contact_name || c.contact_email.split('@')[0]);
-  const email   = esc(c.contact_email);
   const lastAct = formatFuRelative(c.last_activity_at);
   const sti     = getFuStateInfo(c.state);
   const sentRec = fuSentRecency(c.last_followup_sent_at);
@@ -6909,8 +6933,8 @@ function fuKanbanCard(c) {
   return `<div class="fu-kanban-card" draggable="true" data-id="${c.id}"
        ondragstart="fuKanbanDragStart(event,'${c.id}')" ondragend="fuKanbanDragEnd(event)">
     <button class="fu-kanban-card-menu" onclick="event.stopPropagation();toggleFuDropdown(event,'${c.id}')" title="Actions">⋯</button>
-    <div class="fu-kanban-card-title">${c.attention_at ? '🔥 ' : ''}${company}</div>
-    <div class="fu-kanban-card-email">${email}</div>
+    <div class="fu-kanban-card-title">${c.attention_at ? '🔥 ' : ''}${esc(fuName(c))}</div>
+    <div class="fu-kanban-card-email">${esc(fuSub(c))}</div>
     <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
     <div class="fu-kanban-card-foot">⏰ ${lastAct}${route}</div>
     <div class="fu-kanban-qa" onclick="event.stopPropagation()">

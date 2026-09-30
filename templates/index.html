@@ -3655,6 +3655,19 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
           </section>
 
+          <section class="settings-card" data-stab="account">
+            <div class="settings-card-head">
+              <div>
+                <div class="settings-title">Time zone</div>
+                <div class="settings-sub">Your "today" on the Dashboard and Follow-up, the touch send hour and the Monday digest follow this zone.</div>
+              </div>
+            </div>
+            <div class="field" style="margin:0">
+              <select id="cfgTimezone"></select>
+              <div class="settings-toggle-sub" id="cfgTimezoneHint" style="margin-top:6px"></div>
+            </div>
+          </section>
+
           <section class="settings-card" data-stab="sending">
             <div class="settings-card-head">
               <div>
@@ -3792,8 +3805,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
 
         <section class="settings-savebar" data-stab="account">
           <div class="settings-savecopy"><div class="settings-title">Save account</div>
-            <div class="settings-sub">Sender identity used in the sign-off of every email.</div></div>
-          <div class="settings-actions"><button class="btn btn-primary" onclick="saveSettings()">Save</button></div>
+            <div class="settings-sub">Sender identity and time zone.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="saveAccountTab()">Save</button></div>
         </section>
         <section class="settings-savebar" data-stab="sending">
           <div class="settings-savecopy"><div class="settings-title">Save sending defaults</div>
@@ -4218,10 +4231,13 @@ async function loadDailyStats() {
     const replies = allReplies || [];
 
     const sent = stats.today || 0;
-    const todayStr = new Date().toISOString().slice(0,10);
-    const repliedToday = replies.filter(r =>
-      (r.received_at || r.date || '').slice(0,10) === todayStr
-    ).length;
+    const localDay = d => d.toLocaleDateString('en-CA');     // YYYY-MM-DD in local time
+    const todayStr = localDay(new Date());
+    const repliedToday = replies.filter(r => {
+      const raw = r.received_at || r.date || '';
+      const d = raw ? new Date(raw.replace(' ', 'T') + (raw.length <= 16 ? ':00Z' : '')) : null;
+      return d && !isNaN(d) && localDay(d) === todayStr;
+    }).length;
     const conversion = sent > 0 ? Math.round(repliedToday / sent * 100) : null;
 
     // Update date
@@ -5408,6 +5424,7 @@ async function loadSettings() {
 
   await loadPipelineConfig();
   renderPipelineConfigEditor();
+  renderTimezonePicker();
 
   // Handle ?gmail_connected=1 redirect from OAuth callback
   const params = new URLSearchParams(window.location.search);
@@ -5452,6 +5469,51 @@ async function disconnectGmail() {
   await fetch('/api/gmail/disconnect', {method: 'POST', headers: {'Content-Type': 'application/json'}});
   toast('Gmail disconnected');
   loadSettings();
+}
+
+function browserTimezone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; }
+}
+const TZ_CHOICES = [
+  ['America/New_York', 'Eastern (ET)'], ['America/Chicago', 'Central (CT)'],
+  ['America/Denver', 'Mountain (MT)'], ['America/Phoenix', 'Arizona (MST)'],
+  ['America/Los_Angeles', 'Pacific (PT)'], ['America/Anchorage', 'Alaska (AKT)'],
+  ['Pacific/Honolulu', 'Hawaii (HT)'], ['Europe/Kyiv', 'Kyiv'], ['UTC', 'UTC'],
+];
+function renderTimezonePicker() {
+  const sel = document.getElementById('cfgTimezone');
+  if (!sel) return;
+  const browser = browserTimezone();
+  const current = pipelineTimezone || browser;
+  const opts = [...TZ_CHOICES];
+  for (const z of [current, browser]) if (z && !opts.some(o => o[0] === z)) opts.unshift([z, z]);
+  sel.innerHTML = opts.map(([z, label]) =>
+    `<option value="${esc(z)}" ${z === current ? 'selected' : ''}>${esc(label)}${label !== z ? ' — ' + esc(z) : ''}</option>`).join('');
+  const hint = document.getElementById('cfgTimezoneHint');
+  if (hint) hint.textContent = `This browser is set to ${browser}.` + (pipelineTimezone ? '' : ' Not saved yet.');
+}
+async function saveTimezone(tz, quiet) {
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {method:'PUT', headers:{'Content-Type':'application/json'},
+                                                               body: JSON.stringify({timezone: tz})});
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { if (!quiet) toast('Error: ' + (data.error || 'time zone not saved'), true); return false; }
+    pipelineTimezone = data.timezone || tz;
+    pipelineTouchHour = data.touch_hour ?? pipelineTouchHour;
+    return true;
+  } catch (e) { if (!quiet) toast('Error: ' + e.message, true); return false; }
+}
+// First visit after this release: adopt the browser's zone once, silently.
+async function ensureTimezone() {
+  if (!_fuPipelineConfigLoaded) await loadPipelineConfig();
+  if (pipelineTimezone) return false;
+  return saveTimezone(browserTimezone(), true);
+}
+async function saveAccountTab() {
+  const tz = document.getElementById('cfgTimezone')?.value;
+  const okTz = !tz || tz === pipelineTimezone || await saveTimezone(tz);
+  if (!okTz) return;
+  if (await saveSettings()) { renderTimezonePicker(); renderPipelineCadenceEditor(); }
 }
 
 // Account + Sending tabs (one /api/config record).
@@ -6120,7 +6182,8 @@ let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_adva
 let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
 let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
 let pipelineCadence = {};         // {stage_id(str): {days, mode:'manual'|'auto'|'off'}}
-let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (UTC hour for cadence touches)
+let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (hour in the user's time zone for cadence touches)
+let pipelineTimezone = '';        // IANA zone from Settings ('' = not set yet → browser zone is saved)
 let pipelineDigest = true;        // weekly digest email on Mondays
 let pipelineDripAuto = true;      // scheduler auto-sends the FU1–FU3 drip sequence
 let pipelineAutoSend = true;      // master switch over every automatic send path
@@ -6642,6 +6705,7 @@ async function loadPipelineConfig() {
     pipelineDripAuto = data.drip_auto_enabled !== false;
     pipelineAutoSend = data.auto_send_enabled !== false;
     pipelineAutoPreview = data.auto_send_preview || pipelineAutoPreview;
+    pipelineTimezone = data.timezone || '';
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -7105,7 +7169,7 @@ function renderPipelineCadenceEditor() {
         `<option value="auto" ${c.mode === 'auto' ? 'selected' : ''}>Auto-send template</option>` +
       `</select></div>`;
   }).join('') +
-  `<div class="pl-cad-row"><span class="pl-cad-name">Touch send hour (UTC)</span>` +
+  `<div class="pl-cad-row"><span class="pl-cad-name">Touch send hour (${esc(pipelineTimezone || 'UTC')})</span>` +
     `<select id="plTouchHour"><option value="auto" ${pipelineTouchHour === 'auto' ? 'selected' : ''}>Auto — best reply hour</option>` +
     Array.from({length: 24}, (_, h) =>
       `<option value="${h}" ${String(pipelineTouchHour) === String(h) ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('') +
@@ -7260,6 +7324,7 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
     pipelineDripAuto = data.drip_auto_enabled !== false;
     pipelineAutoSend = data.auto_send_enabled !== false;
     pipelineAutoPreview = data.auto_send_preview || pipelineAutoPreview;
+    pipelineTimezone = data.timezone || pipelineTimezone;
     if (scope === 'pipeline') renderPipelineConfigEditor();
     else renderPipelineCadenceEditor();
     if (!quiet) toast('Pipeline saved');
@@ -8117,6 +8182,8 @@ window.addEventListener('popstate', () => _routeFromLocation());
 
 document.addEventListener('DOMContentLoaded', () => {
   _routeFromLocation();
+  // once per account: store the browser's zone, then redraw "today" numbers with it
+  ensureTimezone().then(saved => { if (saved) _routeFromLocation(); }).catch(() => {});
   loadCurrentUser();
   loadSettings();
   ['cfgName','cfgCompany','cfgPhone'].forEach(id => {

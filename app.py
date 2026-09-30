@@ -1086,11 +1086,15 @@ def _schedule_touch(fc, ws=None, force=False, stagger=False):
     fc.touch_enabled = True
     nxt = _utcnow() + timedelta(days=days)
     # Land the touch at the hour carriers actually answer (config: 'auto' =
-    # computed from reply history, or a fixed 0-23 UTC hour)
+    # computed from reply history as a UTC hour, or a fixed 0-23 hour in the
+    # user's time zone)
     try:
         hour_cfg = (ws.pipeline_config or {}).get('touch_hour', 'auto') if ws else 'auto'
-        hour = _best_reply_hour(fc.user_id) if hour_cfg == 'auto' else int(hour_cfg)
-        nxt = nxt.replace(hour=max(0, min(23, hour)), minute=0, second=0, microsecond=0)
+        if hour_cfg == 'auto':
+            hour = max(0, min(23, _best_reply_hour(fc.user_id)))
+            nxt = nxt.replace(hour=hour, minute=0, second=0, microsecond=0)
+        else:
+            nxt = _local_at_hour(nxt, max(0, min(23, int(hour_cfg))), _ws_tz(ws))
     except Exception:
         pass
     fc.next_followup_at = nxt
@@ -1248,6 +1252,54 @@ DEFAULT_CONFIG = {"gmail_address":"","gmail_app_password":"","your_name":"","you
 def _utcnow():
     """Return a naive UTC datetime for DB compatibility, sourced from aware UTC."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+# ─── USER TIME ZONE ────────────────────────────────────────────────────────────
+# Stored in Workspace.pipeline_config['timezone'] (IANA name, set from Settings or
+# the browser). DB timestamps stay naive UTC; only "today", day buckets, the
+# fixed touch hour and the digest time follow the user's zone.
+
+def _valid_tz(name):
+    from zoneinfo import ZoneInfo
+    try:
+        ZoneInfo(str(name))
+        return bool(name)
+    except Exception:
+        return False
+
+
+def _tz_named(name):
+    from zoneinfo import ZoneInfo
+    try:
+        return ZoneInfo(name or 'UTC')
+    except Exception:
+        return ZoneInfo('UTC')
+
+
+def _ws_tz(ws):
+    return _tz_named(((ws.pipeline_config or {}) if ws else {}).get('timezone'))
+
+
+def _user_tz(uid):
+    from app.models import Workspace
+    return _ws_tz(Workspace.query.filter_by(owner_id=uid).first() if uid else None)
+
+
+def _local_date(dt, tz):
+    """Local calendar date of a naive-UTC timestamp."""
+    return dt.replace(tzinfo=UTC).astimezone(tz).date()
+
+
+def _local_day_start(tz, days_ago=0, now=None):
+    """Naive-UTC moment of local midnight `days_ago` days back (negative = ahead)."""
+    d = _local_date(now or _utcnow(), tz) - timedelta(days=days_ago)
+    return datetime(d.year, d.month, d.day, tzinfo=tz).astimezone(UTC).replace(tzinfo=None)
+
+
+def _local_at_hour(dt, hour, tz):
+    """Naive-UTC moment of `hour`:00 local time on dt's local date."""
+    d = _local_date(dt, tz)
+    return datetime(d.year, d.month, d.day, hour, tzinfo=tz).astimezone(UTC).replace(tzinfo=None)
 
 # ─── AUTH HELPERS ──────────────────────────────────────────────────────────────
 
@@ -2387,7 +2439,7 @@ def load_sent_log(uid=None):
     cached, hit = _cache_get(cache_key, _SENT_LOG_TTL)
     if hit: return cached
     from app.models import Send
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_start = _local_day_start(_user_tz(uid))
     # Fetch only the 4 columns needed — avoids transferring all 12+ columns over network
     rows = db.session.query(
         Send.recipient_email, Send.origin, Send.destination, Send.sent_at
@@ -2977,22 +3029,23 @@ def get_stats(period='lifetime'):
     cached, hit = _cache_get(cache_key, _STATS_TTL)
     if hit: return cached
     from app.models import Send, Reply
-    from sqlalchemy import func, case, cast, Date
+    from sqlalchemy import func, case
 
-    today_dt = date.today()
+    tz = _user_tz(uid)                    # "today" = the user's local day
+    today_start = _local_day_start(tz, 0)
 
     # ── Date cutoff for the selected period ───────────────────────────────
     if period == 'today':
-        period_cutoff = today_dt          # only today
+        period_cutoff = today_start       # only today
     elif period == 'week':
-        period_cutoff = today_dt - timedelta(days=6)   # last 7 days inclusive
+        period_cutoff = _local_day_start(tz, 6)   # last 7 days inclusive
     else:
         period_cutoff = None              # no filter = lifetime
 
     def _period_filter(q):
         """Apply period date filter to a Send query."""
         if period_cutoff is not None:
-            q = q.filter(cast(Send.sent_at, Date) >= period_cutoff)
+            q = q.filter(Send.sent_at >= period_cutoff)
         return q
 
     # ── Counts: sent, errors (period-scoped) + today always ──────────────
@@ -3008,20 +3061,14 @@ def get_stats(period='lifetime'):
 
     # today count always shown as context
     today_count = db.session.query(
-        func.count(case((db.and_(Send.status == 'sent', cast(Send.sent_at, Date) == today_dt), 1)))
+        func.count(case((db.and_(Send.status == 'sent', Send.sent_at >= today_start), 1)))
     ).filter(Send.user_id == uid).scalar() or 0
 
     # ── By-day: 14-day window (or just today when period=today) ──────────
-    if period == 'today':
-        chart_cutoff = today_dt
-    else:
-        chart_cutoff = today_dt - timedelta(days=13)
-    by_day_rows = db.session.query(
-        func.date(Send.sent_at).label('day'),
-        func.count(Send.id)
-    ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at >= chart_cutoff)\
-     .group_by(func.date(Send.sent_at)).order_by(func.date(Send.sent_at)).all()
-    by_day = [{"date": str(d), "count": c} for d, c in by_day_rows if d]
+    chart_cutoff = today_start if period == 'today' else _local_day_start(tz, 13)
+    day_counts = Counter(_local_date(t, tz) for (t,) in db.session.query(Send.sent_at).filter(
+        Send.user_id == uid, Send.status == 'sent', Send.sent_at >= chart_cutoff))
+    by_day = [{"date": str(d), "count": c} for d, c in sorted(day_counts.items())]
 
     # ── By-variant (period-scoped) ────────────────────────────────────────
     by_var_q = db.session.query(
@@ -3038,7 +3085,12 @@ def get_stats(period='lifetime'):
             func.count(Send.id)
         ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at.isnot(None))
         by_hr_rows = _period_filter(by_hr_q).group_by('hr').all()
-        by_hr = {int(h): c for h, c in by_hr_rows if h is not None}
+        # UTC hour → user's hour at today's offset (DST drift of history is ignored)
+        shift = int(datetime.now(tz).utcoffset().total_seconds() // 3600)
+        by_hr = Counter()
+        for h, c in by_hr_rows:
+            if h is not None:
+                by_hr[(int(h) + shift) % 24] += c
     except Exception:
         by_hr = {}
     by_hour = [{"hour": f"{h:02d}:00", "count": by_hr.get(h, 0)} for h in range(24)]
@@ -3191,8 +3243,9 @@ def get_automation_impact():
     cfg = load_config()
     delay_avg = (cfg.get('delay_min', 20) + cfg.get('delay_max', 45)) / 2.0
 
-    today = date.today()
-    week_start = today - timedelta(days=today.weekday())
+    tz = _user_tz(uid)
+    today = _local_date(_utcnow(), tz)
+    week_start = _local_day_start(tz, today.weekday())
     today_key = today.strftime('%Y-%m-%d')
 
     daily_counts = Counter()
@@ -3202,17 +3255,11 @@ def get_automation_impact():
         from sqlalchemy import func, extract
 
         # Daily counts (last 14 days only — all we display)
-        cutoff = today - timedelta(days=14)
-        day_rows = db.session.query(
-            func.date(Send.sent_at).label('day'),
-            func.count(Send.id)
-        ).filter(
-            Send.user_id == uid, Send.status == 'sent',
-            Send.sent_at.isnot(None), Send.sent_at >= cutoff
-        ).group_by(func.date(Send.sent_at)).all()
-        for d, c in day_rows:
-            if d:
-                daily_counts[str(d)] = c
+        cutoff = _local_day_start(tz, 14)
+        for (t,) in db.session.query(Send.sent_at).filter(
+                Send.user_id == uid, Send.status == 'sent',
+                Send.sent_at.isnot(None), Send.sent_at >= cutoff):
+            daily_counts[str(_local_date(t, tz))] += 1
 
         # Lifetime + this week totals (single query)
         lifetime_count = db.session.query(func.count(Send.id)).filter(
@@ -3233,7 +3280,8 @@ def get_automation_impact():
                 Send.user_id == uid, Send.status == 'sent', Send.sent_at.isnot(None)
             ).group_by('hr').order_by(func.count(Send.id).desc()).first()
             if hr_row and hr_row.hr is not None:
-                peak_hour = f"{int(hr_row.hr):02d}:00"
+                shift = int(datetime.now(tz).utcoffset().total_seconds() // 3600)
+                peak_hour = f"{(int(hr_row.hr) + shift) % 24:02d}:00"
         except Exception:
             pass
     else:
@@ -4545,6 +4593,23 @@ def get_fu_templates():
             core[level] = r.body
     return core
 
+def _fu_urgency(uid, now=None):
+    """The one definition of the Follow-up urgency buckets, used by the list,
+    its counters and select-all. A set date is a commitment regardless of which
+    engine set it (drip, cadence touch, manual schedule) — enabled flags only
+    gate auto-sends. "Today" ends at the user's local midnight."""
+    from app.models import FollowupContact as FC
+    now = now or _utcnow()
+    end_of_day = _local_day_start(_user_tz(uid), -1, now)
+    active = FC.state == 'active'
+    return {
+        'needs_action': db.and_(FC.stage == 'completed_fu3', active),
+        'overdue':      db.and_(FC.next_followup_at < now, active),
+        'due_today':    db.and_(FC.next_followup_at >= now, FC.next_followup_at < end_of_day, active),
+        'scheduled':    db.and_(FC.scheduled_once == True, FC.next_followup_at > now),
+    }
+
+
 @app.route('/api/followups')
 @login_required
 def api_followups_list():
@@ -4573,22 +4638,9 @@ def api_followups_list():
             FollowupContact.company_name.ilike(f'%{search}%'),
         ))
 
-    now = _utcnow()
-    end_of_day = now.replace(hour=23, minute=59, second=59)
-    if special == 'needs_action':
-        q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
-    elif special == 'overdue':
-        # a set date is a commitment regardless of which engine set it (drip,
-        # cadence touch or manual schedule) — enabled flags only gate auto-sends
-        q = q.filter(FollowupContact.next_followup_at < now,
-                     FollowupContact.state == 'active')
-    elif special == 'due_today':
-        q = q.filter(FollowupContact.next_followup_at <= end_of_day,
-                     FollowupContact.next_followup_at >= now,
-                     FollowupContact.state == 'active')
-    elif special == 'scheduled':
-        q = q.filter(FollowupContact.scheduled_once == True,
-                     FollowupContact.next_followup_at > now)
+    urg = _fu_urgency(uid)
+    if special in urg:
+        q = q.filter(urg[special])
 
     contacts = q.order_by(FollowupContact.created_at.desc()).all()
 
@@ -4600,11 +4652,11 @@ def api_followups_list():
         func.count(case((FollowupContact.state == 'loads', 1))).label('loads'),
         func.count(case((FollowupContact.state == 'blocked', 1))).label('blocked'),
         func.count(case((FollowupContact.state == 'closed', 1))).label('closed'),
-        func.count(case(((FollowupContact.stage == 'completed_fu3') & (FollowupContact.state == 'active'), 1))).label('needs_action'),
-        func.count(case(((FollowupContact.next_followup_at < now) & (FollowupContact.state == 'active'), 1))).label('overdue'),
-        func.count(case(((FollowupContact.next_followup_at <= end_of_day) & (FollowupContact.next_followup_at >= now) & (FollowupContact.state == 'active'), 1))).label('due_today'),
+        func.count(case((urg['needs_action'], 1))).label('needs_action'),
+        func.count(case((urg['overdue'], 1))).label('overdue'),
+        func.count(case((urg['due_today'], 1))).label('due_today'),
         func.count(case((FollowupContact.attention_at.isnot(None) & (FollowupContact.state == 'active'), 1))).label('attention'),
-        func.count(case(((FollowupContact.scheduled_once == True) & (FollowupContact.next_followup_at > now), 1))).label('scheduled'),
+        func.count(case((urg['scheduled'], 1))).label('scheduled'),
     ).filter(FollowupContact.user_id == uid).first()
 
     counts = {
@@ -4649,20 +4701,9 @@ def api_followups_ids():
             FollowupContact.contact_name.ilike(f'%{search}%'),
             FollowupContact.company_name.ilike(f'%{search}%'),
         ))
-    now = _utcnow()
-    if special == 'needs_action':
-        q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
-    elif special == 'overdue':
-        q = q.filter(FollowupContact.next_followup_at < now, FollowupContact.state == 'active',
-                     FollowupContact.is_followup_enabled == True)
-    elif special == 'due_today':
-        end_of_day = now.replace(hour=23, minute=59, second=59)
-        q = q.filter(FollowupContact.next_followup_at <= end_of_day,
-                     FollowupContact.next_followup_at >= now,
-                     FollowupContact.state == 'active', FollowupContact.is_followup_enabled == True)
-    elif special == 'scheduled':
-        q = q.filter(FollowupContact.scheduled_once == True,
-                     FollowupContact.next_followup_at > now)
+    urg = _fu_urgency(uid)          # same buckets as the list and its counters
+    if special in urg:
+        q = q.filter(urg[special])
     ids = [row[0] for row in q.with_entities(FollowupContact.id).all()]
     return jsonify(ids=ids)
 
@@ -5271,6 +5312,7 @@ def api_followups_pipeline_config():
                    drip_auto_enabled=bool(ws.fu_auto_enabled) if ws else False,
                    auto_send_enabled=bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True)),
                    auto_send_preview=_auto_send_preview(ws),
+                   timezone=_cfg.get('timezone') or '',
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -5466,6 +5508,22 @@ def api_followups_pipeline_config_save():
                 cfg['touch_hour'] = max(0, min(23, int(th)))
             except (TypeError, ValueError):
                 pass
+    tz_new = data.get('timezone')
+    if isinstance(tz_new, str) and (tz_new == '' or _valid_tz(tz_new)) \
+            and tz_new != (cfg.get('timezone') or ''):
+        # A fixed touch hour is stored as a local hour: re-express it in the new
+        # zone so touches keep going out at the same moment.
+        th_cur = cfg.get('touch_hour', 'auto')
+        if th_cur != 'auto' and data.get('touch_hour') is None:
+            try:
+                old_tz, new_tz = _ws_tz(ws), _tz_named(tz_new)
+                moment = datetime.now(old_tz).replace(hour=int(th_cur), minute=0, second=0, microsecond=0)
+                cfg['touch_hour'] = moment.astimezone(new_tz).hour
+            except (TypeError, ValueError):
+                pass
+        cfg['timezone'] = tz_new
+        _cache_del(f'stats:{uid}:today', f'stats:{uid}:week', f'stats:{uid}:lifetime',
+                   f'ai_impact:{uid}', f'sent_log:{uid}')
     if isinstance(data.get('digest_enabled'), bool):
         cfg['digest_enabled'] = data['digest_enabled']
     if isinstance(data.get('drip_auto_enabled'), bool):
@@ -5494,7 +5552,8 @@ def api_followups_pipeline_config_save():
                    digest_enabled=bool((ws.pipeline_config or {}).get('digest_enabled', True)),
                    drip_auto_enabled=bool(ws.fu_auto_enabled),
                    auto_send_enabled=bool((ws.pipeline_config or {}).get('auto_send_enabled', True)),
-                   auto_send_preview=_auto_send_preview(ws))
+                   auto_send_preview=_auto_send_preview(ws),
+                   timezone=(ws.pipeline_config or {}).get('timezone') or '')
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])
@@ -5669,8 +5728,9 @@ def _dashboard_data(uid):
     from app.models import Reply, Send, FollowupContact, FollowupEvent, Workspace
     from sqlalchemy import func, case, distinct
     now = _utcnow()
-    sod = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    eod = now.replace(hour=23, minute=59, second=59)
+    tz = _user_tz(uid)
+    sod = _local_day_start(tz, 0, now)
+    eod = _local_day_start(tz, -1, now) - timedelta(microseconds=1)
 
     # Today's actions
     fc_active = FollowupContact.query.filter(FollowupContact.user_id == uid,
@@ -5727,19 +5787,16 @@ def _dashboard_data(uid):
         avg_touches = round(touches / len(booked_ids), 1)
 
     # 14-day activity
-    cut14 = sod - timedelta(days=13)
-    s_rows = dict(db.session.query(func.date(Send.sent_at), func.count()).filter(
-        Send.user_id == uid, Send.status == 'sent', Send.sent_at >= cut14
-    ).group_by(func.date(Send.sent_at)).all())
-    r_rows = dict(db.session.query(func.date(Reply.received_at), func.count()).filter(
-        Reply.user_id == uid, Reply.received_at >= cut14
-    ).group_by(func.date(Reply.received_at)).all())
+    cut14 = _local_day_start(tz, 13, now)
+    s_rows = Counter(_local_date(t, tz) for (t,) in db.session.query(Send.sent_at).filter(
+        Send.user_id == uid, Send.status == 'sent', Send.sent_at >= cut14))
+    r_rows = Counter(_local_date(t, tz) for (t,) in db.session.query(Reply.received_at).filter(
+        Reply.user_id == uid, Reply.received_at >= cut14))
     activity = []
+    first = _local_date(cut14, tz)
     for i in range(14):
-        d = (cut14 + timedelta(days=i)).date()
-        activity.append({'day': d.strftime('%b %d'),
-                         'sends': int(s_rows.get(str(d), s_rows.get(d, 0)) or 0),
-                         'replies': int(r_rows.get(str(d), r_rows.get(d, 0)) or 0)})
+        d = first + timedelta(days=i)
+        activity.append({'day': d.strftime('%b %d'), 'sends': s_rows.get(d, 0), 'replies': r_rows.get(d, 0)})
 
     # Top lanes by carrier replies (30d), enriched with gave-info counts
     cutoff30 = now - timedelta(days=30)
@@ -6710,7 +6767,7 @@ def _run_scheduled_followups():
         if touch_total:
             app.logger.info(f'FU scheduler: sent {touch_total} cadence touches')
 
-        # ── Path 4: Weekly digest emails (Mondays, after 06:00 UTC) ──────────
+        # ── Path 4: Weekly digest emails (Mondays, after 06:00 user time) ────
         try:
             _maybe_send_digests(now)
         except Exception as e:
@@ -6772,16 +6829,18 @@ def _send_self_email(uid, subject, body):
 
 
 def _maybe_send_digests(now):
-    """Mondays after 06:00 UTC: one digest per workspace owner, deduped by date."""
+    """Mondays after 06:00 in each owner's time zone: one digest per workspace
+    owner, deduped by that local date."""
     from app.models import Workspace
-    if now.weekday() != 0 or now.hour < 6:
-        return 0
-    today = now.strftime('%Y-%m-%d')
     sent = 0
     for ws in Workspace.query.all():
         cfg = dict(ws.pipeline_config or {})
         if not cfg.get('digest_enabled', True):
             continue
+        local = now.replace(tzinfo=UTC).astimezone(_ws_tz(ws))
+        if local.weekday() != 0 or local.hour < 6:
+            continue
+        today = local.strftime('%Y-%m-%d')
         if cfg.get('last_digest_at') == today:
             continue
         ok, _err = _send_self_email(ws.owner_id, 'Your weekly DAT Mailer digest',

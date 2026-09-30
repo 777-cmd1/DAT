@@ -58,6 +58,27 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
+
+
+def _proxy_hops(env=os.environ):
+    """Reverse proxies to trust for X-Forwarded-For/-Proto. Railway fronts the
+    app with one edge proxy; with no proxy (local) trust none, or clients could
+    spoof their IP past the rate limiter. PROXY_HOPS overrides."""
+    raw = (env.get('PROXY_HOPS') or '').strip()
+    if raw.isdigit():
+        return int(raw)
+    railway = ('RAILWAY_ENVIRONMENT_NAME', 'RAILWAY_ENVIRONMENT', 'RAILWAY_PROJECT_ID', 'RAILWAY_SERVICE_ID')
+    return 1 if any(env.get(k) for k in railway) else 0
+
+
+def _apply_proxy_fix(flask_app, hops):
+    if hops:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_for=hops, x_proto=hops)
+
+
+_apply_proxy_fix(app, _proxy_hops())
+
 _is_prod_env = bool(os.environ.get('DATABASE_URL')) or os.environ.get('FLASK_ENV') == 'production'
 _secret_key = os.environ.get('SECRET_KEY')
 if not _secret_key:
@@ -1065,11 +1086,15 @@ def _schedule_touch(fc, ws=None, force=False, stagger=False):
     fc.touch_enabled = True
     nxt = _utcnow() + timedelta(days=days)
     # Land the touch at the hour carriers actually answer (config: 'auto' =
-    # computed from reply history, or a fixed 0-23 UTC hour)
+    # computed from reply history as a UTC hour, or a fixed 0-23 hour in the
+    # user's time zone)
     try:
         hour_cfg = (ws.pipeline_config or {}).get('touch_hour', 'auto') if ws else 'auto'
-        hour = _best_reply_hour(fc.user_id) if hour_cfg == 'auto' else int(hour_cfg)
-        nxt = nxt.replace(hour=max(0, min(23, hour)), minute=0, second=0, microsecond=0)
+        if hour_cfg == 'auto':
+            hour = max(0, min(23, _best_reply_hour(fc.user_id)))
+            nxt = nxt.replace(hour=hour, minute=0, second=0, microsecond=0)
+        else:
+            nxt = _local_at_hour(nxt, max(0, min(23, int(hour_cfg))), _ws_tz(ws))
     except Exception:
         pass
     fc.next_followup_at = nxt
@@ -1228,6 +1253,54 @@ def _utcnow():
     """Return a naive UTC datetime for DB compatibility, sourced from aware UTC."""
     return datetime.now(UTC).replace(tzinfo=None)
 
+
+# ─── USER TIME ZONE ────────────────────────────────────────────────────────────
+# Stored in Workspace.pipeline_config['timezone'] (IANA name, set from Settings or
+# the browser). DB timestamps stay naive UTC; only "today", day buckets, the
+# fixed touch hour and the digest time follow the user's zone.
+
+def _valid_tz(name):
+    from zoneinfo import ZoneInfo
+    try:
+        ZoneInfo(str(name))
+        return bool(name)
+    except Exception:
+        return False
+
+
+def _tz_named(name):
+    from zoneinfo import ZoneInfo
+    try:
+        return ZoneInfo(name or 'UTC')
+    except Exception:
+        return ZoneInfo('UTC')
+
+
+def _ws_tz(ws):
+    return _tz_named(((ws.pipeline_config or {}) if ws else {}).get('timezone'))
+
+
+def _user_tz(uid):
+    from app.models import Workspace
+    return _ws_tz(Workspace.query.filter_by(owner_id=uid).first() if uid else None)
+
+
+def _local_date(dt, tz):
+    """Local calendar date of a naive-UTC timestamp."""
+    return dt.replace(tzinfo=UTC).astimezone(tz).date()
+
+
+def _local_day_start(tz, days_ago=0, now=None):
+    """Naive-UTC moment of local midnight `days_ago` days back (negative = ahead)."""
+    d = _local_date(now or _utcnow(), tz) - timedelta(days=days_ago)
+    return datetime(d.year, d.month, d.day, tzinfo=tz).astimezone(UTC).replace(tzinfo=None)
+
+
+def _local_at_hour(dt, hour, tz):
+    """Naive-UTC moment of `hour`:00 local time on dt's local date."""
+    d = _local_date(dt, tz)
+    return datetime(d.year, d.month, d.day, hour, tzinfo=tz).astimezone(UTC).replace(tzinfo=None)
+
 # ─── AUTH HELPERS ──────────────────────────────────────────────────────────────
 
 def hash_password(password):
@@ -1274,8 +1347,8 @@ def get_user(email):
     from app.models import User
     u = User.query.filter(User.email == email.strip().lower()).first()
     if not u: return None
-    return {'email': u.email, 'name': u.name, 'password': u.password,
-            'invited_by': u.invited_by}
+    return {'id': u.id, 'email': u.email, 'name': u.name, 'password': u.password,
+            'invited_by': u.invited_by, 'session_version': u.session_version or 0}
 
 def load_invites():
     from app.models import Invitation
@@ -1300,10 +1373,30 @@ def save_invites(invites):
             ))
     db.session.commit()
 
+def _session_user():
+    """The logged-in User for this request, or None. A session whose user was
+    deleted, or whose version predates the latest logout / password reset, is
+    cleared and treated as logged out."""
+    email = session.get('user_email')
+    if not email:
+        return None
+    from app.models import User as _U
+    u = _U.query.filter_by(email=email.lower()).first()
+    if not u or session.get('sv', 0) != (u.session_version or 0):
+        session.clear()
+        return None
+    return u
+
+
+def _bump_session_version(user):
+    """End every existing session of this user (all devices)."""
+    user.session_version = (user.session_version or 0) + 1
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'user_email' not in session:
+        if not _session_user():
             if request.is_json:
                 return jsonify({'error': 'Not authenticated'}), 401
             return redirect(url_for('login_page'))
@@ -1367,12 +1460,17 @@ def api_login():
     session.clear()   # prevent session fixation
     session['user_email'] = user['email']
     session['user_name'] = user.get('name', email)
+    session['sv'] = user.get('session_version', 0)
     audit_log('login', resource_type='user', detail={'email': email})
     return jsonify({'ok': True, 'name': user.get('name', email)})
 
 @app.route('/api/auth/logout', methods=['POST'])
 @csrf_protected
 def api_logout():
+    u = _session_user()
+    if u:
+        _bump_session_version(u)
+        db.session.commit()
     session.clear()
     return jsonify({'ok': True})
 
@@ -1394,7 +1492,16 @@ def reset_password_page():
     return render_template('reset_password.html', mode='request', csrf_token=_get_csrf_token())
 
 
+def _reset_email_key():
+    """Rate-limit bucket per target address, so one inbox can't be flooded
+    from many IPs."""
+    email = ((request.get_json(silent=True) or {}).get('email') or '').strip().lower()
+    return f'reset-email:{email}'
+
+
 @app.route('/api/auth/reset-request', methods=['POST'])
+@limiter.limit("5 per hour")
+@limiter.limit("3 per hour", key_func=_reset_email_key)
 @csrf_protected
 def api_reset_request():
     """Create a reset token and email it via the admin's Gmail account."""
@@ -1470,6 +1577,7 @@ def api_reset_confirm():
         return jsonify({'error': 'Account not found'}), 400
 
     user.password = hash_password(password)
+    _bump_session_version(user)
     pr.used_at = _utcnow()
     db.session.commit()
 
@@ -1477,7 +1585,7 @@ def api_reset_confirm():
 
 @app.route('/api/auth/me', methods=['GET'])
 def api_me():
-    if 'user_email' not in session:
+    if not _session_user():
         return jsonify({'authenticated': False}), 401
     return jsonify({'authenticated': True, 'email': session['user_email'], 'name': session.get('user_name'), 'is_admin': _is_admin_user()})
 
@@ -1543,6 +1651,7 @@ def api_register():
     session.clear()   # prevent session fixation
     session['user_email'] = email
     session['user_name'] = name or email
+    session['sv'] = user.session_version or 0
     return jsonify({'ok': True})
 
 # ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
@@ -2253,6 +2362,44 @@ def load_stop_list(uid=None):
     _cache_set(cache_key, result)
     return result
 
+
+def _add_to_stop_list(uid, email, reason=''):
+    """Add one address to the user's Stop List (no-op if already there).
+    Flushes only — the caller commits."""
+    from app.models import StopListEntry, Workspace
+    email = (email or '').strip().lower()
+    if not uid or not email:
+        return False
+    if StopListEntry.query.filter_by(user_id=uid, type='email', value=email).first():
+        return False
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    db.session.add(StopListEntry(user_id=uid, workspace_id=ws.id if ws else None,
+                                 type='email', value=email, reason=(reason or '')[:255]))
+    db.session.flush()
+    _cache_del(f'stop_list:{uid}')
+    return True
+
+
+def _remove_from_stop_list(uid, email):
+    from app.models import StopListEntry
+    email = (email or '').strip().lower()
+    n = StopListEntry.query.filter_by(user_id=uid, type='email', value=email).delete()
+    if n:
+        _cache_del(f'stop_list:{uid}')
+    return bool(n)
+
+
+def _block_followup_contact(uid, email, reason):
+    """Move the user's pipeline contact for this address to 'blocked' so no
+    automatic or queued follow-up can reach it. Returns True if it changed."""
+    from app.models import Workspace
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    fc = _fc_by_email(ws.id, email) if ws else None
+    if not fc or fc.state not in ('active', 'paused'):
+        return False
+    ok, _err = _transition_state(fc, 'blocked', reason=reason, actor_user_id=uid)
+    return ok
+
 def get_stop_list_raw():
     uid = current_user_id()
     if not uid: return []
@@ -2292,7 +2439,7 @@ def load_sent_log(uid=None):
     cached, hit = _cache_get(cache_key, _SENT_LOG_TTL)
     if hit: return cached
     from app.models import Send
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_start = _local_day_start(_user_tz(uid))
     # Fetch only the 4 columns needed — avoids transferring all 12+ columns over network
     rows = db.session.query(
         Send.recipient_email, Send.origin, Send.destination, Send.sent_at
@@ -2416,8 +2563,8 @@ def get_log_page(page=1, per_page=100, search='', status='', date_from='', date_
         'per_page': per_page,
     }
 
-def load_replies():
-    uid = current_user_id()
+def load_replies(uid=None):
+    uid = uid or current_user_id()
     if not uid: return []
     from app.models import Reply
     rows = db.session.query(
@@ -2548,7 +2695,7 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
         Reply.subject, Reply.body, Reply.route, Reply.status,
         Reply.reply_filter_key, Reply.received_at,
         Reply.triage_category, Reply.triage_confidence,
-        Reply.auto_processed, Reply.auto_action,
+        Reply.auto_processed, Reply.auto_action, Reply.matched_recipient,
     ).filter(
         Reply.user_id == uid,
         func.lower(Reply.from_email).in_(email_keys)
@@ -2571,19 +2718,20 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
             'triage_confidence': row.triage_confidence,
             'auto_processed': bool(row.auto_processed),
             'auto_action': row.auto_action or '',
+            'matched_recipient': row.matched_recipient or '',
             'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
         })
 
     items = [grouped[email] for email in email_keys if email in grouped]
     return {'items': items, 'counts': counts, 'total': total, 'page': page, 'pages': pages}
 
-def save_replies(replies):
+def save_replies(replies, uid=None):
     """Upsert reply list — used by legacy code paths."""
-    uid = current_user_id()
+    uid = uid or current_user_id()
     if not uid: return
     from app.models import Reply
     for r in replies:
-        existing = Reply.query.filter_by(msg_id=r['msg_id']).first()
+        existing = Reply.query.filter_by(user_id=uid, msg_id=r['msg_id']).first()
         if existing:
             existing.status = r.get('status', existing.status)
         else:
@@ -2593,6 +2741,7 @@ def save_replies(replies):
                 from_email=r.get('email', ''), from_name=r.get('from', ''),
                 subject=r.get('subject', ''), body=r.get('body', ''),
                 route=r.get('route', ''), status=r.get('status', 'new'),
+                matched_recipient=r.get('matched_recipient') or None,
             ))
     db.session.commit()
 
@@ -2623,8 +2772,8 @@ def get_email_body(msg):
         clean.append(line)
     return '\n'.join(clean).strip()[:1000]
 
-def get_known_emails():
-    uid = current_user_id()
+def get_known_emails(uid=None):
+    uid = uid or current_user_id()
     if not uid: return set()
     from app.models import Send
     rows = db.session.query(Send.recipient_email).filter_by(user_id=uid).distinct().all()
@@ -2664,20 +2813,141 @@ def _bulk_routes_for_emails(uid, emails):
 
 _last_fetch_times: dict = {}   # per-user IMAP throttle: {user_id: timestamp}
 
-def fetch_replies_from_gmail():
-    uid = current_user_id()
-    # Rate-limit: once per 60 s per user
-    now = time.time()
-    last = _last_fetch_times.get(uid, 0)
-    if now - last < 60:
-        wait = int(60 - (now - last))
-        return {'error': f'Please wait {wait}s before checking again', 'rate_limited': True}
-    _last_fetch_times[uid] = now
+_BOUNCE_SENDERS = ('mailer-daemon@', 'postmaster@')
+_PERMANENT_FAILURE_RE = re.compile(
+    r'(?i)\b5\.\d\.\d{1,3}\b|\b55[0-4]\b|address not found|does not exist|user unknown|'
+    r'no such user|recipient (?:address )?rejected|mailbox unavailable|account (?:is )?disabled')
 
-    known        = get_known_emails()
-    existing     = load_replies()
+
+def _bounced_recipient(from_addr, headers, body, known):
+    """Address that hard-bounced, if this message is a permanent-failure notice
+    for one of our recipients; else None. Delay notices are ignored."""
+    sender = (from_addr or '').lower()
+    failed_hdr = headers.get('X-Failed-Recipients', '')
+    if not failed_hdr and not any(b in sender for b in _BOUNCE_SENDERS):
+        return None
+    if 'delay' in (headers.get('Subject', '') or '').lower():
+        return None
+    if not failed_hdr and not _PERMANENT_FAILURE_RE.search(body or ''):
+        return None
+    for addr in re.findall(r'[\w.+\-]+@[\w.\-]+\.\w+', f'{failed_hdr} {body or ""}'):
+        if addr.lower() in known:
+            return addr.lower()
+    return None
+
+
+# Mailboxes shared by unrelated people — a domain match there means nothing.
+_PUBLIC_MAIL_DOMAINS = frozenset({
+    'gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com', 'rocketmail.com', 'outlook.com',
+    'hotmail.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com',
+    'comcast.net', 'att.net', 'sbcglobal.net', 'bellsouth.net', 'verizon.net', 'cox.net',
+    'charter.net', 'protonmail.com', 'proton.me', 'gmx.com', 'mail.com', 'yandex.com', 'zoho.com',
+})
+_REPLY_SUBJ_PREFIX = re.compile(r'^\s*(?:(?:re|fw|fwd)\s*(?:\[\d+\])?\s*:\s*)+', re.I)
+_colleague_misses = {}   # uid -> msg_ids already checked and not an answer to our outreach
+
+
+def _own_gmail_address(uid):
+    from app.models import EmailAccount
+    acct = EmailAccount.query.filter_by(user_id=uid).first() if uid else None
+    return (acct.gmail_address or '') if acct else ''
+
+
+class _ColleagueReplyMatcher:
+    """Which of our outreach emails does a reply from an address we never
+    emailed answer? In freight a colleague answering for a shared mailbox
+    (we wrote to dispatch@abc.com, john@abc.com replied) is normal.
+
+    1. Same Gmail thread as one of our sent emails to a known recipient —
+       exact, works for any domain.
+    2. Same corporate domain as a recipient and the subject carries that
+       recipient's lane ("Re: Laredo, TX to Doral, FL, ...") — catches replies
+       to an internally forwarded email. Never for public mail domains.
+    Returns the original recipient (lowercased) or None."""
+
+    def __init__(self, service, uid, known, own_email=''):
+        self.service, self.uid, self.known = service, uid, known
+        self.own_domain = (own_email or '').lower().rpartition('@')[2]
+        self._sent_threads = None
+
+    @staticmethod
+    def looks_like_reply(headers):
+        return bool(headers.get('In-Reply-To') or headers.get('References')
+                    or _REPLY_SUBJ_PREFIX.match(headers.get('Subject') or ''))
+
+    def _sent_thread_map(self):
+        if self._sent_threads is None:
+            self._sent_threads, token = {}, None
+            try:
+                for _ in range(4):   # ≤2000 sent messages from the last 30 days
+                    kw = dict(userId='me', q='in:sent newer_than:30d', maxResults=500)
+                    if token:
+                        kw['pageToken'] = token
+                    resp = self.service.users().messages().list(**kw).execute()
+                    for m in resp.get('messages', []):
+                        self._sent_threads.setdefault(m.get('threadId'), []).append(m['id'])
+                    token = resp.get('nextPageToken')
+                    if not token:
+                        break
+            except Exception:
+                app.logger.exception('colleague match: listing sent mail failed for uid=%s', self.uid)
+        return self._sent_threads
+
+    def by_thread(self, thread_id):
+        for mid in self._sent_thread_map().get(thread_id, [])[:5]:
+            try:
+                md = self.service.users().messages().get(
+                    userId='me', id=mid, format='metadata', metadataHeaders=['To', 'Cc']).execute()
+            except Exception:
+                continue
+            hdrs = {h['name'].lower(): h['value'] for h in md.get('payload', {}).get('headers', [])}
+            for em in re.findall(r'[\w.+\-]+@[\w.\-]+\.\w+', f"{hdrs.get('to', '')} {hdrs.get('cc', '')}"):
+                if em.lower() in self.known:
+                    return em.lower()
+        return None
+
+    def by_lane(self, sender, subject):
+        domain = sender.rpartition('@')[2]
+        if not domain or domain in _PUBLIC_MAIL_DOMAINS or domain == self.own_domain:
+            return None
+        colleagues = [e for e in self.known if e.endswith('@' + domain)]
+        subj = _REPLY_SUBJ_PREFIX.sub('', subject or '').strip().lower()
+        if not colleagues or not subj:
+            return None
+        from app.models import Send
+        from sqlalchemy import func
+        rows = db.session.query(Send.recipient_email, Send.origin, Send.destination).filter(
+            Send.user_id == self.uid, Send.status == 'sent',
+            func.lower(Send.recipient_email).in_(colleagues),
+        ).order_by(Send.sent_at.desc()).limit(300).all()
+        for em, origin, dest in rows:
+            if origin and dest and subj.startswith(f'{origin} to {dest}'.lower()):
+                return em.lower()
+        return None
+
+    def match(self, sender, headers, thread_id):
+        if not self.looks_like_reply(headers):
+            return None
+        return (thread_id and self.by_thread(thread_id)) or self.by_lane(sender, headers.get('Subject', ''))
+
+
+def fetch_replies_from_gmail(uid=None, rate_limit=True):
+    uid = uid or current_user_id()
+    # Rate-limit manual checks: once per 60 s per user. The scheduler's pre-send
+    # check passes rate_limit=False so it never makes the user's button wait.
+    if rate_limit:
+        now = time.time()
+        last = _last_fetch_times.get(uid, 0)
+        if now - last < 60:
+            wait = int(60 - (now - last))
+            return {'error': f'Please wait {wait}s before checking again', 'rate_limited': True}
+        _last_fetch_times[uid] = now
+
+    known        = get_known_emails(uid)
+    existing     = load_replies(uid)
     existing_ids = {r['msg_id'] for r in existing}
     new_replies  = []
+    bounced      = set()
 
     try:
         service = _get_gmail_service(uid)
@@ -2693,6 +2963,7 @@ def fetch_replies_from_gmail():
 
         # First pass: collect new reply data without route lookup (avoid N+1)
         _pending_replies = []
+        matcher = None   # built on the first reply from an address we never emailed
         for msg_ref in messages:
             try:
                 msg_data = service.users().messages().get(
@@ -2710,8 +2981,25 @@ def fetch_replies_from_gmail():
                 if not em:
                     continue
                 sender = em.group().lower()
+                matched = None
                 if sender not in known:
-                    continue
+                    if any(b in sender for b in _BOUNCE_SENDERS) or headers.get('X-Failed-Recipients'):
+                        failed = _bounced_recipient(from_addr, headers,
+                                                    _gmail_get_body(msg_data.get('payload', {})), known)
+                        if failed:
+                            bounced.add(failed)
+                        continue
+                    misses = _colleague_misses.setdefault(uid, set())
+                    if msg_id in misses:
+                        continue
+                    if matcher is None:
+                        matcher = _ColleagueReplyMatcher(service, uid, known, _own_gmail_address(uid))
+                    matched = matcher.match(sender, headers, msg_data.get('threadId', ''))
+                    if not matched:
+                        if len(misses) > 5000:
+                            misses.clear()
+                        misses.add(msg_id)
+                        continue
 
                 body = _gmail_get_body(msg_data.get('payload', {}))
 
@@ -2719,6 +3007,7 @@ def fetch_replies_from_gmail():
                     'msg_id':      msg_id,
                     'thread_id':   msg_data.get('threadId', ''),
                     'email':       sender,
+                    'matched_recipient': matched,
                     'from':        from_addr,
                     'subject':     headers.get('Subject', ''),
                     'date':        headers.get('Date', ''),
@@ -2733,7 +3022,8 @@ def fetch_replies_from_gmail():
         # Bulk route lookup — 1 query instead of N
         if _pending_replies:
             sender_emails = {r['email'] for r in _pending_replies}
-            route_map = _bulk_routes_for_emails(uid, sender_emails)
+            route_map = _bulk_routes_for_emails(
+                uid, sender_emails | {r['matched_recipient'] for r in _pending_replies if r.get('matched_recipient')})
 
             # Bulk status-inheritance lookup — if contact was ignored/not_interested,
             # inherit that status so they don't re-appear in the queue as 'new'.
@@ -2762,7 +3052,7 @@ def fetch_replies_from_gmail():
                 pass  # if lookup fails, fall back to 'new' — safe default
 
             for r in _pending_replies:
-                r['route'] = route_map.get(r['email'], '')
+                r['route'] = route_map.get(r['email']) or route_map.get(r.get('matched_recipient') or '', '')
                 # Inherit suppressed status so ignored contacts stay quiet
                 r['status'] = _inherited_status.get(r['email'], 'new')
             new_replies.extend(_pending_replies)
@@ -2771,15 +3061,34 @@ def fetch_replies_from_gmail():
         return {'error': str(e)}
 
     all_replies = new_replies + existing
-    save_replies(all_replies)
+    save_replies(all_replies, uid)
+
+    # Hard bounces: the address can never be reached — stop-list it and stop
+    # its follow-ups so nothing keeps retrying a dead mailbox.
+    bounced_added = 0
+    if bounced and uid:
+        be, _bd = load_stop_list(uid)
+        for addr in sorted(bounced):
+            if addr in be:
+                continue
+            try:
+                if _add_to_stop_list(uid, addr, reason='bounced'):
+                    bounced_added += 1
+                _block_followup_contact(uid, addr, 'bounced')
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception('bounce handling failed for %s', addr)
 
     # Auto-stop follow-ups for contacts who replied
     if new_replies and uid:
         for r in new_replies:
-            try:
-                _check_reply_stops_followup(r['email'], uid)
-            except Exception:
-                pass
+            # a colleague's answer counts as the emailed contact replying too
+            for addr in {r['email'], r.get('matched_recipient')} - {None, ''}:
+                try:
+                    _check_reply_stops_followup(addr, uid)
+                except Exception:
+                    pass
         try:
             db.session.commit()
         except Exception:
@@ -2804,6 +3113,7 @@ def fetch_replies_from_gmail():
             'auto_ignored': triage.get('auto_ignored', 0),
             'auto_followup': triage.get('auto_followup', 0),
             'ooo_paused': triage.get('ooo_paused', 0),
+            'bounced': bounced_added,
             'detected': triage.get('detected', {})}
 
 
@@ -2833,22 +3143,23 @@ def get_stats(period='lifetime'):
     cached, hit = _cache_get(cache_key, _STATS_TTL)
     if hit: return cached
     from app.models import Send, Reply
-    from sqlalchemy import func, case, cast, Date
+    from sqlalchemy import func, case
 
-    today_dt = date.today()
+    tz = _user_tz(uid)                    # "today" = the user's local day
+    today_start = _local_day_start(tz, 0)
 
     # ── Date cutoff for the selected period ───────────────────────────────
     if period == 'today':
-        period_cutoff = today_dt          # only today
+        period_cutoff = today_start       # only today
     elif period == 'week':
-        period_cutoff = today_dt - timedelta(days=6)   # last 7 days inclusive
+        period_cutoff = _local_day_start(tz, 6)   # last 7 days inclusive
     else:
         period_cutoff = None              # no filter = lifetime
 
     def _period_filter(q):
         """Apply period date filter to a Send query."""
         if period_cutoff is not None:
-            q = q.filter(cast(Send.sent_at, Date) >= period_cutoff)
+            q = q.filter(Send.sent_at >= period_cutoff)
         return q
 
     # ── Counts: sent, errors (period-scoped) + today always ──────────────
@@ -2864,20 +3175,14 @@ def get_stats(period='lifetime'):
 
     # today count always shown as context
     today_count = db.session.query(
-        func.count(case((db.and_(Send.status == 'sent', cast(Send.sent_at, Date) == today_dt), 1)))
+        func.count(case((db.and_(Send.status == 'sent', Send.sent_at >= today_start), 1)))
     ).filter(Send.user_id == uid).scalar() or 0
 
     # ── By-day: 14-day window (or just today when period=today) ──────────
-    if period == 'today':
-        chart_cutoff = today_dt
-    else:
-        chart_cutoff = today_dt - timedelta(days=13)
-    by_day_rows = db.session.query(
-        func.date(Send.sent_at).label('day'),
-        func.count(Send.id)
-    ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at >= chart_cutoff)\
-     .group_by(func.date(Send.sent_at)).order_by(func.date(Send.sent_at)).all()
-    by_day = [{"date": str(d), "count": c} for d, c in by_day_rows if d]
+    chart_cutoff = today_start if period == 'today' else _local_day_start(tz, 13)
+    day_counts = Counter(_local_date(t, tz) for (t,) in db.session.query(Send.sent_at).filter(
+        Send.user_id == uid, Send.status == 'sent', Send.sent_at >= chart_cutoff))
+    by_day = [{"date": str(d), "count": c} for d, c in sorted(day_counts.items())]
 
     # ── By-variant (period-scoped) ────────────────────────────────────────
     by_var_q = db.session.query(
@@ -2894,7 +3199,12 @@ def get_stats(period='lifetime'):
             func.count(Send.id)
         ).filter(Send.user_id == uid, Send.status == 'sent', Send.sent_at.isnot(None))
         by_hr_rows = _period_filter(by_hr_q).group_by('hr').all()
-        by_hr = {int(h): c for h, c in by_hr_rows if h is not None}
+        # UTC hour → user's hour at today's offset (DST drift of history is ignored)
+        shift = int(datetime.now(tz).utcoffset().total_seconds() // 3600)
+        by_hr = Counter()
+        for h, c in by_hr_rows:
+            if h is not None:
+                by_hr[(int(h) + shift) % 24] += c
     except Exception:
         by_hr = {}
     by_hour = [{"hour": f"{h:02d}:00", "count": by_hr.get(h, 0)} for h in range(24)]
@@ -2919,11 +3229,10 @@ def get_stats(period='lifetime'):
         .group_by(Send.origin, Send.destination)\
         .order_by(func.count(Send.id).desc()).limit(10).all()
 
-    # ── Reply stats — contact-based (distinct from_email), lifetime ─────
+    # ── Reply stats — contact-based (distinct from_email), same period ────
     # Count unique contacts, not messages — prevents multi-message threads
-    # from inflating Reply Rate (1 broker sending 5 msgs = 1 reply, not 5).
-    from sqlalchemy import func as _sfunc
-    reply_contact_rows = db.session.query(
+    # from inflating the numbers (1 broker sending 5 msgs = 1 reply, not 5).
+    reply_contact_q = db.session.query(
         func.lower(Reply.from_email).label('em'),
         # Best status per contact: follow_up/interested > new/viewed > not_interested/ignored
         func.min(case(
@@ -2935,14 +3244,18 @@ def get_stats(period='lifetime'):
         Reply.user_id == uid,
         Reply.from_email.isnot(None),
         Reply.from_email != '',
-    ).group_by(func.lower(Reply.from_email)).all()
+    )
+    if period_cutoff is not None:
+        reply_contact_q = reply_contact_q.filter(Reply.received_at >= period_cutoff)
+    reply_contact_rows = reply_contact_q.group_by(func.lower(Reply.from_email)).all()
 
     tr = len(reply_contact_rows)                          # unique contacts who replied
     interested = sum(1 for r in reply_contact_rows if r.priority == 0)   # follow_up or interested
     not_int    = sum(1 for r in reply_contact_rows if r.priority == 2)   # ignored/not_interested
     new_r      = sum(1 for r in reply_contact_rows if r.priority == 1)   # new/viewed
 
-    response_rate_pct = round(100 * tr / sent, 1) if sent > 0 else 0
+    contacted, replied = _reply_cohort(uid, period_cutoff)
+    response_rate_pct = _reply_rate(contacted, replied) or 0
     interest_rate_pct = round(100 * interested / tr, 1) if tr > 0 else 0
 
     # ── Replied emails/domains (lifetime) ────────────────────────────────
@@ -2972,6 +3285,8 @@ def get_stats(period='lifetime'):
         "replied_emails": [{"email": e, "count": c, "status": rs.get(e, 'new')} for e, c in rc.most_common()],
         "replied_domains": [{"domain": d, "count": c} for d, c in dc.most_common()],
         "response_rate": {
+            "contacted": contacted,
+            "replied": replied,
             "total_replies": tr,
             "interested": interested,
             "not_interested": not_int,
@@ -3047,8 +3362,9 @@ def get_automation_impact():
     cfg = load_config()
     delay_avg = (cfg.get('delay_min', 20) + cfg.get('delay_max', 45)) / 2.0
 
-    today = date.today()
-    week_start = today - timedelta(days=today.weekday())
+    tz = _user_tz(uid)
+    today = _local_date(_utcnow(), tz)
+    week_start = _local_day_start(tz, today.weekday())
     today_key = today.strftime('%Y-%m-%d')
 
     daily_counts = Counter()
@@ -3058,17 +3374,11 @@ def get_automation_impact():
         from sqlalchemy import func, extract
 
         # Daily counts (last 14 days only — all we display)
-        cutoff = today - timedelta(days=14)
-        day_rows = db.session.query(
-            func.date(Send.sent_at).label('day'),
-            func.count(Send.id)
-        ).filter(
-            Send.user_id == uid, Send.status == 'sent',
-            Send.sent_at.isnot(None), Send.sent_at >= cutoff
-        ).group_by(func.date(Send.sent_at)).all()
-        for d, c in day_rows:
-            if d:
-                daily_counts[str(d)] = c
+        cutoff = _local_day_start(tz, 14)
+        for (t,) in db.session.query(Send.sent_at).filter(
+                Send.user_id == uid, Send.status == 'sent',
+                Send.sent_at.isnot(None), Send.sent_at >= cutoff):
+            daily_counts[str(_local_date(t, tz))] += 1
 
         # Lifetime + this week totals (single query)
         lifetime_count = db.session.query(func.count(Send.id)).filter(
@@ -3089,7 +3399,8 @@ def get_automation_impact():
                 Send.user_id == uid, Send.status == 'sent', Send.sent_at.isnot(None)
             ).group_by('hr').order_by(func.count(Send.id).desc()).first()
             if hr_row and hr_row.hr is not None:
-                peak_hour = f"{int(hr_row.hr):02d}:00"
+                shift = int(datetime.now(tz).utcoffset().total_seconds() // 3600)
+                peak_hour = f"{(int(hr_row.hr) + shift) % 24:02d}:00"
         except Exception:
             pass
     else:
@@ -3616,10 +3927,14 @@ def api_gmail_callback():
     if error:
         return redirect(f'/?gmail_error={urllib.parse.quote(error)}')
 
+    # The state must match the one this browser's session issued — a missing
+    # value on either side is a mismatch, never a match.
     state = request.args.get('state', '')
-    if state != session.get('oauth_state', ''):
+    expected = session.pop('oauth_state', None)
+    if not state or not expected or not secrets.compare_digest(state, expected):
         return redirect('/?gmail_error=state_mismatch')
-    session.pop('oauth_state', None)
+    if not _session_user():
+        return redirect(url_for('login_page'))
 
     code         = request.args.get('code', '')
     client_id    = os.environ.get('GOOGLE_CLIENT_ID', '')
@@ -4075,7 +4390,7 @@ def api_intelligence():
 
     # ── Reply & Rate Request aggregation ─────────────────────────────────────
     all_replies = db.session.query(
-        Reply.from_email, Reply.body, Reply.status
+        Reply.from_email, Reply.body, Reply.status, Reply.matched_recipient
     ).filter_by(user_id=uid).all()
     # DISTINCT by from_email — avoids inflated counts from thread duplicates
     unique_reply_emails   = {r.from_email.lower() for r in all_replies if r.from_email}
@@ -4100,8 +4415,11 @@ def api_intelligence():
      .order_by(func.count(Send.id).desc())\
      .limit(20).all()
 
-    # Build reply lookup: from_email → (has_reply, is_rate_request)
+    # Build reply lookup: emailed address → reply (its own, or a colleague's for it)
     reply_lookup = {r.from_email.lower(): r for r in all_replies if r.from_email}
+    for r in all_replies:
+        if r.matched_recipient:
+            reply_lookup.setdefault(r.matched_recipient.lower(), r)
 
     # For each lane, cross-ref with replies
     lanes = []
@@ -4116,7 +4434,7 @@ def api_intelligence():
         replies_count = sum(1 for e in lane_email_set if e in reply_lookup)
         rr_count = sum(1 for e in lane_email_set if e in rate_request_emails)
 
-        reply_rate = round(100 * replies_count / row.emails_sent, 1) if row.emails_sent > 0 else 0
+        reply_rate = _reply_rate(len(lane_email_set), replies_count) or 0
         rr_rate    = round(100 * rr_count    / row.emails_sent, 1) if row.emails_sent > 0 else 0
 
         lanes.append({
@@ -4133,33 +4451,39 @@ def api_intelligence():
     # ── Broker Response Profile ───────────────────────────────────────────────
     # Group sends by domain
     sent_by_domain: dict = {}
+    contacted_by_domain: dict = {}
     all_sends = db.session.query(Send.recipient_email).filter_by(user_id=uid, status='sent').all()
     for s in all_sends:
         if not s.recipient_email or '@' not in s.recipient_email:
             continue
-        domain = s.recipient_email.lower().split('@')[1]
+        em = s.recipient_email.lower()
+        domain = em.split('@')[1]
         sent_by_domain[domain] = sent_by_domain.get(domain, 0) + 1
+        contacted_by_domain.setdefault(domain, set()).add(em)
 
-    # Group replies by domain
+    # Unique contacts per domain (not messages) — same basis as the reply rate
     reply_by_domain: dict = {}
     rr_by_domain: dict = {}
     interested_by_domain: dict = {}
     for r in all_replies:
         if not r.from_email or '@' not in r.from_email:
             continue
-        domain = r.from_email.lower().split('@')[1]
-        reply_by_domain[domain] = reply_by_domain.get(domain, 0) + 1
+        em = r.from_email.lower()
+        domain = em.split('@')[1]
+        answered_for = (r.matched_recipient or em).lower()
+        if answered_for in contacted_by_domain.get(answered_for.split('@')[-1], ()):
+            reply_by_domain.setdefault(answered_for.split('@')[-1], set()).add(answered_for)
         if _is_rate_request(r.body):
-            rr_by_domain[domain] = rr_by_domain.get(domain, 0) + 1
-        if r.status == 'interested':
-            interested_by_domain[domain] = interested_by_domain.get(domain, 0) + 1
+            rr_by_domain.setdefault(domain, set()).add(em)
+        if r.status in ('follow_up', 'interested'):   # same "Follow-up" as Analytics
+            interested_by_domain.setdefault(domain, set()).add(em)
 
     brokers = []
     for domain, sent_count in sorted(sent_by_domain.items(), key=lambda x: -x[1]):
-        replies_count = reply_by_domain.get(domain, 0)
-        rr_count      = rr_by_domain.get(domain, 0)
-        interested    = interested_by_domain.get(domain, 0)
-        reply_rate    = round(100 * replies_count / sent_count, 1) if sent_count > 0 else 0
+        replies_count = len(reply_by_domain.get(domain, ()))
+        rr_count      = len(rr_by_domain.get(domain, ()))
+        interested    = len(interested_by_domain.get(domain, ()))
+        reply_rate    = _reply_rate(len(contacted_by_domain.get(domain, ())), replies_count) or 0
         brokers.append({
             'domain': domain,
             'emails_sent': sent_count,
@@ -4247,21 +4571,20 @@ def api_reply_status():
         })
     if status in ('interested', 'follow_up') and reply_obj:
         from app.models import Reply as ReplyModel
-        reply_db = ReplyModel.query.filter_by(msg_id=reply_obj['msg_id']).first()
+        reply_db = ReplyModel.query.filter_by(user_id=current_user_id(), msg_id=reply_obj['msg_id']).first()
         if reply_db:
             add_to_followups(reply_db)
     if add_to_stop and reply_obj:
         uid = current_user_id()
         em = reply_obj.get('email','')
         if uid and em:
-            from app.models import StopListEntry
-            from sqlalchemy.exc import IntegrityError
             try:
-                db.session.add(StopListEntry(user_id=uid, type='email', value=em.lower()))
+                _add_to_stop_list(uid, em, reason='blocked from Replies')
+                _block_followup_contact(uid, em, 'blocked from Replies')
                 db.session.commit()
-                _cache_del(f'stop_list:{uid}')  # invalidate so next parse sees updated list
-            except IntegrityError:
+            except Exception:
                 db.session.rollback()
+                app.logger.exception('block from Replies failed for %s', em)
     audit_log('mark_reply', resource_type='reply',
               detail={'msg_id': msg_id, 'status': status, 'email': reply_obj.get('email') if reply_obj else None})
     return jsonify({'ok': True})
@@ -4287,7 +4610,6 @@ def health():
         'db':        db_ok,
         'scheduler': scheduler_ok,
         'scheduler_enabled': _scheduler_enabled,
-        'rate_limit_store': _limiter_storage,
         'rate_limit_shared': _limiter_shared,
     }), 200 if ok else 503
 
@@ -4399,6 +4721,52 @@ def get_fu_templates():
             core[level] = r.body
     return core
 
+def _reply_rate(contacted, replied):
+    """THE reply rate (Dashboard, Analytics, Intelligence, digest): the share of
+    unique contacts emailed in a window who replied — themselves or through a
+    colleague answering for them (Reply.matched_recipient) — always 0..100%."""
+    return round(100.0 * replied / contacted, 1) if contacted else None
+
+
+def _reply_cohort(uid, since=None):
+    """(contacted, replied): unique recipients emailed since `since` (all time
+    when None) and how many of them have replied since then."""
+    from app.models import Send, Reply
+    from sqlalchemy import func, distinct
+    rq = db.session.query(func.lower(Send.recipient_email).label('em')).filter(
+        Send.user_id == uid, Send.status == 'sent')
+    if since is not None:
+        rq = rq.filter(Send.sent_at >= since)
+    recipients = rq.distinct().subquery()
+    contacted = db.session.query(func.count()).select_from(recipients).scalar() or 0
+    # who answered: the sender, plus the emailed address a colleague answered for
+    answered = [db.select(func.lower(col).label('em')).where(Reply.user_id == uid, col.isnot(None))
+                for col in (Reply.from_email, Reply.matched_recipient)]
+    if since is not None:
+        answered = [a.where(Reply.received_at >= since) for a in answered]
+    responders = db.union(*answered).subquery()
+    replied = db.session.query(func.count(distinct(recipients.c.em))).filter(
+        recipients.c.em.in_(db.select(responders.c.em))).scalar() or 0
+    return contacted, replied
+
+
+def _fu_urgency(uid, now=None):
+    """The one definition of the Follow-up urgency buckets, used by the list,
+    its counters and select-all. A set date is a commitment regardless of which
+    engine set it (drip, cadence touch, manual schedule) — enabled flags only
+    gate auto-sends. "Today" ends at the user's local midnight."""
+    from app.models import FollowupContact as FC
+    now = now or _utcnow()
+    end_of_day = _local_day_start(_user_tz(uid), -1, now)
+    active = FC.state == 'active'
+    return {
+        'needs_action': db.and_(FC.stage == 'completed_fu3', active),
+        'overdue':      db.and_(FC.next_followup_at < now, active),
+        'due_today':    db.and_(FC.next_followup_at >= now, FC.next_followup_at < end_of_day, active),
+        'scheduled':    db.and_(FC.scheduled_once == True, FC.next_followup_at > now),
+    }
+
+
 @app.route('/api/followups')
 @login_required
 def api_followups_list():
@@ -4427,22 +4795,9 @@ def api_followups_list():
             FollowupContact.company_name.ilike(f'%{search}%'),
         ))
 
-    now = _utcnow()
-    end_of_day = now.replace(hour=23, minute=59, second=59)
-    if special == 'needs_action':
-        q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
-    elif special == 'overdue':
-        # a set date is a commitment regardless of which engine set it (drip,
-        # cadence touch or manual schedule) — enabled flags only gate auto-sends
-        q = q.filter(FollowupContact.next_followup_at < now,
-                     FollowupContact.state == 'active')
-    elif special == 'due_today':
-        q = q.filter(FollowupContact.next_followup_at <= end_of_day,
-                     FollowupContact.next_followup_at >= now,
-                     FollowupContact.state == 'active')
-    elif special == 'scheduled':
-        q = q.filter(FollowupContact.scheduled_once == True,
-                     FollowupContact.next_followup_at > now)
+    urg = _fu_urgency(uid)
+    if special in urg:
+        q = q.filter(urg[special])
 
     contacts = q.order_by(FollowupContact.created_at.desc()).all()
 
@@ -4454,11 +4809,11 @@ def api_followups_list():
         func.count(case((FollowupContact.state == 'loads', 1))).label('loads'),
         func.count(case((FollowupContact.state == 'blocked', 1))).label('blocked'),
         func.count(case((FollowupContact.state == 'closed', 1))).label('closed'),
-        func.count(case(((FollowupContact.stage == 'completed_fu3') & (FollowupContact.state == 'active'), 1))).label('needs_action'),
-        func.count(case(((FollowupContact.next_followup_at < now) & (FollowupContact.state == 'active'), 1))).label('overdue'),
-        func.count(case(((FollowupContact.next_followup_at <= end_of_day) & (FollowupContact.next_followup_at >= now) & (FollowupContact.state == 'active'), 1))).label('due_today'),
+        func.count(case((urg['needs_action'], 1))).label('needs_action'),
+        func.count(case((urg['overdue'], 1))).label('overdue'),
+        func.count(case((urg['due_today'], 1))).label('due_today'),
         func.count(case((FollowupContact.attention_at.isnot(None) & (FollowupContact.state == 'active'), 1))).label('attention'),
-        func.count(case(((FollowupContact.scheduled_once == True) & (FollowupContact.next_followup_at > now), 1))).label('scheduled'),
+        func.count(case((urg['scheduled'], 1))).label('scheduled'),
     ).filter(FollowupContact.user_id == uid).first()
 
     counts = {
@@ -4503,20 +4858,9 @@ def api_followups_ids():
             FollowupContact.contact_name.ilike(f'%{search}%'),
             FollowupContact.company_name.ilike(f'%{search}%'),
         ))
-    now = _utcnow()
-    if special == 'needs_action':
-        q = q.filter(FollowupContact.stage == 'completed_fu3', FollowupContact.state == 'active')
-    elif special == 'overdue':
-        q = q.filter(FollowupContact.next_followup_at < now, FollowupContact.state == 'active',
-                     FollowupContact.is_followup_enabled == True)
-    elif special == 'due_today':
-        end_of_day = now.replace(hour=23, minute=59, second=59)
-        q = q.filter(FollowupContact.next_followup_at <= end_of_day,
-                     FollowupContact.next_followup_at >= now,
-                     FollowupContact.state == 'active', FollowupContact.is_followup_enabled == True)
-    elif special == 'scheduled':
-        q = q.filter(FollowupContact.scheduled_once == True,
-                     FollowupContact.next_followup_at > now)
+    urg = _fu_urgency(uid)          # same buckets as the list and its counters
+    if special in urg:
+        q = q.filter(urg[special])
     ids = [row[0] for row in q.with_entities(FollowupContact.id).all()]
     return jsonify(ids=ids)
 
@@ -4760,10 +5104,15 @@ def api_followups_action():
         ok, err = _transition_state(fc, 'loads', actor_user_id=uid)
     elif action == 'block':
         ok, err = _transition_state(fc, 'blocked', reason=reason, actor_user_id=uid)
+        if ok:
+            _add_to_stop_list(uid, fc.contact_email, reason='blocked from Follow-up')
     elif action == 'close':
         ok, err = _transition_state(fc, 'closed', reason=reason, actor_user_id=uid)
     elif action == 'restart-fu1':
+        was_blocked = fc.state == 'blocked'
         ok, err = _restart_contact_from_fu1(fc, actor_user_id=uid)
+        if ok and was_blocked:
+            _remove_from_stop_list(uid, fc.contact_email)
     elif action == 'set-pipeline-stage':
         ok, err = _apply_pipeline_stage(fc, data.get('pipeline_stage'),
                                         actor_user_id=uid, reason=reason or 'manual')
@@ -4798,10 +5147,15 @@ def api_followups_bulk_action():
         if action in ('pause', 'resume', 'warm', 'loads', 'block', 'close'):
             target = 'active' if action == 'resume' else ('blocked' if action == 'block' else action)
             ok, err = _transition_state(fc, target, reason=reason, actor_user_id=uid)
+            if ok and target == 'blocked':
+                _add_to_stop_list(uid, fc.contact_email, reason='blocked from Follow-up')
             results.append({'id': cid, 'ok': ok, 'error': err})
 
         elif action == 'restart-fu1':
+            was_blocked = fc.state == 'blocked'
             ok, err = _restart_contact_from_fu1(fc, actor_user_id=uid)
+            if ok and was_blocked:
+                _remove_from_stop_list(uid, fc.contact_email)
             results.append({'id': cid, 'ok': ok, 'error': err})
 
         elif action == 'send-now':
@@ -5112,7 +5466,10 @@ def api_followups_pipeline_config():
                    triage_modes=modes, cadence=cadence,
                    touch_hour=_cfg.get('touch_hour', 'auto'),
                    digest_enabled=bool(_cfg.get('digest_enabled', True)),
-                   drip_auto_enabled=bool(ws.fu_auto_enabled) if ws else True,
+                   drip_auto_enabled=bool(ws.fu_auto_enabled) if ws else False,
+                   auto_send_enabled=bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True)),
+                   auto_send_preview=_auto_send_preview(ws),
+                   timezone=_cfg.get('timezone') or '',
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -5308,10 +5665,28 @@ def api_followups_pipeline_config_save():
                 cfg['touch_hour'] = max(0, min(23, int(th)))
             except (TypeError, ValueError):
                 pass
+    tz_new = data.get('timezone')
+    if isinstance(tz_new, str) and (tz_new == '' or _valid_tz(tz_new)) \
+            and tz_new != (cfg.get('timezone') or ''):
+        # A fixed touch hour is stored as a local hour: re-express it in the new
+        # zone so touches keep going out at the same moment.
+        th_cur = cfg.get('touch_hour', 'auto')
+        if th_cur != 'auto' and data.get('touch_hour') is None:
+            try:
+                old_tz, new_tz = _ws_tz(ws), _tz_named(tz_new)
+                moment = datetime.now(old_tz).replace(hour=int(th_cur), minute=0, second=0, microsecond=0)
+                cfg['touch_hour'] = moment.astimezone(new_tz).hour
+            except (TypeError, ValueError):
+                pass
+        cfg['timezone'] = tz_new
+        _cache_del(f'stats:{uid}:today', f'stats:{uid}:week', f'stats:{uid}:lifetime',
+                   f'ai_impact:{uid}', f'sent_log:{uid}')
     if isinstance(data.get('digest_enabled'), bool):
         cfg['digest_enabled'] = data['digest_enabled']
     if isinstance(data.get('drip_auto_enabled'), bool):
         ws.fu_auto_enabled = data['drip_auto_enabled']   # scheduler drip kill switch
+    if isinstance(data.get('auto_send_enabled'), bool):
+        cfg['auto_send_enabled'] = data['auto_send_enabled']   # master switch, all auto paths
 
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
     db.session.commit()
@@ -5332,7 +5707,10 @@ def api_followups_pipeline_config_save():
                    cadence=ws.get_cadence(),
                    touch_hour=(ws.pipeline_config or {}).get('touch_hour', 'auto'),
                    digest_enabled=bool((ws.pipeline_config or {}).get('digest_enabled', True)),
-                   drip_auto_enabled=bool(ws.fu_auto_enabled))
+                   drip_auto_enabled=bool(ws.fu_auto_enabled),
+                   auto_send_enabled=bool((ws.pipeline_config or {}).get('auto_send_enabled', True)),
+                   auto_send_preview=_auto_send_preview(ws),
+                   timezone=(ws.pipeline_config or {}).get('timezone') or '')
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])
@@ -5507,8 +5885,9 @@ def _dashboard_data(uid):
     from app.models import Reply, Send, FollowupContact, FollowupEvent, Workspace
     from sqlalchemy import func, case, distinct
     now = _utcnow()
-    sod = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    eod = now.replace(hour=23, minute=59, second=59)
+    tz = _user_tz(uid)
+    sod = _local_day_start(tz, 0, now)
+    eod = _local_day_start(tz, -1, now) - timedelta(microseconds=1)
 
     # Today's actions
     fc_active = FollowupContact.query.filter(FollowupContact.user_id == uid,
@@ -5550,7 +5929,8 @@ def _dashboard_data(uid):
                                db.or_(FollowupContact.last_activity_at < rot_cut,
                                       FollowupContact.last_activity_at.is_(None))).count()
     f30 = _funnel(30)
-    reply_rate = round(100.0 * f30['replied'] / f30['sent'], 1) if f30['sent'] else None
+    contacted30, replied30 = _reply_cohort(uid, now - timedelta(days=30))
+    reply_rate = _reply_rate(contacted30, replied30)
 
     booked_ids = [r[0] for r in db.session.query(distinct(FollowupEvent.followup_contact_id)).join(
         FollowupContact, FollowupEvent.followup_contact_id == FollowupContact.id
@@ -5565,19 +5945,16 @@ def _dashboard_data(uid):
         avg_touches = round(touches / len(booked_ids), 1)
 
     # 14-day activity
-    cut14 = sod - timedelta(days=13)
-    s_rows = dict(db.session.query(func.date(Send.sent_at), func.count()).filter(
-        Send.user_id == uid, Send.status == 'sent', Send.sent_at >= cut14
-    ).group_by(func.date(Send.sent_at)).all())
-    r_rows = dict(db.session.query(func.date(Reply.received_at), func.count()).filter(
-        Reply.user_id == uid, Reply.received_at >= cut14
-    ).group_by(func.date(Reply.received_at)).all())
+    cut14 = _local_day_start(tz, 13, now)
+    s_rows = Counter(_local_date(t, tz) for (t,) in db.session.query(Send.sent_at).filter(
+        Send.user_id == uid, Send.status == 'sent', Send.sent_at >= cut14))
+    r_rows = Counter(_local_date(t, tz) for (t,) in db.session.query(Reply.received_at).filter(
+        Reply.user_id == uid, Reply.received_at >= cut14))
     activity = []
+    first = _local_date(cut14, tz)
     for i in range(14):
-        d = (cut14 + timedelta(days=i)).date()
-        activity.append({'day': d.strftime('%b %d'),
-                         'sends': int(s_rows.get(str(d), s_rows.get(d, 0)) or 0),
-                         'replies': int(r_rows.get(str(d), r_rows.get(d, 0)) or 0)})
+        d = first + timedelta(days=i)
+        activity.append({'day': d.strftime('%b %d'), 'sends': s_rows.get(d, 0), 'replies': r_rows.get(d, 0)})
 
     # Top lanes by carrier replies (30d), enriched with gave-info counts
     cutoff30 = now - timedelta(days=30)
@@ -5591,13 +5968,14 @@ def _dashboard_data(uid):
 
     return dict(
         touches={'due_today': due_today, 'done_today': done_today,
-                 'next': ({'name': nxt.contact_name or nxt.contact_email,
+                 'next': ({'name': nxt.display_name,
                            'route': nxt.current_route or ''} if nxt else None)},
         attention=attention,
         replies_pending=replies_pending,
         funnel={'7': _funnel(7), '30': f30},
         health={'no_next_step': no_next, 'rotting': rotting,
-                'reply_rate': reply_rate, 'sends_30d': f30['sent'],
+                'reply_rate': reply_rate, 'contacted_30d': contacted30, 'replied_30d': replied30,
+                'sends_30d': f30['sent'],
                 'replies_30d': f30['replied'], 'avg_touches_to_booked': avg_touches},
         activity=activity,
         top_lanes=top_lanes,
@@ -5726,11 +6104,21 @@ def api_followups_notes():
     fc = db.session.get(FollowupContact, data.get('id'))
     if not fc or fc.user_id != uid:
         return jsonify(error='Not found'), 404
-    fc.notes = data.get('notes', '')
+    text = (data.get('notes') or '').strip()[:2000]
+    if data.get('append'):
+        # Add a dated line under the existing notes instead of replacing them
+        if not text:
+            return jsonify(error='Note is empty'), 400
+        line = f"[{_utcnow().strftime('%Y-%m-%d')}] {text}"
+        fc.notes = f"{fc.notes.rstrip()}\n{line}" if (fc.notes or '').strip() else line
+        logged = text
+    else:
+        fc.notes = text
+        logged = fc.notes
     fc.updated_at = _utcnow()
-    _record_event(fc, 'note_added', actor_user_id=uid, notes=fc.notes[:100])
+    _record_event(fc, 'note_added', actor_user_id=uid, notes=logged[:100])
     db.session.commit()
-    return jsonify(ok=True)
+    return jsonify(ok=True, notes=fc.notes)
 
 
 @app.route('/api/followups/candidates')
@@ -6108,6 +6496,8 @@ def _check_reply_stops_followup(reply_email, user_id):
         if not _schedule_touch(fc, ws, force=True):
             fc.next_followup_at = None
         _record_event(fc, 'reply_detected', actor_type='system', notes=f'Reply from {email}')
+    elif fc.touch_enabled and fc.state == 'active':
+        _schedule_touch(fc, ws, force=True)
 
 
 def _get_fu_templates_for_user(uid):
@@ -6160,12 +6550,108 @@ def _next_recurring_datetime(recurring_days, recurring_time):
             return candidate
     raise ValueError(f'No valid day found — unreachable with valid input: days={days}')
 
+def _auto_send_on(workspace_id, cache):
+    """Workspace master switch over every automatic send path (default on)."""
+    if workspace_id not in cache:
+        from app.models import Workspace
+        ws = db.session.get(Workspace, workspace_id) if workspace_id else None
+        cache[workspace_id] = bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True))
+    return cache[workspace_id]
+
+
+def _would_auto_send(fc, ws):
+    """True if the scheduler would email this due contact without a human click."""
+    if fc.scheduled_once or fc.recurring_enabled:
+        return True
+    if fc.is_followup_enabled:
+        return bool(ws and ws.fu_auto_enabled and fc.stage in ('fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled'))
+    if fc.touch_enabled:
+        return _cadence_for_stage(ws, fc.pipeline_stage or 1).get('mode') == 'auto'
+    return False
+
+
+def _auto_send_preview(ws, hours=24):
+    """How many contacts the scheduler would email on its own in the next
+    `hours` (overdue included), split by path. Counted as if both the master
+    switch and the FU1–FU3 switch were on, so the Settings banner can update
+    live while the user flips them."""
+    from app.models import FollowupContact
+    out = {'drip': 0, 'touches': 0, 'scheduled': 0}
+    if not ws:
+        return out
+    horizon = _utcnow() + timedelta(hours=hours)
+    due = FollowupContact.query.filter(
+        FollowupContact.workspace_id == ws.id,
+        FollowupContact.state == 'active',
+        FollowupContact.next_followup_at.isnot(None),
+        FollowupContact.next_followup_at <= horizon,
+    ).all()
+    for fc in due:
+        if fc.scheduled_once or fc.recurring_enabled:
+            out['scheduled'] += 1
+        elif fc.is_followup_enabled:
+            if fc.stage in ('fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled'):
+                out['drip'] += 1
+        elif fc.touch_enabled and _cadence_for_stage(ws, fc.pipeline_stage or 1).get('mode') == 'auto':
+            out['touches'] += 1
+    return out
+
+
+def _prefetch_replies_before_sending(now):
+    """Pull fresh Gmail replies for every user about to get automatic sends in
+    this run, so a contact who already answered is stopped before we email
+    them. Returns the user ids whose reply check failed — their automatic
+    sends are held until the next run rather than risk emailing a replier."""
+    from app.models import FollowupContact, Workspace
+    due = FollowupContact.query.filter(
+        FollowupContact.state == 'active',
+        FollowupContact.next_followup_at <= now,
+        db.or_(FollowupContact.is_followup_enabled == True,
+               FollowupContact.scheduled_once == True,
+               FollowupContact.recurring_enabled == True,
+               FollowupContact.touch_enabled == True),
+    ).all()
+    gate, uids = {}, set()
+    for fc in due:
+        if fc.user_id in uids or not _auto_send_on(fc.workspace_id, gate):
+            continue
+        ws = db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None
+        if _would_auto_send(fc, ws):
+            uids.add(fc.user_id)
+    hold = set()
+    for uid in uids:
+        try:
+            res = fetch_replies_from_gmail(uid=uid, rate_limit=False) or {}
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('pre-send reply check crashed for uid=%s', uid)
+            hold.add(uid)
+            continue
+        err = str(res.get('error') or '')
+        # not connected = no Gmail API to check (legacy app-password accounts)
+        if err and 'not connected' not in err.lower():
+            app.logger.warning('pre-send reply check failed for uid=%s: %s — holding auto-sends', uid, err)
+            hold.add(uid)
+    return hold
+
+
 def _run_scheduled_followups():
     """Process due follow-up contacts and send emails. Called from daemon thread.
     Uses SELECT FOR UPDATE SKIP LOCKED on PostgreSQL to prevent duplicate sends."""
     from app.models import FollowupContact, EmailAccount, Workspace
     now = _utcnow()
     with app.app_context():
+        try:
+            hold_uids = _prefetch_replies_before_sending(now)
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('pre-send reply check failed — holding all auto-sends this run')
+            return 0
+        _gate = {}
+
+        def _allowed(c):
+            return c.user_id not in hold_uids and _auto_send_on(c.workspace_id, _gate)
+
         try:
             # Workspace kill switch: with fu_auto_enabled off, due drip contacts
             # stay in Overdue/Today's touches for manual sending — the scheduler
@@ -6192,6 +6678,8 @@ def _run_scheduled_followups():
         sent_total = 0
         for fc in contacts:
             try:
+                if not _allowed(fc):
+                    continue
                 if fc.state != 'active' or not fc.is_followup_enabled:
                     continue
                 if fc.stage not in STAGE_TO_TEMPLATE:
@@ -6230,6 +6718,7 @@ def _run_scheduled_followups():
                         fc.is_followup_enabled = False
                         fc.next_followup_at = None
                         fc.completed_fu3_at = now
+                        _schedule_touch(fc, force=True)   # drip done → cadence takes over (same as manual send)
 
                     _record_event(fc, 'auto_send', actor_type='scheduler',
                                   from_stage=old_stage, to_stage=fc.stage)
@@ -6266,7 +6755,7 @@ def _run_scheduled_followups():
 
         sched_total = 0
         for fc in sched_contacts:
-            if fc.id in processed_ids:
+            if fc.id in processed_ids or not _allowed(fc):
                 continue
             try:
                 if fc.state != 'active':
@@ -6324,8 +6813,8 @@ def _run_scheduled_followups():
 
         rec_total = 0
         for fc in recurring:
-            if fc.id in processed_ids:
-                continue  # already sent in Path 1 this run
+            if fc.id in processed_ids or not _allowed(fc):
+                continue  # already sent in Path 1 this run, or auto-send held/off
             try:
                 if fc.state != 'active' or not fc.recurring_enabled:
                     continue
@@ -6396,7 +6885,7 @@ def _run_scheduled_followups():
         from app.models import Workspace as _WS
         touch_total = 0
         for fc in touches:
-            if fc.id in processed_ids:
+            if fc.id in processed_ids or not _allowed(fc):
                 continue
             try:
                 ws = db.session.get(_WS, fc.workspace_id) if fc.workspace_id else None
@@ -6438,7 +6927,7 @@ def _run_scheduled_followups():
         if touch_total:
             app.logger.info(f'FU scheduler: sent {touch_total} cadence touches')
 
-        # ── Path 4: Weekly digest emails (Mondays, after 06:00 UTC) ──────────
+        # ── Path 4: Weekly digest emails (Mondays, after 06:00 user time) ────
         try:
             _maybe_send_digests(now)
         except Exception as e:
@@ -6500,16 +6989,18 @@ def _send_self_email(uid, subject, body):
 
 
 def _maybe_send_digests(now):
-    """Mondays after 06:00 UTC: one digest per workspace owner, deduped by date."""
+    """Mondays after 06:00 in each owner's time zone: one digest per workspace
+    owner, deduped by that local date."""
     from app.models import Workspace
-    if now.weekday() != 0 or now.hour < 6:
-        return 0
-    today = now.strftime('%Y-%m-%d')
     sent = 0
     for ws in Workspace.query.all():
         cfg = dict(ws.pipeline_config or {})
         if not cfg.get('digest_enabled', True):
             continue
+        local = now.replace(tzinfo=UTC).astimezone(_ws_tz(ws))
+        if local.weekday() != 0 or local.hour < 6:
+            continue
+        today = local.strftime('%Y-%m-%d')
         if cfg.get('last_digest_at') == today:
             continue
         ok, _err = _send_self_email(ws.owner_id, 'Your weekly DAT Mailer digest',
@@ -6564,6 +7055,36 @@ def auto_create_admin():
         db.session.commit()
         print(f"✓ Admin account + workspace auto-created for {admin_email}")
 
+def _migrate_reply_msg_id_per_user():
+    """replies.msg_id used to be unique across ALL users, so an email that
+    reached two users made the second one's fetch update the first one's reply.
+    Swap the global unique constraint/index for UNIQUE (user_id, msg_id).
+    PostgreSQL only (prod); idempotent. SQLite dev DBs get it from create_all."""
+    if db.engine.dialect.name != 'postgresql':
+        return
+    with db.engine.connect() as conn:
+        msg_col = """(SELECT attnum FROM pg_attribute
+                      WHERE attrelid = 'replies'::regclass AND attname = 'msg_id')"""
+        old_constraints = [r[0] for r in conn.execute(db.text(f"""
+            SELECT conname FROM pg_constraint
+            WHERE conrelid = 'replies'::regclass AND contype = 'u'
+              AND conkey = ARRAY[{msg_col}]::smallint[]""")).fetchall()]
+        old_indexes = [r[0] for r in conn.execute(db.text(f"""
+            SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid
+            WHERE x.indrelid = 'replies'::regclass AND x.indisunique AND NOT x.indisprimary
+              AND x.indnatts = 1 AND x.indkey[0] = {msg_col}
+              AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid = x.indexrelid)""")).fetchall()]
+        conn.execute(db.text(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_replies_user_msg ON replies (user_id, msg_id)'))
+        for name in old_constraints:
+            conn.execute(db.text(f'ALTER TABLE replies DROP CONSTRAINT "{name}"'))
+        for name in old_indexes:
+            conn.execute(db.text(f'DROP INDEX IF EXISTS "{name}"'))
+        conn.commit()
+        if old_constraints or old_indexes:
+            print(f'✓ Migration: replies.msg_id now unique per user (dropped {old_constraints + old_indexes})')
+
+
 with app.app_context():
     db.create_all()   # Creates all tables if they don't exist (safe to run repeatedly)
     # Inline migrations — safe to run on every startup (idempotent ADD COLUMN IF NOT EXISTS)
@@ -6595,6 +7116,8 @@ with app.app_context():
         # Follow-up cadence engine (Today's touches)
         ('followup_contacts', 'touch_enabled',       'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('followup_contacts', 'attention_at',        'TIMESTAMP'),
+        ('users',             'session_version',     'INTEGER NOT NULL DEFAULT 0'),
+        ('replies',           'matched_recipient',   'VARCHAR(255)'),
         # Bulk follow-up send jobs (SendJob kind discriminator + per-contact log).
         # Inline delivery is REQUIRED: prod schema changes only apply here — the
         # Alembic releaseCommand does not run against the live DB (a3b4c5d6e7f8
@@ -6655,6 +7178,10 @@ with app.app_context():
             _conn.commit()
     except Exception:
         pass
+    try:
+        _migrate_reply_msg_id_per_user()
+    except Exception as _e:
+        print(f'replies msg_id migration skipped: {_e}')
     # Mark any DB jobs still "running" as "interrupted" (handles deploy mid-send)
     try:
         from app.models import SendJob

@@ -28,6 +28,9 @@ class User(db.Model):
     role         = db.Column(db.String(20), default='user')    # 'admin' | 'user'
     invited_by   = db.Column(db.String(255))
     followup_view_mode = db.Column(db.String(20), default='table', server_default='table')  # 'table' | 'kanban'
+    # Bumped on logout / password reset; a session cookie carrying an older
+    # value is rejected, so a stolen cookie dies with the next logout.
+    session_version = db.Column(db.Integer, default=0, nullable=False, server_default='0')
     created_at   = db.Column(db.DateTime, default=_utcnow)
     last_login   = db.Column(db.DateTime)
 
@@ -165,7 +168,7 @@ class Workspace(db.Model):
     name             = db.Column(db.String(255), nullable=False)
     owner_id         = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     plan             = db.Column(db.String(20), default='free')  # 'free' | 'starter' | 'pro'
-    fu_auto_enabled  = db.Column(db.Boolean, default=True, nullable=False, server_default='1')
+    fu_auto_enabled  = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     pipeline_config  = db.Column(db.JSON, nullable=True)   # {stages: [...], reply_filters: [...]}
     created_at       = db.Column(db.DateTime, default=_utcnow)
 
@@ -351,7 +354,7 @@ class Reply(db.Model):
     id           = db.Column(db.String(36), primary_key=True, default=_uuid)
     user_id      = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     workspace_id = db.Column(db.String(36), db.ForeignKey('workspaces.id'))
-    msg_id       = db.Column(db.String(512), unique=True, nullable=False)
+    msg_id       = db.Column(db.String(512), nullable=False)   # unique per user (uq_replies_user_msg)
     thread_id    = db.Column(db.String(255), nullable=True)   # Gmail threadId
     from_email   = db.Column(db.String(255), default='')
     from_name    = db.Column(db.String(255), default='')
@@ -360,6 +363,9 @@ class Reply(db.Model):
     route        = db.Column(db.String(512), default='')
     status       = db.Column(db.String(30), default='new')  # 'new' | 'interested' | 'not_interested'
     reply_filter_key = db.Column(db.String(50), nullable=True)   # pipeline reply-filter tag
+    # Set when a colleague answered for the address we emailed (we wrote to
+    # dispatch@abc.com, john@abc.com replied): the original recipient, lowercased.
+    matched_recipient = db.Column(db.String(255), nullable=True)
     auto_advanced    = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     # Semi-automatic triage: category detected at ingest + what (if anything) was auto-applied
     triage_category   = db.Column(db.String(20), nullable=True)   # 'negative'|'gave_info'|'rate_request'|'auto_reply'|NULL
@@ -375,6 +381,9 @@ class Reply(db.Model):
         db.Index('ix_reply_user_received', 'user_id', 'received_at'),
         db.Index('ix_reply_user_status', 'user_id', 'status'),
         db.Index('ix_reply_user_email', 'user_id', 'from_email'),
+        # The same email can land in two users' inboxes (CC, shared threads) —
+        # Message-ID is only unique within one mailbox.
+        db.UniqueConstraint('user_id', 'msg_id', name='uq_replies_user_msg'),
     )
 
     def to_dict(self):
@@ -384,6 +393,7 @@ class Reply(db.Model):
             'subject': self.subject, 'body': self.body,
             'route': self.route, 'status': self.status,
             'reply_filter_key': self.reply_filter_key or '',
+            'matched_recipient': self.matched_recipient or '',
             'triage_category': self.triage_category or '',
             'triage_confidence': self.triage_confidence,
             'auto_processed': bool(self.auto_processed),
@@ -509,6 +519,20 @@ class FollowupContact(db.Model):
         db.Index('ix_fc_user_state', 'user_id', 'state'),
     )
 
+    @property
+    def display_name(self):
+        """The one label used for this contact across the UI and the digest:
+        the person's name if known, else the company, else the email.
+        contact_name often holds a raw From header ("Laura Neal <laura@x.com>")
+        or a bare address, so only the name part counts."""
+        from email.utils import parseaddr
+        raw = (self.contact_name or '').strip()
+        name = parseaddr(raw)[0] if '<' in raw else raw
+        name = name.strip().strip('"\'').strip()
+        if '@' in name:
+            name = ''
+        return name or (self.company_name or '').strip() or (self.contact_email or '')
+
     def to_dict(self):
         fmt = lambda dt: dt.strftime('%Y-%m-%dT%H:%M:%SZ') if dt else None
         return {
@@ -516,6 +540,7 @@ class FollowupContact(db.Model):
             'contact_email': self.contact_email,
             'contact_name': self.contact_name or '',
             'company_name': self.company_name or '',
+            'display_name': self.display_name,
             'state': self.state,
             'stage': self.stage,
             'pipeline_stage': self.pipeline_stage or 1,

@@ -116,6 +116,19 @@ URL: `/admin`
 Головна сторінка: `/api/dashboard` (спільне `_dashboard_data` з дайджестом) —
 дії дня, воронка 7/30д з івент-логу, здоровʼя бази, activity 14д, top lanes.
 
+## Інваріанти циклу 2026-09 (деталі — docs/PROJECT_OVERVIEW.md)
+- Автовідправка: `pipeline_config.auto_send_enabled` — головний вимикач усіх авто-шляхів;
+  шедулер перед відправкою сам перевіряє реплаї (`_prefetch_replies_before_sending`).
+- Overdue/Today — тільки через `_fu_urgency(uid)`; reply rate — тільки `_reply_cohort` + `_reply_rate`.
+- Відповідь колеги (писали dispatch@abc.com, відповів john@abc.com) — норма: `_ColleagueReplyMatcher`
+  приймає її (тред Gmail або корпоративний домен + маршрут у темі), `Reply.matched_recipient` = кому писали;
+  зупиняє дрип цього контакта і рахується в reply rate.
+- «Сьогодні» — за поясом юзера (`pipeline_config.timezone`, `_user_tz`, `_local_day_start`);
+  фіксована touch_hour — локальна година. БД-час лишається naive UTC.
+- Імʼя контакта в UI — `FollowupContact.display_name` (JS `fuName/fuSub`).
+- `replies`: UNIQUE (user_id, msg_id); будь-який пошук за msg_id — з фільтром user_id.
+- Зміни схеми для проду — рантайм-міграції при старті в app.py (Alembic на Railway не покладатися).
+
 ## Процес деплою (конвенція цього репо)
 - Розробка на робочій гілці → тести → пуш → **деплой у main ТІЛЬКИ після апрува юзера**.
 - Перед деплоєм створюється rollback-гілка `rollback/<name>`; відкат = force-push її в main.
@@ -126,5 +139,5 @@ URL: `/admin`
 ```bash
 python -m pytest tests/test_parser.py tests/test_triage.py tests/test_touch.py tests/test_pipeline_kanban.py -q
 ```
-Пофайлово зелені (~100). Повний прогін `tests/` має передіснуючі флейки ізоляції —
+Пофайлово зелені (~250, 22 файли; test_followup_stoplist ~7 хв). Повний прогін `tests/` має передіснуючі флейки ізоляції —
 ганяти пофайлово. JS: `node --check` на витягнутих <script> з index.html.

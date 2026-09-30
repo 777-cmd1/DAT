@@ -653,6 +653,38 @@ select { cursor: pointer; }
 @media (max-width: 1080px) {
   .settings-grid { grid-template-columns: 1fr; }
 }
+/* Settings tabs: one tab's cards at a time, each tab has its own save bar */
+.settings-tabs {
+  display: flex; gap: 4px; margin: 0 0 18px; padding: 4px;
+  width: fit-content; max-width: 100%;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface2);
+}
+.settings-tab {
+  border: 0; background: transparent; color: var(--text2);
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 16px; border-radius: 9px; cursor: pointer;
+}
+.settings-tab:hover { color: var(--text); }
+.settings-tab.active { background: var(--accent-glow); color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.settings-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#settingsShell { max-width: 880px; }
+#settingsShell .settings-grid { display: contents; }
+#settingsShell[data-active="account"]    [data-stab]:not([data-stab="account"]),
+#settingsShell[data-active="sending"]    [data-stab]:not([data-stab="sending"]),
+#settingsShell[data-active="automation"] [data-stab]:not([data-stab="automation"]),
+#settingsShell[data-active="pipeline"]   [data-stab]:not([data-stab="pipeline"]) { display: none; }
+.auto-banner {
+  margin-bottom: 14px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface2);
+}
+.auto-banner.on  { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); background: var(--green-dim); }
+.auto-banner.on.idle { background: var(--surface2); }
+.auto-banner.off { border-color: color-mix(in srgb, var(--yellow) 50%, var(--border)); background: var(--yellow-dim); }
+.auto-banner-head { font-size: 14px; font-weight: 700; color: var(--text); }
+.auto-banner-sub { margin-top: 3px; font-size: 12px; color: var(--text2); }
+.auto-banner-unsaved { font-weight: 500; font-size: 12px; color: var(--text2); }
+.auto-sub-row { margin-left: 28px; }
+.settings-toggle-row.is-off { opacity: .5; }
 @media (max-width: 760px) {
   .settings-followup-grid { grid-template-columns: 1fr; }
   .settings-ready-row,
@@ -1220,7 +1252,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
   position:relative;
 }
 .tq-card:hover { box-shadow:0 4px 18px rgba(15,23,42,.07); border-color:var(--border-h); }
-.tq-card.state-new       { border-left-color:#f87171; }
+.tq-card.state-new       { border-left-color:var(--blue); }   /* no category yet — Negative owns red */
 .tq-card.state-viewed    { border-left-color:#60a5fa; }
 .tq-card.state-follow_up { border-left-color:#fb923c; }
 .tq-card.state-interested{ border-left-color:var(--accent); }
@@ -1432,6 +1464,15 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-search:focus { outline:none; border-color:var(--accent); }
 /* Stats bar */
 .fu-stats-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+.terms-btn { margin-left:8px; border:1px solid var(--border); background:transparent; color:var(--text2); font:inherit; font-size:11px; font-weight:600; padding:2px 9px; border-radius:10px; cursor:pointer; vertical-align:middle; }
+.terms-btn:hover { color:var(--text); border-color:var(--border-h); }
+.terms-group { margin-top:16px; }
+.terms-title { font-size:12px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.terms-title span { font-weight:500; color:var(--text3); margin-left:6px; }
+.terms-row { display:grid; grid-template-columns:120px 1fr; gap:10px; padding:5px 0; border-top:1px solid var(--border); font-size:12px; color:var(--text2); }
+.terms-row b { color:var(--text); font-weight:600; }
+.fu-pstage { display:inline-flex; align-items:baseline; gap:6px; font-size:12px; font-weight:600; color:var(--text); line-height:1.3; min-width:90px; }
+.fu-pstage-dot { width:8px; height:8px; border-radius:50%; flex:none; transform:translateY(-1px); }
 .fu-stat-pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; background:var(--surface); border:1px solid var(--border); color:var(--text3); white-space:nowrap; }
 .fu-stat-pill .fu-stat-num { font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--text); margin-right:2px; }
 .fu-stat-pill.pill-active .fu-stat-num { color:var(--accent); }
@@ -1744,7 +1785,11 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .tq-card.tq-cat-rate_request { border-left:3px solid #f59f00; }
 .tq-card.tq-cat-gave_info    { border-left:3px solid #37b24c; }
 .tq-card.tq-cat-auto_reply   { border-left:3px solid #868e96; }
-.tq-action.tq-emph { box-shadow:0 0 0 1.5px currentColor inset; font-weight:700; }
+.tq-action.tq-emph { background:color-mix(in srgb, currentColor 11%, transparent); }
+.tq-action-no.tq-emph { color:var(--text); }
+.tq-for { font-family:inherit; font-size:10.5px; color:var(--text2); margin-left:6px; }
+.tq-action-label { display:flex; flex-direction:column; align-items:flex-start; text-align:left; line-height:1.15; }
+.tq-rec-tag { font-size:8.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; opacity:.75; margin-top:2px; }
 .tq-auto-strip { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:8px 12px; font-size:12px; }
 .tq-auto-strip-head { display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text2); font-weight:600; }
 .tq-auto-strip-head .grow { flex:1; }
@@ -2428,10 +2473,10 @@ html:not([data-theme="dark"]) .send-cta-bar {
     <nav class="nav">
       <!-- PRIMARY: core workflow -->
       <div class="nav-section">Workflow</div>
-      <div class="nav-item" onclick="nav('dashboard',this)">
+      <div class="nav-item active" onclick="nav('dashboard',this)">
         <i class="nav-icon ph-bold ph-squares-four" aria-hidden="true"></i> Dashboard
       </div>
-      <div class="nav-item active" onclick="nav('send',this)">
+      <div class="nav-item" onclick="nav('send',this)">
         <i class="nav-icon ph-bold ph-paper-plane-tilt" aria-hidden="true"></i> Send
       </div>
       <div class="nav-item" onclick="nav('replies',this)">
@@ -2490,7 +2535,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
   <main class="main">
 
     <!-- SEND -->
-    <div class="page active" id="page-send">
+    <div class="page" id="page-send">
       <div class="page-header">
         <div class="page-title">Send Emails</div>
         <div class="page-sub">Paste DAT text → parse → send</div>
@@ -2740,7 +2785,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
         <div class="an-kpi-sub" id="anReplyRateSub"></div>
       </div>
       <div class="an-kpi">
-        <div class="an-kpi-label">Interested</div>
+        <div class="an-kpi-label" title="Replies you moved to Follow-up">Follow-up</div>
         <div class="an-kpi-value green" id="anInterested">—</div>
         <div class="an-kpi-sub" id="anInterestedSub"></div>
       </div>
@@ -2777,17 +2822,17 @@ html:not([data-theme="dark"]) .send-cta-bar {
     <div class="an-section-sub">Is targeting attracting the right kind of replies?</div>
     <div id="anQualityWrap">
       <div class="an-quality-row">
-        <div class="an-quality-label green-text">Interested</div>
+        <div class="an-quality-label green-text">Follow-up</div>
         <div class="an-quality-bar-wrap"><div class="an-quality-bar green-bar" id="anBarInterested" style="width:0%"></div></div>
         <div class="an-quality-stat" id="anStatInterested">—</div>
       </div>
       <div class="an-quality-row">
-        <div class="an-quality-label muted-text">Neutral</div>
+        <div class="an-quality-label muted-text">Needs Action</div>
         <div class="an-quality-bar-wrap"><div class="an-quality-bar blue-bar" id="anBarNeutral" style="width:0%"></div></div>
         <div class="an-quality-stat" id="anStatNeutral">—</div>
       </div>
       <div class="an-quality-row">
-        <div class="an-quality-label red-text">Not Interested</div>
+        <div class="an-quality-label red-text">Ignored</div>
         <div class="an-quality-bar-wrap"><div class="an-quality-bar red-bar" id="anBarNotInt" style="width:0%"></div></div>
         <div class="an-quality-stat" id="anStatNotInt">—</div>
       </div>
@@ -2911,7 +2956,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
 
     <!-- REPLIES TRIAGE QUEUE -->
     <!-- DASHBOARD PAGE -->
-    <div class="page" id="page-dashboard">
+    <div class="page active" id="page-dashboard">
       <div class="page-header">
         <div class="page-title">Dashboard</div>
         <div class="page-sub">Today's actions first, funnel and base health below</div>
@@ -2922,7 +2967,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
     <div class="page" id="page-replies">
       <div class="page-header">
         <div class="page-title">Replies</div>
-        <div class="page-sub" id="fetchStatus">Lead triage queue — classify each contact in one click</div>
+        <div class="page-sub"><span id="fetchStatus">Lead triage queue — classify each contact in one click</span>
+          <button class="terms-btn" onclick="openTermsGlossary()" title="What the labels mean">ⓘ Terms</button></div>
       </div>
 
       <!-- Top bar: progress + check gmail -->
@@ -2931,8 +2977,6 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <span class="tq-progress-label" id="tqProgressLabel">Loading...</span>
           <div class="tq-progress-track"><div class="tq-progress-fill" id="tqProgressFill" style="width:0%"></div></div>
           <span class="tq-inbox-zero" id="tqInboxZero" style="display:none">✓ All clear</span>
-          <span class="tq-queue-chip">Need decision <strong id="tqNeedsDecision">0</strong></span>
-          <span class="tq-queue-chip">Processed <strong id="tqProcessedCount">0</strong></span>
         </div>
         <button class="btn btn-primary" id="fetchBtn" onclick="fetchReplies()">
           <i class="ph-bold ph-arrows-clockwise" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Check Gmail
@@ -2944,8 +2988,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
         <input id="repliesSearch" class="tq-search" placeholder="Search company or email..." oninput="queueRepliesRefresh()">
         <div class="tq-filters">
           <button class="tq-tab active" id="tqf-all"      onclick="setFilter('all')">All <span class="tq-tab-count" id="tqc-all">0</span></button>
-          <button class="tq-tab" id="tqf-needs_action"   onclick="setFilter('needs_action')">Needs Action <span class="tq-tab-count" id="tqc-needs_action">0</span></button>
-          <button class="tq-tab" id="tqf-new"             onclick="setFilter('new')">● New <span class="tq-tab-count" id="tqc-new">0</span></button>
+          <button class="tq-tab" id="tqf-needs_action"   onclick="setFilter('needs_action')" title="Replies still waiting for your decision">Needs Action <span class="tq-tab-count" id="tqc-needs_action">0</span></button>
           <button class="tq-tab" id="tqf-follow_up"       onclick="setFilter('follow_up')"><i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-tab-count" id="tqc-follow_up">0</span></button>
           <button class="tq-tab" id="tqf-ignored"         onclick="setFilter('ignored')"><i class="ph-bold ph-prohibit"></i> Ignored <span class="tq-tab-count" id="tqc-ignored">0</span></button>
         </div>
@@ -2965,7 +3008,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
       <div class="fu-page-header">
         <div>
           <div class="page-title">Follow-up Queue</div>
-          <div class="page-sub">Urgency-first queue for daily follow-up execution</div>
+          <div class="page-sub">Urgency-first queue for daily follow-up execution
+            <button class="terms-btn" onclick="openTermsGlossary()" title="What the labels mean">ⓘ Terms</button></div>
         </div>
         <div class="fu-header-actions">
           <div class="fu-tabs fu-tabs-compact">
@@ -2991,10 +3035,10 @@ html:not([data-theme="dark"]) .send-cta-bar {
               <input class="fu-search fu-search-wide" id="fuSearch" placeholder="Search company, contact, or email..." oninput="renderFuCurrentView(); renderFuSelection()">
               <div class="fu-segment" id="fuUrgencySegment">
                 <button class="fu-segment-btn active" id="fuf-special-all" onclick="setFuSpecialFilter('')">All</button>
-                <button class="fu-segment-btn" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')">Overdue <span id="fuOverdueCount"></span></button>
-                <button class="fu-segment-btn" id="fuf-special-due_today" onclick="setFuSpecialFilter('due_today')">Today</button>
-                <button class="fu-segment-btn" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')">Needs Action <span id="fuNeedsActionCount"></span></button>
-                <button class="fu-segment-btn" id="fuf-special-scheduled" onclick="setFuSpecialFilter('scheduled')">Scheduled <span id="fuScheduledCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')" title="Past due — needs action now">Overdue <span id="fuOverdueCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-due_today" onclick="setFuSpecialFilter('due_today')" title="Due later today">Today <span id="fuTodayCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')" title="FU1–FU3 sequence finished">Needs Action <span id="fuNeedsActionCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-scheduled" onclick="setFuSpecialFilter('scheduled')" title="One-time future sends">Scheduled <span id="fuScheduledCount"></span></button>
               </div>
             </div>
             <div class="fu-toolbar-side">
@@ -3007,7 +3051,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
                 <option value="active">Active</option>
                 <option value="paused">Paused</option>
                 <option value="warm">Warm</option>
-                <option value="loads">Loads</option>
+                <option value="loads">Booked</option>
                 <option value="blocked">Blocked</option>
                 <option value="closed">Closed</option>
               </select>
@@ -3029,7 +3073,6 @@ html:not([data-theme="dark"]) .send-cta-bar {
 
           <div id="fuTouchPanel" class="fu-touch-panel" style="display:none"></div>
 
-          <div class="fu-summary-strip" id="fuStatsBar"></div>
 
           <div class="fu-bulk-bar" id="fuBulkBar" style="display:none">
             <div class="fu-bulk-group">
@@ -3043,7 +3086,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
               <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal(null, 'recurring')">Set Recurring</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('pause')">Pause</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('resume')">Resume</button>
-              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('loads')">Mark Loads</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('loads')">Mark Booked</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('warm')">Mark Warm</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('cancel-schedule')">Cancel Schedule</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('restart-fu1')">Restart Follow-up</button>
@@ -3074,8 +3117,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
                   </th>
                   <th>Contact</th>
                   <th>State</th>
-                  <th>Stage</th>
-                  <th class="fu-th-sort" onclick="setFuSort('next_followup_at')" title="Sort by next follow-up">Next Follow-up <span class="fu-sort-arrow" id="fuSortArrow-next_followup_at"></span></th>
+                  <th title="Pipeline stage (FU1–FU3 step shown while the sequence runs)">Stage</th>
+                  <th class="fu-th-sort" onclick="setFuSort('next_followup_at')" title="Sort by next touch">Next touch <span class="fu-sort-arrow" id="fuSortArrow-next_followup_at"></span></th>
                   <th class="fu-th-sort" onclick="setFuSort('last_activity_at')" title="Sort by last activity">Last Activity <span class="fu-sort-arrow" id="fuSortArrow-last_activity_at"></span></th>
                   <th>Route</th>
                   <th>Action</th>
@@ -3310,7 +3353,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
             <th onclick="sortIntelTable('brokers','replies',this)">Replies ↕</th>
             <th onclick="sortIntelTable('brokers','reply_rate',this)">Reply Rate ↕</th>
             <th onclick="sortIntelTable('brokers','rate_requests',this)">Rate Reqs ↕</th>
-            <th onclick="sortIntelTable('brokers','interested',this)">Interested ↕</th>
+            <th onclick="sortIntelTable('brokers','interested',this)" title="Replies you moved to Follow-up">Follow-up ↕</th>
           </tr>
         </thead>
         <tbody id="intel-brokers-body">
@@ -3556,8 +3599,14 @@ html:not([data-theme="dark"]) .send-cta-bar {
         <div class="page-title">Settings</div>
         <div class="page-sub">Manage connection, sender identity, and default sending behavior</div>
       </div>
-      <div class="settings-shell">
-        <section class="settings-card">
+      <div class="settings-tabs" role="tablist">
+        <button class="settings-tab active" role="tab" data-tab="account" onclick="setSettingsTab('account')">Account</button>
+        <button class="settings-tab" role="tab" data-tab="sending" onclick="setSettingsTab('sending')">Sending</button>
+        <button class="settings-tab" role="tab" data-tab="automation" onclick="setSettingsTab('automation')">Automation</button>
+        <button class="settings-tab" role="tab" data-tab="pipeline" onclick="setSettingsTab('pipeline')">Pipeline</button>
+      </div>
+      <div class="settings-shell" id="settingsShell" data-active="account">
+        <section class="settings-card" data-stab="account">
           <div class="settings-card-head">
             <div>
               <div class="settings-title">Workspace Readiness</div>
@@ -3591,7 +3640,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
         </section>
 
         <div class="settings-grid">
-          <section class="settings-card">
+          <section class="settings-card" data-stab="account">
             <div class="settings-card-head">
               <div>
                 <div class="settings-title">Sender Identity</div>
@@ -3607,7 +3656,20 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
           </section>
 
-          <section class="settings-card">
+          <section class="settings-card" data-stab="account">
+            <div class="settings-card-head">
+              <div>
+                <div class="settings-title">Time zone</div>
+                <div class="settings-sub">Your "today" on the Dashboard and Follow-up, the touch send hour and the Monday digest follow this zone.</div>
+              </div>
+            </div>
+            <div class="field" style="margin:0">
+              <select id="cfgTimezone"></select>
+              <div class="settings-toggle-sub" id="cfgTimezoneHint" style="margin-top:6px"></div>
+            </div>
+          </section>
+
+          <section class="settings-card" data-stab="sending">
             <div class="settings-card-head">
               <div>
                 <div class="settings-title">Sending Defaults</div>
@@ -3634,7 +3696,33 @@ html:not([data-theme="dark"]) .send-cta-bar {
           </section>
         </div>
 
-        <section class="settings-card">
+        <section class="settings-card" data-stab="automation">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-title">Automatic sending</div>
+              <div class="settings-sub">What the system may send on its own, without your click.</div>
+            </div>
+          </div>
+          <div id="autoSendBanner" class="auto-banner" aria-live="polite"></div>
+          <div class="settings-stack-sm">
+            <div class="settings-toggle-row auto-master-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">Allow automatic sending</div>
+                <div class="settings-toggle-sub">Master switch. Off = nothing is sent on its own (FU1–FU3, auto touches, scheduled, recurring) — everything waits for your click.</div>
+              </div>
+              <input id="plAutoSend" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
+            </div>
+            <div class="settings-toggle-row auto-sub-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">Include FU1–FU3 sequence</div>
+                <div class="settings-toggle-sub">Off = due FU1–FU3 wait in Overdue / Today's touches for a manual send. Touches per stage are set under Touch cadence below.</div>
+              </div>
+              <input id="plDripAuto" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-card" data-stab="automation">
           <div class="settings-card-head">
             <div>
               <div class="settings-title">Follow-up Defaults</div>
@@ -3674,19 +3762,19 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
             <div class="settings-toggle-row">
               <div class="settings-toggle-copy">
-                <div class="settings-toggle-title">Enable follow-up by default</div>
-                <div class="settings-toggle-sub">New follow-up contacts start in the scheduled flow automatically.</div>
+                <div class="settings-toggle-title">New contacts start the FU1–FU3 sequence</div>
+                <div class="settings-toggle-sub">Gives new pipeline contacts their FU1 date. Whether it is sent automatically is decided by the switches above.</div>
               </div>
               <input id="fuDefaultEnabled" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
             </div>
           </div>
         </section>
 
-        <section class="settings-card">
+        <section class="settings-card" data-stab="pipeline">
           <div class="settings-card-head">
             <div>
               <div class="settings-title">Pipeline / Kanban</div>
-              <div class="settings-sub">Customize the Kanban stages and reply-filter tags used by the Follow-up board. Saved separately below.</div>
+              <div class="settings-sub">Customize the Kanban stages and reply-filter tags used by the Follow-up board.</div>
             </div>
           </div>
           <div class="pl-cfg-subhead">Stages <span class="pl-cfg-hint">minimum 2 — these are the Kanban columns</span></div>
@@ -3697,22 +3785,44 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <div id="pipelineFiltersEditor" class="pl-cfg-list"></div>
           <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineFilterRow()">+ Add Custom Filter</button>
 
-          <div class="pl-cfg-subhead" style="margin-top:18px">Touch cadence <span class="pl-cfg-hint">how often to re-touch contacts sitting in each stage once the FU1-3 drip is done. Manual = lands in Today's touches for a one-click send; Auto = a template is sent automatically.</span></div>
-          <div id="pipelineCadenceEditor" class="pl-cfg-list"></div>
+        </section>
 
-          <div style="margin-top:16px">
-            <button class="btn btn-primary" onclick="savePipelineConfig()">Save Pipeline Config</button>
+        <section class="settings-card" data-stab="automation">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-title">Touch cadence</div>
+              <div class="settings-sub">How often to re-touch contacts in each stage once the FU1–FU3 sequence is done. Manual = lands in Today's touches for a one-click send; Auto = a template is sent automatically (only while automatic sending is allowed).</div>
+            </div>
+          </div>
+          <div id="pipelineCadenceEditor" class="pl-cfg-list"></div>
+          <div class="settings-toggle-row" style="margin-top:10px">
+            <div class="settings-toggle-copy">
+              <div class="settings-toggle-title">Weekly digest email</div>
+              <div class="settings-toggle-sub">Mondays — a week summary to your own inbox.</div>
+            </div>
+            <input id="plDigest" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
           </div>
         </section>
 
-        <section class="settings-savebar">
-          <div class="settings-savecopy">
-            <div class="settings-title">Save Workspace Settings</div>
-            <div class="settings-sub">Connection, sender identity, cadence defaults, and follow-up timing will all be updated together.</div>
-          </div>
-          <div class="settings-actions">
-            <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
-          </div>
+        <section class="settings-savebar" data-stab="account">
+          <div class="settings-savecopy"><div class="settings-title">Save account</div>
+            <div class="settings-sub">Sender identity and time zone.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="saveAccountTab()">Save</button></div>
+        </section>
+        <section class="settings-savebar" data-stab="sending">
+          <div class="settings-savecopy"><div class="settings-title">Save sending defaults</div>
+            <div class="settings-sub">Delays between emails and the daily target for the Send queue.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="saveSettings()">Save</button></div>
+        </section>
+        <section class="settings-savebar" data-stab="automation">
+          <div class="settings-savecopy"><div class="settings-title">Save automation</div>
+            <div class="settings-sub">Automatic sending, follow-up timing, touch cadence and digest — saved together.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="saveAutomationTab()">Save</button></div>
+        </section>
+        <section class="settings-savebar" data-stab="pipeline">
+          <div class="settings-savecopy"><div class="settings-title">Save pipeline</div>
+            <div class="settings-sub">Kanban stages and reply filters.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="savePipelineConfig()">Save</button></div>
         </section>
       </div>
     </div>
@@ -3781,7 +3891,12 @@ async function loadCurrentUser() {
 }
 
 // ── NAV ──────────────────────────────────────────────────────────────────────
+let _navFromHistory = false;   // true while routing from the URL — don't push a new entry
+
 function nav(page, el) {
+  if (!_navFromHistory && location.hash !== '#/' + page) {
+    history.pushState({ page }, '', location.pathname + location.search + '#/' + page);
+  }
   // Save send page full state before leaving
   const datTxt = document.getElementById('datText');
   if (datTxt && datTxt.value) sessionStorage.setItem('dat_draft', datTxt.value);
@@ -4117,10 +4232,13 @@ async function loadDailyStats() {
     const replies = allReplies || [];
 
     const sent = stats.today || 0;
-    const todayStr = new Date().toISOString().slice(0,10);
-    const repliedToday = replies.filter(r =>
-      (r.received_at || r.date || '').slice(0,10) === todayStr
-    ).length;
+    const localDay = d => d.toLocaleDateString('en-CA');     // YYYY-MM-DD in local time
+    const todayStr = localDay(new Date());
+    const repliedToday = replies.filter(r => {
+      const raw = r.received_at || r.date || '';
+      const d = raw ? new Date(raw.replace(' ', 'T') + (raw.length <= 16 ? ':00Z' : '')) : null;
+      return d && !isNaN(d) && localDay(d) === todayStr;
+    }).length;
     const conversion = sent > 0 ? Math.round(repliedToday / sent * 100) : null;
 
     // Update date
@@ -4805,7 +4923,7 @@ function _renderIntelRecommendations(d) {
   if (bestDomain) {
     recs.push({
       title: `Prioritize ${bestDomain.domain}`,
-      body: `${bestDomain.replies} replies and ${bestDomain.interested} interested signals from ${bestDomain.emails_sent} sent make this domain one of the best current response sources.`,
+      body: `${bestDomain.replies} replies and ${bestDomain.interested} follow-up replies from ${bestDomain.emails_sent} sent make this domain one of the best current response sources.`,
       confidence: _intelConfidence(bestDomain.emails_sent, bestDomain.replies, bestDomain.reply_rate),
       action: 'Next move: Reuse the best-performing template for similar brokers on this domain.'
     });
@@ -4854,7 +4972,7 @@ function _renderIntelSignals(d) {
     .slice(0, 2)
     .forEach(b => opportunities.push(_intelSignalRow(
       b.domain,
-      `${b.interested} interested replies · ${b.replies} total replies · ${b.reply_rate}% reply rate`,
+      `${b.interested} follow-up replies · ${b.replies} total replies · ${b.reply_rate}% reply rate`,
       _intelConfidence(b.emails_sent, b.replies, b.reply_rate)
     )));
 
@@ -4874,7 +4992,7 @@ function _renderIntelSignals(d) {
     .slice(0, 2)
     .forEach(b => warnings.push(_intelSignalRow(
       b.domain,
-      `${b.emails_sent} sent with ${b.replies} replies but no interested signals yet.`,
+      `${b.emails_sent} sent with ${b.replies} replies but no follow-up replies yet.`,
       _intelConfidence(b.emails_sent, b.replies, b.reply_rate)
     )));
 
@@ -5263,6 +5381,14 @@ async function deleteFuTmpl(id) {
 
 // ── SETTINGS ─────────────────────────────────────────────────────────────────
 async function loadSettings() {
+  {
+    const q = new URLSearchParams(window.location.search);
+    let tab = 'account';
+    if (!q.has('gmail_connected') && !q.has('gmail_error')) {
+      try { tab = localStorage.getItem('settings_tab') || 'account'; } catch (e) {}
+    }
+    setSettingsTab(tab);
+  }
   const [cfg, fu] = await Promise.all([
     (await fetch('/api/config')).json(),
     (await fetch('/api/settings/followup')).json(),
@@ -5297,18 +5423,19 @@ async function loadSettings() {
   document.getElementById('fuDefaultEnabled').checked = fu.default_followup_enabled !== false;
   renderSettingsPreview();
 
-  if (!_fuPipelineConfigLoaded) await loadPipelineConfig();
+  await loadPipelineConfig();
   renderPipelineConfigEditor();
+  renderTimezonePicker();
 
   // Handle ?gmail_connected=1 redirect from OAuth callback
   const params = new URLSearchParams(window.location.search);
   if (params.has('gmail_connected')) {
     toast('Gmail connected successfully');
-    window.history.replaceState({}, '', window.location.pathname);
+    window.history.replaceState(history.state, '', window.location.pathname + window.location.hash);
   }
   if (params.has('gmail_error')) {
     toast('Gmail connection failed: ' + params.get('gmail_error'), true);
-    window.history.replaceState({}, '', window.location.pathname);
+    window.history.replaceState(history.state, '', window.location.pathname + window.location.hash);
   }
 }
 
@@ -5345,33 +5472,96 @@ async function disconnectGmail() {
   loadSettings();
 }
 
+function browserTimezone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; }
+}
+const TZ_CHOICES = [
+  ['America/New_York', 'Eastern (ET)'], ['America/Chicago', 'Central (CT)'],
+  ['America/Denver', 'Mountain (MT)'], ['America/Phoenix', 'Arizona (MST)'],
+  ['America/Los_Angeles', 'Pacific (PT)'], ['America/Anchorage', 'Alaska (AKT)'],
+  ['Pacific/Honolulu', 'Hawaii (HT)'], ['Europe/Kyiv', 'Kyiv'], ['UTC', 'UTC'],
+];
+function renderTimezonePicker() {
+  const sel = document.getElementById('cfgTimezone');
+  if (!sel) return;
+  const browser = browserTimezone();
+  const current = pipelineTimezone || browser;
+  const opts = [...TZ_CHOICES];
+  for (const z of [current, browser]) if (z && !opts.some(o => o[0] === z)) opts.unshift([z, z]);
+  sel.innerHTML = opts.map(([z, label]) =>
+    `<option value="${esc(z)}" ${z === current ? 'selected' : ''}>${esc(label)}${label !== z ? ' — ' + esc(z) : ''}</option>`).join('');
+  const hint = document.getElementById('cfgTimezoneHint');
+  if (hint) hint.textContent = `This browser is set to ${browser}.` + (pipelineTimezone ? '' : ' Not saved yet.');
+}
+async function saveTimezone(tz, quiet) {
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {method:'PUT', headers:{'Content-Type':'application/json'},
+                                                               body: JSON.stringify({timezone: tz})});
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { if (!quiet) toast('Error: ' + (data.error || 'time zone not saved'), true); return false; }
+    pipelineTimezone = data.timezone || tz;
+    pipelineTouchHour = data.touch_hour ?? pipelineTouchHour;
+    return true;
+  } catch (e) { if (!quiet) toast('Error: ' + e.message, true); return false; }
+}
+// First visit after this release: adopt the browser's zone once, silently.
+async function ensureTimezone() {
+  if (!_fuPipelineConfigLoaded) await loadPipelineConfig();
+  if (pipelineTimezone) return false;
+  return saveTimezone(browserTimezone(), true);
+}
+async function saveAccountTab() {
+  const tz = document.getElementById('cfgTimezone')?.value;
+  const okTz = !tz || tz === pipelineTimezone || await saveTimezone(tz);
+  if (!okTz) return;
+  if (await saveSettings()) { renderTimezonePicker(); renderPipelineCadenceEditor(); }
+}
+
+// Account + Sending tabs (one /api/config record).
 async function saveSettings() {
+  const num = id => parseInt(document.getElementById(id).value);
   const data = {
     your_name:    document.getElementById('cfgName').value,
     your_company: document.getElementById('cfgCompany').value,
     your_phone:   document.getElementById('cfgPhone').value,
-    delay_min:    parseInt(document.getElementById('cfgDelayMin').value),
-    delay_max:    parseInt(document.getElementById('cfgDelayMax').value),
-    daily_target: parseInt(document.getElementById('cfgDailyTarget').value),
+    delay_min:    num('cfgDelayMin'),
+    delay_max:    num('cfgDelayMax'),
+    daily_target: num('cfgDailyTarget'),
   };
-  const fuData = {
-    fu1_delay_days: parseInt(document.getElementById('fuDelay1').value),
-    fu2_delay_days: parseInt(document.getElementById('fuDelay2').value),
-    fu3_delay_days: parseInt(document.getElementById('fuDelay3').value),
-    auto_stop_on_reply: document.getElementById('fuAutoStop').checked,
-    default_followup_enabled: document.getElementById('fuDefaultEnabled').checked,
-  };
-  await Promise.all([
-    fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)}),
-    fetch('/api/settings/followup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fuData)}),
-  ]);
-  const targetVal = parseInt(document.getElementById('cfgDailyTarget').value);
-  if (targetVal > 0) {
-    dailyTarget = targetVal;
+  for (const k of ['delay_min', 'delay_max', 'daily_target']) {
+    if (!Number.isFinite(data[k])) { toast('Delays and daily target must be numbers', true); return false; }
   }
+  try {
+    const res = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { toast('Error: ' + (out.error || 'save failed'), true); return false; }
+  } catch (e) { toast('Error: ' + e.message, true); return false; }
+  if (data.daily_target > 0) dailyTarget = data.daily_target;
   toast('Settings saved');
   loadDailyStats();
   renderSettingsPreview();
+  return true;
+}
+
+// Follow-up Defaults card (Automation tab).
+async function saveFollowupDefaults(quiet) {
+  const num = id => parseInt(document.getElementById(id).value);
+  const fuData = {
+    fu1_delay_days: num('fuDelay1'),
+    fu2_delay_days: num('fuDelay2'),
+    fu3_delay_days: num('fuDelay3'),
+    auto_stop_on_reply: document.getElementById('fuAutoStop').checked,
+    default_followup_enabled: document.getElementById('fuDefaultEnabled').checked,
+  };
+  if (![fuData.fu1_delay_days, fuData.fu2_delay_days, fuData.fu3_delay_days].every(v => Number.isFinite(v) && v >= 1)) {
+    toast('FU1–FU3 delays must be at least 1 day', true); return false;
+  }
+  try {
+    const res = await fetch('/api/settings/followup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fuData)});
+    if (!res.ok) { toast('Error: follow-up defaults not saved', true); return false; }
+  } catch (e) { toast('Error: ' + e.message, true); return false; }
+  if (!quiet) toast('Follow-up defaults saved');
+  return true;
 }
 
 // ── REPLIES ──────────────────────────────────────────────────────────────────
@@ -5643,6 +5833,7 @@ async function fetchReplies(silent) {
       const detParts = Object.keys(det).map(k => (TRIAGE_CATS[k]?.emoji || '🏷️') + det[k]);
       if (detParts.length) toast('🔍 Detected: ' + detParts.join(' ') + ' — check the filters');
       if (data.ooo_paused) toast('⏸ ' + data.ooo_paused + ' contact' + (data.ooo_paused > 1 ? 's' : '') + ' paused (out of office)');
+      if (data.bounced) toast('📭 ' + data.bounced + ' bounced address' + (data.bounced > 1 ? 'es' : '') + ' added to Stop List');
       await loadReplies();
       loadAutoStrip();
     }
@@ -5766,12 +5957,14 @@ function tqCard(msgs) {
 
   // Right column: show actions only for unprocessed states; otherwise show reset
   const showActions = (state === 'new' || state === 'viewed');
+  const recLabel = (txt, on) => on
+    ? '<span class="tq-action-label">' + txt + '<span class="tq-rec-tag">Recommended</span></span>' : txt;
   const rightHtml = showActions
     ? '<div class="tq-card-right" onclick="event.stopPropagation()">' +
         '<button class="tq-action tq-action-fu' + (rec === 'followup' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
-          '<i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-action-key">F</span></button>' +
+          '<i class="ph-bold ph-clock-countdown"></i> ' + recLabel('Follow-up', rec === 'followup') + ' <span class="tq-action-key">F</span></button>' +
         '<button class="tq-action tq-action-no' + (rec === 'ignore' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
-          '<i class="ph-bold ph-x"></i> Ignore <span class="tq-action-key">X</span></button>' +
+          '<i class="ph-bold ph-x"></i> ' + recLabel('Ignore', rec === 'ignore') + ' <span class="tq-action-key">X</span></button>' +
         '<button class="tq-action tq-action-block" onclick="markContactStop(\'' + emailEsc + '\')" title="Block + Stop List [B]">' +
           '<i class="ph-bold ph-prohibit"></i> Block <span class="tq-action-key">B</span></button>' +
       '</div>'
@@ -5797,7 +5990,9 @@ function tqCard(msgs) {
             '<span class="tq-time">' + time + '</span>' +
           '</div>' +
           '<div class="tq-company">' + esc(company) + '</div>' +
-          '<div class="tq-email">' + esc(emailRaw) + '</div>' +
+          '<div class="tq-email">' + esc(emailRaw) +
+            (latest.matched_recipient ? ' <span class="tq-for" title="A colleague answered your email to this address">↪ for ' + esc(latest.matched_recipient) + '</span>' : '') +
+          '</div>' +
           '<div class="tq-preview">' + esc(preview) + (preview.length >= 110 ? '…' : '') + '</div>' +
           (route ? '<div class="tq-route"><i class="ph-bold ph-map-pin" style="font-size:10px"></i> ' + esc(route) + '</div>' : '') +
           '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' + esc(latest.body || '(empty)') + '</div>' +
@@ -5853,7 +6048,7 @@ function renderReplies() {
     follow_up: replyCounts.follow_up || 0,
     ignored: replyCounts.ignored || 0,
   };
-  ['all','needs_action','new','follow_up','ignored'].forEach(k => {
+  ['all','needs_action','follow_up','ignored'].forEach(k => {
     const el = document.getElementById('tqc-' + k);
     if (el) el.textContent = counts[k] || 0;
   });
@@ -5866,13 +6061,9 @@ function renderReplies() {
   const fill = document.getElementById('tqProgressFill');
   const label = document.getElementById('tqProgressLabel');
   const zero = document.getElementById('tqInboxZero');
-  const needEl = document.getElementById('tqNeedsDecision');
-  const processedEl = document.getElementById('tqProcessedCount');
   if (fill) fill.style.width = pct + '%';
-  if (label) label.textContent = unprocessed > 0 ? unprocessed + ' need' + (unprocessed>1?'s':'') + ' a decision · ' + done + ' processed' : done + ' processed';
+  if (label) label.textContent = unprocessed > 0 ? unprocessed + (unprocessed === 1 ? ' needs' : ' need') + ' a decision · ' + done + ' processed' : done + ' processed';
   if (zero) zero.style.display = unprocessed === 0 && total > 0 ? 'inline' : 'none';
-  if (needEl) needEl.textContent = unprocessed;
-  if (processedEl) processedEl.textContent = done;
 
   // Filter by active tab
   let filtered = replyGroups;
@@ -5994,9 +6185,12 @@ let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_adva
 let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
 let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
 let pipelineCadence = {};         // {stage_id(str): {days, mode:'manual'|'auto'|'off'}}
-let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (UTC hour for cadence touches)
+let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (hour in the user's time zone for cadence touches)
+let pipelineTimezone = '';        // IANA zone from Settings ('' = not set yet → browser zone is saved)
 let pipelineDigest = true;        // weekly digest email on Mondays
 let pipelineDripAuto = true;      // scheduler auto-sends the FU1–FU3 drip sequence
+let pipelineAutoSend = true;      // master switch over every automatic send path
+let pipelineAutoPreview = { drip: 0, touches: 0, scheduled: 0 };   // due in next 24h, per path
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -6183,28 +6377,15 @@ function updateFuBadge() {
   const na = document.getElementById('fuNeedsActionCount');
   const ov = document.getElementById('fuOverdueCount');
   const sc = document.getElementById('fuScheduledCount');
+  const td = document.getElementById('fuTodayCount');
+  if (td) td.textContent = fuCounts.due_today ? ` ${fuCounts.due_today}` : '';
   if (na) na.textContent = fuCounts.needs_action ? ` ${fuCounts.needs_action}` : '';
   if (ov) ov.textContent = fuCounts.overdue ? ` ${fuCounts.overdue}` : '';
   if (sc) sc.textContent = fuCounts.scheduled ? ` ${fuCounts.scheduled}` : '';
 }
 
+// Counts live on the urgency segment (updateFuBadge); this only syncs the controls.
 function renderFuStatsBar() {
-  const el = document.getElementById('fuStatsBar');
-  if (!el) return;
-  const c = fuCounts;
-  const cards = [
-    { key:'overdue', label:'Overdue', n:c.overdue||0, cls:'overdue', meta:'Needs action now' },
-    { key:'due_today', label:'Today', n:(c.due_today||0), cls:'today', meta:'Ready to send today' },
-    { key:'needs_action', label:'Needs Action', n:c.needs_action||0, cls:'needs-action', meta:'Completed sequence' },
-    { key:'scheduled', label:'Scheduled', n:c.scheduled||0, cls:'scheduled', meta:'One-time future sends' },
-  ];
-  el.innerHTML = cards.map(card =>
-    `<button class="fu-summary-card ${card.cls} ${fuSpecialFilter===card.key ? 'active' : ''}" onclick="setFuSpecialFilter('${card.key}')">
-      <span class="fu-summary-label">${card.label}</span>
-      <span class="fu-summary-value">${card.n}</span>
-      <span class="fu-summary-meta">${card.meta}</span>
-    </button>`
-  ).join('');
   syncFuFilterControls();
 }
 
@@ -6259,10 +6440,12 @@ function getFuUrgencyMeta(c) {
   const now = new Date();
   const next = c.next_followup_at ? new Date(c.next_followup_at) : null;
   const isNeedsAction = c.stage === 'completed_fu3' && c.state === 'active';
-  const isOverdue = next && next < now && c.state === 'active' && c.is_followup_enabled;
+  // Same rule as the server counts and Today's touches: a set date is a
+  // commitment whichever engine set it; enabled flags only gate auto-sends.
+  const isOverdue = next && next < now && c.state === 'active';
   const endOfDay = new Date(now);
   endOfDay.setHours(23, 59, 59, 999);
-  const isToday = next && next >= now && next <= endOfDay && c.state === 'active' && c.is_followup_enabled;
+  const isToday = next && next >= now && next <= endOfDay && c.state === 'active';
   const isScheduled = !!(c.scheduled_once && next && next > now);
   let rank = 4;
   if (isOverdue) rank = 0;
@@ -6278,7 +6461,7 @@ function getFuPrimaryActionLabel(c) {
   const terminal = ['warm','loads','blocked','closed'];
   if (terminal.includes(c.state)) return '';
   if (c.state === 'paused') return 'Resume';
-  if (c.stage === 'completed_fu3') return 'Mark Loads';
+  if (c.stage === 'completed_fu3') return 'Mark Booked';
   if (['fu1_scheduled','fu2_scheduled','fu3_scheduled'].includes(c.stage)) return 'Send Now';
   return '';
 }
@@ -6287,11 +6470,53 @@ function getFuPrimaryActionButton(c) {
   const label = getFuPrimaryActionLabel(c);
   if (!label) return `<span class="fu-time-sub">No action</span>`;
   if (label === 'Resume') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','resume')">Resume</button>`;
-  if (label === 'Mark Loads') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Mark Loads</button>`;
+  if (label === 'Mark Booked') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Mark Booked</button>`;
   return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send Now</button>`;
 }
 
 // ── Contact queue rendering ────────────────────────────────────────────────────
+// One label per contact everywhere (server display_name: person → company → email).
+function fuName(c) {
+  return c.display_name || c.contact_name || c.company_name || c.contact_email || '';
+}
+// Second line under the name: company (if it isn't the label already) · email.
+function fuSub(c) {
+  const name = fuName(c);
+  const co = (c.company_name || '').trim();
+  return [co && co !== name ? co : '', c.contact_email && c.contact_email !== name ? c.contact_email : '']
+    .filter(Boolean).join(' · ');
+}
+function fuPipelineStage(c) {
+  const id = c.pipeline_stage || 1;
+  const s = (pipelineStages || []).find(x => x.id === id);
+  return { name: s ? s.name : 'Stage ' + id, color: s ? s.color : 'var(--text3)' };
+}
+// What the next dated step is and whether it goes out on its own
+// (mirrors the scheduler's _would_auto_send + the Settings switches).
+function fuNextKind(c) {
+  let label, auto;
+  const fu = /^fu([123])_scheduled$/.exec(c.stage || '');
+  if (c.scheduled_once) { label = 'Scheduled send'; auto = true; }
+  else if (c.recurring_enabled) { label = 'Recurring'; auto = true; }
+  else if (fu) { label = 'FU' + fu[1]; auto = !!c.is_followup_enabled && pipelineDripAuto; }
+  else {
+    label = 'Touch';
+    auto = !c.is_followup_enabled && !!c.touch_enabled &&
+      (pipelineCadence[String(c.pipeline_stage || 1)] || {}).mode === 'auto';
+  }
+  return { label, auto: auto && pipelineAutoSend };
+}
+function fuNextTouch(c) {
+  if (['warm','loads','blocked','closed'].includes(c.state)) return { text: '—', sub: '', cls: '' };
+  if (c.state === 'paused') return { text: 'Paused', sub: 'resume to schedule', cls: '' };
+  const d = formatFuDate(c.next_followup_at);
+  if (!d) return { text: 'No next step', sub: 'pick a date', cls: 'overdue' };
+  const k = fuNextKind(c);
+  const late = new Date(c.next_followup_at) < new Date();
+  return { text: d.text, sub: `${k.label} · ${k.auto ? 'auto-send' : 'manual'}`,
+           cls: late ? 'overdue' : (d.text === 'Today' ? 'today' : '') };
+}
+
 function getFuStageInfo(stage) {
   const map = {
     fu1_scheduled:{label:'FU1',cls:'fu-stage-fu1'}, fu1_sent:{label:'FU1✓',cls:'fu-stage-fu1'},
@@ -6304,7 +6529,7 @@ function getFuStageInfo(stage) {
 function getFuStateInfo(state) {
   const map = {
     active:{label:'Active',cls:'fu-state-active'}, paused:{label:'Paused',cls:'fu-state-paused'},
-    warm:{label:'Warm',cls:'fu-state-warm'}, loads:{label:'Loads',cls:'fu-state-loads'},
+    warm:{label:'Warm',cls:'fu-state-warm'}, loads:{label:'Booked',cls:'fu-state-loads'},
     blocked:{label:'Blocked',cls:'fu-state-blocked'}, closed:{label:'Closed',cls:'fu-state-closed'},
   };
   return map[state] || {label:state,cls:'fu-state-active'};
@@ -6313,7 +6538,7 @@ function getFuPrimaryBtn(c) {
   const terminal = ['warm','loads','blocked','closed'];
   if (terminal.includes(c.state)) return '';
   if (c.state === 'paused') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','resume')">Resume</button>`;
-  if (c.stage === 'completed_fu3') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Loads</button>`;
+  if (c.stage === 'completed_fu3') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Booked</button>`;
   if (['fu1_scheduled','fu2_scheduled','fu3_scheduled'].includes(c.stage))
     return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send Now</button>`;
   return '';
@@ -6404,7 +6629,6 @@ function renderFuContacts() {
     const meta = getFuUrgencyMeta(c);
     const isTerminal = terminal.includes(c.state);
     const isMuted = c.state === 'paused';
-    const nextFu = formatFuDate(c.next_followup_at);
     const lastAct = formatFuRelative(c.last_activity_at);
     const sentRec = fuSentRecency(c.last_followup_sent_at);
     const sentBadge = sentRec === 'today'
@@ -6412,9 +6636,10 @@ function renderFuContacts() {
       : sentRec === 'yesterday'
       ? `<span class="fu-sent-badge yesterday" title="Follow-up sent yesterday">🟡 Sent yesterday</span>`
       : '';
-    const company = esc(c.company_name || c.contact_name || c.contact_email.split('@')[0]);
-    const email = esc(c.contact_email);
     const route = esc(c.current_route || '—');
+    const ps = fuPipelineStage(c);
+    const nt = fuNextTouch(c);
+    const inDrip = c.is_followup_enabled && /^fu[123]_(scheduled|sent)$/.test(c.stage || '');
     const rowCls = [
       'fu-table-row',
       meta.isOverdue ? 'overdue' : '',
@@ -6423,8 +6648,6 @@ function renderFuContacts() {
       isTerminal ? 'terminal' : '',
       selectedFuIds.has(c.id) ? 'selected' : ''
     ].filter(Boolean).join(' ');
-    const nextText = meta.isNeedsAction ? 'Needs review' : (nextFu ? nextFu.text : 'No schedule');
-    const nextCls = meta.isOverdue ? 'overdue' : (meta.isToday ? 'today' : '');
     const actionBtn = getFuPrimaryActionButton(c);
 
     return `<tr class="${rowCls}" id="fu-row-${c.id}">
@@ -6432,8 +6655,8 @@ function renderFuContacts() {
         <input type="checkbox" class="fu-checkbox" id="fu-cb-${c.id}" ${selectedFuIds.has(c.id)?'checked':''} onclick="toggleFuSelect('${c.id}',event)">
       </td>
       <td class="fu-contact-cell" onclick="openTimeline('${c.id}')" style="cursor:pointer" title="Open history">
-        <div class="fu-contact-primary">${c.attention_at ? '🔥 ' : ''}${company}</div>
-        <div class="fu-contact-secondary">${email}</div>
+        <div class="fu-contact-primary">${c.attention_at ? '🔥 ' : ''}${esc(fuName(c))}</div>
+        <div class="fu-contact-secondary">${esc(fuSub(c))}</div>
       </td>
       <td>
         <div class="fu-meta-stack">
@@ -6444,14 +6667,14 @@ function renderFuContacts() {
       </td>
       <td>
         <div class="fu-meta-stack">
-          <span class="fu-stage-badge ${si.cls}">${si.label}</span>
-          ${c.scheduled_once ? `<span class="fu-state-badge" style="background:rgba(124,108,248,.10);color:var(--accent)">Scheduled</span>` : ''}
+          <span class="fu-pstage"><span class="fu-pstage-dot" style="background:${esc(ps.color)}"></span>${esc(ps.name)}</span>
+          ${inDrip ? `<span class="fu-stage-badge ${si.cls}" title="Follow-up sequence step">${si.label}</span>` : ''}
         </div>
       </td>
       <td>
         <div class="fu-time-cell">
-          <span class="fu-time-main ${nextCls}">${nextText}</span>
-          <span class="fu-time-sub">${meta.isNeedsAction ? 'Sequence complete' : (c.next_followup_at ? 'UTC' : '—')}</span>
+          <span class="fu-time-main ${nt.cls}">${nt.text}</span>
+          <span class="fu-time-sub">${esc(nt.sub) || '—'}</span>
         </div>
       </td>
       <td>
@@ -6483,6 +6706,9 @@ async function loadPipelineConfig() {
     pipelineTouchHour = data.touch_hour ?? 'auto';
     pipelineDigest = data.digest_enabled !== false;
     pipelineDripAuto = data.drip_auto_enabled !== false;
+    pipelineAutoSend = data.auto_send_enabled !== false;
+    pipelineAutoPreview = data.auto_send_preview || pipelineAutoPreview;
+    pipelineTimezone = data.timezone || '';
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -6576,7 +6802,7 @@ function renderDashboard() {
       <div class="dash-hint">stage ≥ Got info, no activity 14+ days</div></div>
     <div class="dash-card"><div class="dash-k">Reply rate · 30d</div>
       <div class="dash-big">${h.reply_rate !== null ? h.reply_rate + '<small>%</small>' : '—'}</div>
-      <div class="dash-hint">${h.replies_30d} repliers / ${h.sends_30d} sends</div></div>
+      <div class="dash-hint">${h.replied_30d ?? 0} of ${h.contacted_30d ?? 0} contacts emailed replied</div></div>
     <div class="dash-card"><div class="dash-k">Avg touches → booked</div>
       <div class="dash-big">${h.avg_touches_to_booked ?? '—'}</div>
       <div class="dash-hint">from pipeline event log</div></div>
@@ -6655,8 +6881,8 @@ function renderTouchPanel() {
     const sendAction = /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send';
     return `<div class="fu-touch-row${c.attention_at ? ' hot' : ''}">` +
       `<span>${c.attention_at ? '🔥' : (late ? '⏰' : '📅')}</span>` +
-      `<span class="ft-who" style="cursor:pointer" onclick="openTimeline('${c.id}')" title="Open history"><b>${esc(c.contact_name || c.company_name || c.contact_email)}</b>` +
-        `<span class="ft-email">${esc(c.contact_email)}</span></span>` +
+      `<span class="ft-who" style="cursor:pointer" onclick="openTimeline('${c.id}')" title="Open history"><b>${esc(fuName(c))}</b>` +
+        `<span class="ft-email">${esc(fuSub(c))}</span></span>` +
       `<span class="ft-stage">${esc(stageName(c.pipeline_stage))}</span>` +
       (c.current_route ? `<span class="ft-route">${esc(c.current_route)}</span>` : '') +
       `<span class="ft-actions">` +
@@ -6697,8 +6923,8 @@ async function openTimeline(id) {
   ov.onclick = e => { if (e.target === ov) closeTimeline(); };
   ov.innerHTML = `<div class="fu-tl" role="dialog" aria-label="Contact history">` +
     `<button class="fu-tl-close" onclick="closeTimeline()" aria-label="Close">✕</button>` +
-    `<div class="fu-tl-name">${c.attention_at ? '🔥 ' : ''}${esc(c.contact_name || c.company_name || c.contact_email)}</div>` +
-    `<div class="fu-tl-sub">${esc(c.contact_email)}</div>` +
+    `<div class="fu-tl-name">${c.attention_at ? '🔥 ' : ''}${esc(fuName(c))}</div>` +
+    `<div class="fu-tl-sub">${esc(fuSub(c))}</div>` +
     `<div class="fu-tl-meta">` +
       (stageName ? `<span class="fu-tl-chip">${esc(stageName)}</span>` : '') +
       `<span class="fu-tl-chip">${esc(c.state)}</span>` +
@@ -6759,24 +6985,18 @@ async function loadPipelineStats() {
 function renderPipelineStats() {
   const el = document.getElementById('fuPipelineStats');
   if (!el) return;
-  const bs = pipelineStats.by_stage || {};
   const tr = pipelineStats.transitions || {};
+  // Per-stage counts are on the column heads; here only the total and moves between stages.
   let html = `<div class="fu-pstat total"><span class="fu-pstat-label">Total</span><span class="fu-pstat-val">${pipelineStats.total || 0}</span></div>`;
-  html += pipelineStages.map(s => {
-    const cnt = bs[s.id] ?? bs[String(s.id)] ?? 0;
-    return `<div class="fu-pstat"><span class="fu-pstat-dot" style="background:${s.color}"></span><span class="fu-pstat-label">${esc(s.name)}</span><span class="fu-pstat-val">${cnt}</span></div>`;
-  }).join('');
   for (let i = 0; i < pipelineStages.length - 1; i++) {
-    const a = pipelineStages[i].id, b = pipelineStages[i+1].id;
-    const cnt = tr[`${a}_to_${b}`] || 0;
-    html += `<div class="fu-pstat trans"><span class="fu-pstat-label">${a}→${b}</span><span class="fu-pstat-val">${cnt}</span></div>`;
+    const a = pipelineStages[i], b = pipelineStages[i+1];
+    const cnt = tr[`${a.id}_to_${b.id}`] || 0;
+    html += `<div class="fu-pstat trans" title="Moved ${esc(a.name)} → ${esc(b.name)}"><span class="fu-pstat-label">${a.id}→${b.id}</span><span class="fu-pstat-val">${cnt}</span></div>`;
   }
   el.innerHTML = html;
 }
 
 function fuKanbanCard(c) {
-  const company = esc(c.company_name || c.contact_name || c.contact_email.split('@')[0]);
-  const email   = esc(c.contact_email);
   const lastAct = formatFuRelative(c.last_activity_at);
   const sti     = getFuStateInfo(c.state);
   const sentRec = fuSentRecency(c.last_followup_sent_at);
@@ -6787,8 +7007,8 @@ function fuKanbanCard(c) {
   return `<div class="fu-kanban-card" draggable="true" data-id="${c.id}"
        ondragstart="fuKanbanDragStart(event,'${c.id}')" ondragend="fuKanbanDragEnd(event)">
     <button class="fu-kanban-card-menu" onclick="event.stopPropagation();toggleFuDropdown(event,'${c.id}')" title="Actions">⋯</button>
-    <div class="fu-kanban-card-title">${c.attention_at ? '🔥 ' : ''}${company}</div>
-    <div class="fu-kanban-card-email">${email}</div>
+    <div class="fu-kanban-card-title">${c.attention_at ? '🔥 ' : ''}${esc(fuName(c))}</div>
+    <div class="fu-kanban-card-email">${esc(fuSub(c))}</div>
     <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
     <div class="fu-kanban-card-foot">⏰ ${lastAct}${route}</div>
     <div class="fu-kanban-qa" onclick="event.stopPropagation()">
@@ -6952,27 +7172,122 @@ function renderPipelineCadenceEditor() {
         `<option value="auto" ${c.mode === 'auto' ? 'selected' : ''}>Auto-send template</option>` +
       `</select></div>`;
   }).join('') +
-  `<div class="pl-cad-row"><span class="pl-cad-name">Touch send hour (UTC)</span>` +
+  `<div class="pl-cad-row"><span class="pl-cad-name">Touch send hour (${esc(pipelineTimezone || 'UTC')})</span>` +
     `<select id="plTouchHour"><option value="auto" ${pipelineTouchHour === 'auto' ? 'selected' : ''}>Auto — best reply hour</option>` +
     Array.from({length: 24}, (_, h) =>
       `<option value="${h}" ${String(pipelineTouchHour) === String(h) ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('') +
-    `</select></div>` +
-  `<div class="pl-cad-row"><span class="pl-cad-name">Weekly digest email</span>` +
-    `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
-    `<input type="checkbox" id="plDigest" ${pipelineDigest ? 'checked' : ''}> Mondays — week summary to your inbox</label></div>` +
-  `<div class="pl-cad-row"><span class="pl-cad-name">Auto-send FU1–FU3 drip</span>` +
-    `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
-    `<input type="checkbox" id="plDripAuto" ${pipelineDripAuto ? 'checked' : ''}> ` +
-    `Scheduler emails due FU1–FU3 automatically. Off = they wait in Overdue / Today's touches for manual send</label></div>`;
+    `</select></div>`;
+  const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  setChk('plDigest', pipelineDigest);
+  setChk('plAutoSend', pipelineAutoSend);
+  setChk('plDripAuto', pipelineDripAuto);
+  renderAutoSendBanner();
 }
 
-async function savePipelineConfig() {
+// Banner over the Automation tab: is anything going out on its own, and how much.
+// live=true → reflects the unsaved switch positions.
+function renderAutoSendBanner(live) {
+  const box = document.getElementById('autoSendBanner');
+  if (!box) return;
+  const master = document.getElementById('plAutoSend');
+  const drip = document.getElementById('plDripAuto');
+  const on = master ? master.checked : pipelineAutoSend;
+  const dripOn = drip ? drip.checked : pipelineDripAuto;
+  if (drip) drip.disabled = !on;
+  drip?.closest('.settings-toggle-row')?.classList.toggle('is-off', !on);
+  const p = pipelineAutoPreview || {};
+  const parts = [];
+  if (dripOn && p.drip) parts.push(`${p.drip} FU1–FU3`);
+  if (p.touches) parts.push(`${p.touches} auto touch${p.touches === 1 ? '' : 'es'}`);
+  if (p.scheduled) parts.push(`${p.scheduled} scheduled/recurring`);
+  const n = (dripOn ? (p.drip || 0) : 0) + (p.touches || 0) + (p.scheduled || 0);
+  const unsaved = live && (on !== pipelineAutoSend || dripOn !== pipelineDripAuto)
+    ? ' <span class="auto-banner-unsaved">— not saved yet</span>' : '';
+  let head, sub;
+  if (!on) {
+    box.className = 'auto-banner off';
+    head = 'Auto-send OFF';
+    sub = 'Nothing is sent without your click.' +
+      (n ? ` If turned on, ~${n} email${n === 1 ? '' : 's'} would go out in the next 24 h.` : '');
+  } else if (n) {
+    box.className = 'auto-banner on';
+    head = `Auto-send ON: ~${n} email${n === 1 ? '' : 's'} in the next 24 h`;
+    sub = parts.join(' · ') + '. Replies are checked right before each send.';
+  } else {
+    box.className = 'auto-banner on idle';
+    head = 'Auto-send ON: nothing due in the next 24 h';
+    sub = 'Due FU1–FU3, auto touches and scheduled emails will go out on their own.';
+  }
+  box.innerHTML = `<div class="auto-banner-head">${head}${unsaved}</div><div class="auto-banner-sub">${esc(sub)}</div>`;
+}
+
+// One glossary for the words used across Replies, Follow-up, Dashboard and Analytics.
+const TERMS_GLOSSARY = [
+  ['What the reply says', 'auto-detected, Replies page', [
+    ['Negative', 'a no — "we don\'t use…", "not at this time"'],
+    ['Rate request', 'asks for your rate on the lane'],
+    ['Gave info', 'shares availability, rate or load details'],
+    ['Auto-reply', 'out-of-office and other automatic answers'],
+  ]],
+  ['Your decision on a reply', 'Replies buttons, Analytics', [
+    ['Needs Action', 'waiting for your decision'],
+    ['Follow-up', 'worth pursuing — the contact goes into the pipeline'],
+    ['Ignored', 'not worth pursuing, no emails'],
+    ['Blocked', 'never email again (added to the Stop List)'],
+  ]],
+  ['Where the contact is', 'Follow-up page', [
+    ['FU1–FU3', 'the automatic follow-up sequence after a reply'],
+    ['Touch', 'a repeat email to a contact sitting in a pipeline stage (Touch cadence in Settings)'],
+    ['Pipeline stage', 'your Kanban columns — names are yours (Settings → Pipeline)'],
+    ['Active / Paused', 'in the queue / on hold'],
+    ['Warm', 'a hot lead handed to you for a personal answer'],
+    ['Booked', 'the carrier took a load — a win'],
+    ['Closed', 'finished without a win'],
+  ]],
+];
+function openTermsGlossary() {
+  document.getElementById('termsOverlay')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'fu-tl-overlay'; ov.id = 'termsOverlay';
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = `<div class="fu-tl terms-panel" role="dialog" aria-label="Terms">` +
+    `<button class="fu-tl-close" onclick="document.getElementById('termsOverlay').remove()" aria-label="Close">✕</button>` +
+    `<div class="fu-tl-name">Terms</div>` +
+    TERMS_GLOSSARY.map(([title, where, rows]) =>
+      `<div class="terms-group"><div class="terms-title">${esc(title)} <span>${esc(where)}</span></div>` +
+      rows.map(([t, d]) => `<div class="terms-row"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('') +
+      `</div>`).join('') +
+    `</div>`;
+  document.body.appendChild(ov);
+}
+
+function setSettingsTab(tab) {
+  const shell = document.getElementById('settingsShell');
+  if (!shell) return;
+  if (!['account', 'sending', 'automation', 'pipeline'].includes(tab)) tab = 'account';
+  shell.dataset.active = tab;
+  document.querySelectorAll('.settings-tab').forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  try { localStorage.setItem('settings_tab', tab); } catch (e) {}
+}
+
+async function saveAutomationTab() {
+  const [a, b] = await Promise.all([saveFollowupDefaults(true), savePipelineConfig(true, 'automation')]);
+  if (a && b) toast('Automation saved');
+}
+
+// scope 'pipeline' = stages + reply filters (Pipeline tab);
+// scope 'automation' = cadence, touch hour, digest and the auto-send switches.
+async function savePipelineConfig(quiet, scope = 'pipeline') {
   const stages = [...document.querySelectorAll('#pipelineStagesEditor .pl-row')].map(r => ({
     id: r.dataset.id ? parseInt(r.dataset.id) : null,
     name: r.querySelector('.pl-stage-name').value.trim(),
     color: r.querySelector('.pl-stage-color').value,
   })).filter(s => s.name);
-  if (stages.length < 2) { toast('At least 2 stages required', true); return; }
+  if (scope === 'pipeline' && stages.length < 2) { toast('At least 2 stages required', true); return false; }
   const reply_filters = [...document.querySelectorAll('#pipelineFiltersEditor .pl-frow')].map(r => ({
     key: r.dataset.key || '',
     label: r.querySelector('.pl-filter-label').value.trim(),
@@ -6983,22 +7298,26 @@ async function savePipelineConfig() {
   })).filter(f => f.label);
   const cadence = {};
   document.querySelectorAll('#pipelineCadenceEditor .pl-cad-row').forEach(r => {
-    if (!r.dataset.sid) return;   // skip non-stage rows (touch hour, digest, drip toggle)
+    if (!r.dataset.sid) return;   // skip the touch-hour row
     cadence[r.dataset.sid] = {
       days: parseInt(r.querySelector('.pl-cad-days')?.value) || 3,
       mode: r.querySelector('.pl-cad-mode')?.value || 'off',
     };
   });
+  const body = scope === 'automation'
+    ? { cadence,
+        touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
+        digest_enabled: !!document.getElementById('plDigest')?.checked,
+        drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked,
+        auto_send_enabled: !!document.getElementById('plAutoSend')?.checked }
+    : { stages, reply_filters };
   try {
     const res = await fetch('/api/followups/pipeline-config', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ stages, reply_filters, cadence,
-        touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
-        digest_enabled: !!document.getElementById('plDigest')?.checked,
-        drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
-    if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
+    if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return false; }
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
     pipelineFilterKeywords = data.filter_keywords || {};
@@ -7006,12 +7325,17 @@ async function savePipelineConfig() {
     pipelineTouchHour = data.touch_hour ?? 'auto';
     pipelineDigest = data.digest_enabled !== false;
     pipelineDripAuto = data.drip_auto_enabled !== false;
-    renderPipelineConfigEditor();
-    toast('Pipeline config saved');
+    pipelineAutoSend = data.auto_send_enabled !== false;
+    pipelineAutoPreview = data.auto_send_preview || pipelineAutoPreview;
+    pipelineTimezone = data.timezone || pipelineTimezone;
+    if (scope === 'pipeline') renderPipelineConfigEditor();
+    else renderPipelineCadenceEditor();
+    if (!quiet) toast('Pipeline saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {
       await loadPipelineStats(); renderFuKanban();
     }
-  } catch(e) { toast('Error: ' + e.message, true); }
+    return true;
+  } catch(e) { toast('Error: ' + e.message, true); return false; }
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────
@@ -7043,8 +7367,8 @@ async function fuAction(id, action, reason, extraPayload) {
         : 'Moved to Warm — it may appear lower in the queue';
     } else if (action === 'loads') {
       msg = fuSpecialFilter || (fuStateFilter && fuStateFilter !== 'loads')
-        ? 'Moved to Loads — current view may hide it'
-        : 'Moved to Loads — it may appear lower in the queue';
+        ? 'Moved to Booked — current view may hide it'
+        : 'Moved to Booked — it may appear lower in the queue';
     } else if (action === 'block') {
       msg = 'Blocked — removed from active follow-up';
     } else if (action === 'close') {
@@ -7356,7 +7680,7 @@ function toggleFuDropdown(event, contactId) {
   }
   if (!isTerminal) {
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('warm')"><i class="ph-bold ph-fire"></i> Move to Warm</button>`;
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('loads')"><i class="ph-bold ph-truck"></i> Move to Loads</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('loads')"><i class="ph-bold ph-truck"></i> Move to Booked</button>`;
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('block')"><i class="ph-bold ph-prohibit"></i> Block contact</button>`;
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('close')"><i class="ph-bold ph-check-circle"></i> Mark as Closed</button>`;
     items += `<div class="fu-dd-sep"></div>`;
@@ -7384,9 +7708,14 @@ async function fuDropdownAction(action) {
     toast('Deleted'); await loadFollowups(); return;
   }
   if (action==='note') {
-    const txt = prompt('Add note:'); if (txt===null) return;
-    await fetch('/api/followups/notes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, notes:txt})});
-    toast('Note saved'); return;
+    const txt = prompt('Add note (added under existing notes):');
+    if (txt===null || !txt.trim()) return;
+    const res = await fetch('/api/followups/notes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, notes:txt, append:true})});
+    if (!res.ok) { toast('Could not save note', true); return; }
+    const d = await res.json();
+    const c = (fuContacts || []).find(x => x.id === id);
+    if (c) c.notes = d.notes;
+    toast('Note added'); return;
   }
   if (action==='schedule-once') { openFuScheduleModal(id, 'once'); return; }
   if (action==='set-recurring')  { openFuScheduleModal(id, 'recurring'); return; }
@@ -7501,20 +7830,20 @@ function renderFuAnalytics(data) {
     <div class="fu-analytics-section">
       <div class="fu-analytics-title">Outcomes</div>
       <div class="fu-outcomes-grid">
-        <div class="fu-outcome-card fu-outcome-loads"><div class="fu-outcome-label">Loads</div><div class="fu-outcome-num">${o.loads||0}</div></div>
+        <div class="fu-outcome-card fu-outcome-loads"><div class="fu-outcome-label">Booked</div><div class="fu-outcome-num">${o.loads||0}</div></div>
         <div class="fu-outcome-card fu-outcome-warm"><div class="fu-outcome-label">Warm</div><div class="fu-outcome-num">${o.warm||0}</div></div>
         <div class="fu-outcome-card fu-outcome-blocked"><div class="fu-outcome-label">Blocked</div><div class="fu-outcome-num">${o.blocked||0}</div></div>
         <div class="fu-outcome-card fu-outcome-closed"><div class="fu-outcome-label">Closed</div><div class="fu-outcome-num">${o.closed||0}</div></div>
       </div>
     </div>
     <div class="fu-analytics-section">
-      <div class="fu-analytics-title">Conversion to Loads by Stage</div>
+      <div class="fu-analytics-title">Conversion to Booked by Stage</div>
       ${convRows.map(r=>`<div class="fu-conv-row">
         <div class="fu-conv-label">${r.label}</div>
         <div class="fu-conv-bar-wrap"><div class="fu-conv-bar" style="width:${Math.round(r.n*100/maxConv)}%"></div></div>
         <div class="fu-conv-num">${r.n}</div>
       </div>`).join('')}
-      <div style="font-size:11px;color:var(--text3);margin-top:10px">Total loads from follow-ups: <strong style="color:var(--green)">${loadsTotal}</strong></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px">Total booked from follow-ups: <strong style="color:var(--green)">${loadsTotal}</strong></div>
     </div>`;
 }
 
@@ -7700,14 +8029,14 @@ function renderAnKpis() {
   countUp('anErrors', errors);
   renderSpark('anSentSpark', ((_anAiData && _anAiData.daily) || []).map(d => d.emails));
   setEl2('anSentSub', s.today ? s.today + ' today' : '');
-  setEl2('anReplyRateSub', pct > 0 ? (rr.total_replies || 0) + ' replies' : 'no replies yet');
+  setEl2('anReplyRateSub', rr.contacted ? (rr.replied || 0) + ' of ' + rr.contacted + ' contacts replied' : 'no emails in this period');
   setEl2('anInterestedSub', intPct > 0 ? intPct.toFixed(0) + '% of replies' : '');
   setEl2('anErrorsSub', errors > 0 ? 'review below' : 'all good');
   let summaryInsight = 'No outreach data yet for this period.';
   if (errors > 0) {
     summaryInsight = 'Reply rate is ' + (pct > 0 ? pct.toFixed(1) + '%' : '\u2014') + ', but there ' + (errors === 1 ? 'is 1 error' : 'are ' + errors + ' errors') + ' to review.';
   } else if (pct > 0 && interested > 0) {
-    summaryInsight = 'Reply rate is ' + pct.toFixed(1) + '% with ' + interested + ' interested repl' + (interested === 1 ? 'y' : 'ies') + ' in this period.';
+    summaryInsight = 'Reply rate is ' + pct.toFixed(1) + '% with ' + interested + ' follow-up repl' + (interested === 1 ? 'y' : 'ies') + ' in this period.';
   } else if (sent > 0) {
     summaryInsight = 'Outreach is live. Review what works and the best send windows below.';
   }
@@ -7730,8 +8059,8 @@ function renderAnQuality() {
   setEl2('anStatNeutral',    (rr.new || 0) + ' (' + nPct + '%)');
   setEl2('anStatNotInt',     (rr.not_interested || 0) + ' (' + notPct + '%)');
   let ins = iPct >= 30 ? 'Targeting looks strong \u2014 keep focusing on these routes.'
-          : iPct >= 15 ? 'Moderate interest \u2014 consider testing new templates.'
-          : total > 10 ? 'Low interest rate \u2014 review your targeting or templates.'
+          : iPct >= 15 ? 'Moderate follow-up rate \u2014 consider testing new templates.'
+          : total > 10 ? 'Low follow-up rate \u2014 review your targeting or templates.'
           : 'Early data \u2014 need more replies for meaningful insights.';
   setEl2('anQualityInsight', ins);
 }
@@ -7840,7 +8169,24 @@ function toggleAnAdvanced() {
 function setEl2(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
 
 // ── STARTUP ─────────────────────────────────────────────────────────────────
+function _routeFromLocation() {
+  const params = new URLSearchParams(location.search);
+  let page = location.hash.replace(/^#\/?/, '');
+  if (!page && (params.has('gmail_connected') || params.has('gmail_error'))) page = 'settings';
+  if (!page || !document.getElementById('page-' + page)) page = 'dashboard';
+  const el = document.querySelector(`.nav-item[onclick*="'${page}'"]`);
+  _navFromHistory = true;
+  try { nav(page, el); } finally { _navFromHistory = false; }
+  if (location.hash !== '#/' + page) {   // unknown/empty hash → normalize the address
+    history.replaceState({ page }, '', location.pathname + location.search + '#/' + page);
+  }
+}
+window.addEventListener('popstate', () => _routeFromLocation());
+
 document.addEventListener('DOMContentLoaded', () => {
+  _routeFromLocation();
+  // once per account: store the browser's zone, then redraw "today" numbers with it
+  ensureTimezone().then(saved => { if (saved) _routeFromLocation(); }).catch(() => {});
   loadCurrentUser();
   loadSettings();
   ['cfgName','cfgCompany','cfgPhone'].forEach(id => {

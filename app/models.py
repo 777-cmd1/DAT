@@ -363,6 +363,9 @@ class Reply(db.Model):
     route        = db.Column(db.String(512), default='')
     status       = db.Column(db.String(30), default='new')  # 'new' | 'interested' | 'not_interested'
     reply_filter_key = db.Column(db.String(50), nullable=True)   # pipeline reply-filter tag
+    # Set when a colleague answered for the address we emailed (we wrote to
+    # dispatch@abc.com, john@abc.com replied): the original recipient, lowercased.
+    matched_recipient = db.Column(db.String(255), nullable=True)
     auto_advanced    = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     # Semi-automatic triage: category detected at ingest + what (if anything) was auto-applied
     triage_category   = db.Column(db.String(20), nullable=True)   # 'negative'|'gave_info'|'rate_request'|'auto_reply'|NULL
@@ -390,6 +393,7 @@ class Reply(db.Model):
             'subject': self.subject, 'body': self.body,
             'route': self.route, 'status': self.status,
             'reply_filter_key': self.reply_filter_key or '',
+            'matched_recipient': self.matched_recipient or '',
             'triage_category': self.triage_category or '',
             'triage_confidence': self.triage_confidence,
             'auto_processed': bool(self.auto_processed),

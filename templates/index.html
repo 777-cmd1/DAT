@@ -1787,6 +1787,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .tq-card.tq-cat-auto_reply   { border-left:3px solid #868e96; }
 .tq-action.tq-emph { background:color-mix(in srgb, currentColor 11%, transparent); }
 .tq-action-no.tq-emph { color:var(--text); }
+.tq-for { font-family:inherit; font-size:10.5px; color:var(--text2); margin-left:6px; }
 .tq-action-label { display:flex; flex-direction:column; align-items:flex-start; text-align:left; line-height:1.15; }
 .tq-rec-tag { font-size:8.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; opacity:.75; margin-top:2px; }
 .tq-auto-strip { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:8px 12px; font-size:12px; }
@@ -5989,7 +5990,9 @@ function tqCard(msgs) {
             '<span class="tq-time">' + time + '</span>' +
           '</div>' +
           '<div class="tq-company">' + esc(company) + '</div>' +
-          '<div class="tq-email">' + esc(emailRaw) + '</div>' +
+          '<div class="tq-email">' + esc(emailRaw) +
+            (latest.matched_recipient ? ' <span class="tq-for" title="A colleague answered your email to this address">↪ for ' + esc(latest.matched_recipient) + '</span>' : '') +
+          '</div>' +
           '<div class="tq-preview">' + esc(preview) + (preview.length >= 110 ? '…' : '') + '</div>' +
           (route ? '<div class="tq-route"><i class="ph-bold ph-map-pin" style="font-size:10px"></i> ' + esc(route) + '</div>' : '') +
           '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' + esc(latest.body || '(empty)') + '</div>' +

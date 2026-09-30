@@ -2695,7 +2695,7 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
         Reply.subject, Reply.body, Reply.route, Reply.status,
         Reply.reply_filter_key, Reply.received_at,
         Reply.triage_category, Reply.triage_confidence,
-        Reply.auto_processed, Reply.auto_action,
+        Reply.auto_processed, Reply.auto_action, Reply.matched_recipient,
     ).filter(
         Reply.user_id == uid,
         func.lower(Reply.from_email).in_(email_keys)
@@ -2718,6 +2718,7 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
             'triage_confidence': row.triage_confidence,
             'auto_processed': bool(row.auto_processed),
             'auto_action': row.auto_action or '',
+            'matched_recipient': row.matched_recipient or '',
             'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
         })
 
@@ -2740,6 +2741,7 @@ def save_replies(replies, uid=None):
                 from_email=r.get('email', ''), from_name=r.get('from', ''),
                 subject=r.get('subject', ''), body=r.get('body', ''),
                 route=r.get('route', ''), status=r.get('status', 'new'),
+                matched_recipient=r.get('matched_recipient') or None,
             ))
     db.session.commit()
 
@@ -2834,6 +2836,101 @@ def _bounced_recipient(from_addr, headers, body, known):
     return None
 
 
+# Mailboxes shared by unrelated people — a domain match there means nothing.
+_PUBLIC_MAIL_DOMAINS = frozenset({
+    'gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com', 'rocketmail.com', 'outlook.com',
+    'hotmail.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com',
+    'comcast.net', 'att.net', 'sbcglobal.net', 'bellsouth.net', 'verizon.net', 'cox.net',
+    'charter.net', 'protonmail.com', 'proton.me', 'gmx.com', 'mail.com', 'yandex.com', 'zoho.com',
+})
+_REPLY_SUBJ_PREFIX = re.compile(r'^\s*(?:(?:re|fw|fwd)\s*(?:\[\d+\])?\s*:\s*)+', re.I)
+_colleague_misses = {}   # uid -> msg_ids already checked and not an answer to our outreach
+
+
+def _own_gmail_address(uid):
+    from app.models import EmailAccount
+    acct = EmailAccount.query.filter_by(user_id=uid).first() if uid else None
+    return (acct.gmail_address or '') if acct else ''
+
+
+class _ColleagueReplyMatcher:
+    """Which of our outreach emails does a reply from an address we never
+    emailed answer? In freight a colleague answering for a shared mailbox
+    (we wrote to dispatch@abc.com, john@abc.com replied) is normal.
+
+    1. Same Gmail thread as one of our sent emails to a known recipient —
+       exact, works for any domain.
+    2. Same corporate domain as a recipient and the subject carries that
+       recipient's lane ("Re: Laredo, TX to Doral, FL, ...") — catches replies
+       to an internally forwarded email. Never for public mail domains.
+    Returns the original recipient (lowercased) or None."""
+
+    def __init__(self, service, uid, known, own_email=''):
+        self.service, self.uid, self.known = service, uid, known
+        self.own_domain = (own_email or '').lower().rpartition('@')[2]
+        self._sent_threads = None
+
+    @staticmethod
+    def looks_like_reply(headers):
+        return bool(headers.get('In-Reply-To') or headers.get('References')
+                    or _REPLY_SUBJ_PREFIX.match(headers.get('Subject') or ''))
+
+    def _sent_thread_map(self):
+        if self._sent_threads is None:
+            self._sent_threads, token = {}, None
+            try:
+                for _ in range(4):   # ≤2000 sent messages from the last 30 days
+                    kw = dict(userId='me', q='in:sent newer_than:30d', maxResults=500)
+                    if token:
+                        kw['pageToken'] = token
+                    resp = self.service.users().messages().list(**kw).execute()
+                    for m in resp.get('messages', []):
+                        self._sent_threads.setdefault(m.get('threadId'), []).append(m['id'])
+                    token = resp.get('nextPageToken')
+                    if not token:
+                        break
+            except Exception:
+                app.logger.exception('colleague match: listing sent mail failed for uid=%s', self.uid)
+        return self._sent_threads
+
+    def by_thread(self, thread_id):
+        for mid in self._sent_thread_map().get(thread_id, [])[:5]:
+            try:
+                md = self.service.users().messages().get(
+                    userId='me', id=mid, format='metadata', metadataHeaders=['To', 'Cc']).execute()
+            except Exception:
+                continue
+            hdrs = {h['name'].lower(): h['value'] for h in md.get('payload', {}).get('headers', [])}
+            for em in re.findall(r'[\w.+\-]+@[\w.\-]+\.\w+', f"{hdrs.get('to', '')} {hdrs.get('cc', '')}"):
+                if em.lower() in self.known:
+                    return em.lower()
+        return None
+
+    def by_lane(self, sender, subject):
+        domain = sender.rpartition('@')[2]
+        if not domain or domain in _PUBLIC_MAIL_DOMAINS or domain == self.own_domain:
+            return None
+        colleagues = [e for e in self.known if e.endswith('@' + domain)]
+        subj = _REPLY_SUBJ_PREFIX.sub('', subject or '').strip().lower()
+        if not colleagues or not subj:
+            return None
+        from app.models import Send
+        from sqlalchemy import func
+        rows = db.session.query(Send.recipient_email, Send.origin, Send.destination).filter(
+            Send.user_id == self.uid, Send.status == 'sent',
+            func.lower(Send.recipient_email).in_(colleagues),
+        ).order_by(Send.sent_at.desc()).limit(300).all()
+        for em, origin, dest in rows:
+            if origin and dest and subj.startswith(f'{origin} to {dest}'.lower()):
+                return em.lower()
+        return None
+
+    def match(self, sender, headers, thread_id):
+        if not self.looks_like_reply(headers):
+            return None
+        return (thread_id and self.by_thread(thread_id)) or self.by_lane(sender, headers.get('Subject', ''))
+
+
 def fetch_replies_from_gmail(uid=None, rate_limit=True):
     uid = uid or current_user_id()
     # Rate-limit manual checks: once per 60 s per user. The scheduler's pre-send
@@ -2866,6 +2963,7 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
 
         # First pass: collect new reply data without route lookup (avoid N+1)
         _pending_replies = []
+        matcher = None   # built on the first reply from an address we never emailed
         for msg_ref in messages:
             try:
                 msg_data = service.users().messages().get(
@@ -2883,13 +2981,25 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
                 if not em:
                     continue
                 sender = em.group().lower()
+                matched = None
                 if sender not in known:
                     if any(b in sender for b in _BOUNCE_SENDERS) or headers.get('X-Failed-Recipients'):
                         failed = _bounced_recipient(from_addr, headers,
                                                     _gmail_get_body(msg_data.get('payload', {})), known)
                         if failed:
                             bounced.add(failed)
-                    continue
+                        continue
+                    misses = _colleague_misses.setdefault(uid, set())
+                    if msg_id in misses:
+                        continue
+                    if matcher is None:
+                        matcher = _ColleagueReplyMatcher(service, uid, known, _own_gmail_address(uid))
+                    matched = matcher.match(sender, headers, msg_data.get('threadId', ''))
+                    if not matched:
+                        if len(misses) > 5000:
+                            misses.clear()
+                        misses.add(msg_id)
+                        continue
 
                 body = _gmail_get_body(msg_data.get('payload', {}))
 
@@ -2897,6 +3007,7 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
                     'msg_id':      msg_id,
                     'thread_id':   msg_data.get('threadId', ''),
                     'email':       sender,
+                    'matched_recipient': matched,
                     'from':        from_addr,
                     'subject':     headers.get('Subject', ''),
                     'date':        headers.get('Date', ''),
@@ -2911,7 +3022,8 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
         # Bulk route lookup — 1 query instead of N
         if _pending_replies:
             sender_emails = {r['email'] for r in _pending_replies}
-            route_map = _bulk_routes_for_emails(uid, sender_emails)
+            route_map = _bulk_routes_for_emails(
+                uid, sender_emails | {r['matched_recipient'] for r in _pending_replies if r.get('matched_recipient')})
 
             # Bulk status-inheritance lookup — if contact was ignored/not_interested,
             # inherit that status so they don't re-appear in the queue as 'new'.
@@ -2940,7 +3052,7 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
                 pass  # if lookup fails, fall back to 'new' — safe default
 
             for r in _pending_replies:
-                r['route'] = route_map.get(r['email'], '')
+                r['route'] = route_map.get(r['email']) or route_map.get(r.get('matched_recipient') or '', '')
                 # Inherit suppressed status so ignored contacts stay quiet
                 r['status'] = _inherited_status.get(r['email'], 'new')
             new_replies.extend(_pending_replies)
@@ -2971,10 +3083,12 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
     # Auto-stop follow-ups for contacts who replied
     if new_replies and uid:
         for r in new_replies:
-            try:
-                _check_reply_stops_followup(r['email'], uid)
-            except Exception:
-                pass
+            # a colleague's answer counts as the emailed contact replying too
+            for addr in {r['email'], r.get('matched_recipient')} - {None, ''}:
+                try:
+                    _check_reply_stops_followup(addr, uid)
+                except Exception:
+                    pass
         try:
             db.session.commit()
         except Exception:
@@ -4276,7 +4390,7 @@ def api_intelligence():
 
     # ── Reply & Rate Request aggregation ─────────────────────────────────────
     all_replies = db.session.query(
-        Reply.from_email, Reply.body, Reply.status
+        Reply.from_email, Reply.body, Reply.status, Reply.matched_recipient
     ).filter_by(user_id=uid).all()
     # DISTINCT by from_email — avoids inflated counts from thread duplicates
     unique_reply_emails   = {r.from_email.lower() for r in all_replies if r.from_email}
@@ -4301,8 +4415,11 @@ def api_intelligence():
      .order_by(func.count(Send.id).desc())\
      .limit(20).all()
 
-    # Build reply lookup: from_email → (has_reply, is_rate_request)
+    # Build reply lookup: emailed address → reply (its own, or a colleague's for it)
     reply_lookup = {r.from_email.lower(): r for r in all_replies if r.from_email}
+    for r in all_replies:
+        if r.matched_recipient:
+            reply_lookup.setdefault(r.matched_recipient.lower(), r)
 
     # For each lane, cross-ref with replies
     lanes = []
@@ -4353,8 +4470,9 @@ def api_intelligence():
             continue
         em = r.from_email.lower()
         domain = em.split('@')[1]
-        if em in contacted_by_domain.get(domain, ()):
-            reply_by_domain.setdefault(domain, set()).add(em)
+        answered_for = (r.matched_recipient or em).lower()
+        if answered_for in contacted_by_domain.get(answered_for.split('@')[-1], ()):
+            reply_by_domain.setdefault(answered_for.split('@')[-1], set()).add(answered_for)
         if _is_rate_request(r.body):
             rr_by_domain.setdefault(domain, set()).add(em)
         if r.status in ('follow_up', 'interested'):   # same "Follow-up" as Analytics
@@ -4605,7 +4723,8 @@ def get_fu_templates():
 
 def _reply_rate(contacted, replied):
     """THE reply rate (Dashboard, Analytics, Intelligence, digest): the share of
-    unique contacts emailed in a window who replied — always 0..100%."""
+    unique contacts emailed in a window who replied — themselves or through a
+    colleague answering for them (Reply.matched_recipient) — always 0..100%."""
     return round(100.0 * replied / contacted, 1) if contacted else None
 
 
@@ -4620,11 +4739,15 @@ def _reply_cohort(uid, since=None):
         rq = rq.filter(Send.sent_at >= since)
     recipients = rq.distinct().subquery()
     contacted = db.session.query(func.count()).select_from(recipients).scalar() or 0
-    q = db.session.query(func.count(distinct(func.lower(Reply.from_email)))).filter(
-        Reply.user_id == uid, func.lower(Reply.from_email).in_(db.select(recipients.c.em)))
+    # who answered: the sender, plus the emailed address a colleague answered for
+    answered = [db.select(func.lower(col).label('em')).where(Reply.user_id == uid, col.isnot(None))
+                for col in (Reply.from_email, Reply.matched_recipient)]
     if since is not None:
-        q = q.filter(Reply.received_at >= since)
-    return contacted, (q.scalar() or 0)
+        answered = [a.where(Reply.received_at >= since) for a in answered]
+    responders = db.union(*answered).subquery()
+    replied = db.session.query(func.count(distinct(recipients.c.em))).filter(
+        recipients.c.em.in_(db.select(responders.c.em))).scalar() or 0
+    return contacted, replied
 
 
 def _fu_urgency(uid, now=None):
@@ -6994,6 +7117,7 @@ with app.app_context():
         ('followup_contacts', 'touch_enabled',       'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('followup_contacts', 'attention_at',        'TIMESTAMP'),
         ('users',             'session_version',     'INTEGER NOT NULL DEFAULT 0'),
+        ('replies',           'matched_recipient',   'VARCHAR(255)'),
         # Bulk follow-up send jobs (SendJob kind discriminator + per-contact log).
         # Inline delivery is REQUIRED: prod schema changes only apply here — the
         # Alembic releaseCommand does not run against the live DB (a3b4c5d6e7f8

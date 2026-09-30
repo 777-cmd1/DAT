@@ -120,6 +120,9 @@ URL: `/admin`
 - Автовідправка: `pipeline_config.auto_send_enabled` — головний вимикач усіх авто-шляхів;
   шедулер перед відправкою сам перевіряє реплаї (`_prefetch_replies_before_sending`).
 - Overdue/Today — тільки через `_fu_urgency(uid)`; reply rate — тільки `_reply_cohort` + `_reply_rate`.
+- Відповідь колеги (писали dispatch@abc.com, відповів john@abc.com) — норма: `_ColleagueReplyMatcher`
+  приймає її (тред Gmail або корпоративний домен + маршрут у темі), `Reply.matched_recipient` = кому писали;
+  зупиняє дрип цього контакта і рахується в reply rate.
 - «Сьогодні» — за поясом юзера (`pipeline_config.timezone`, `_user_tz`, `_local_day_start`);
   фіксована touch_hour — локальна година. БД-час лишається naive UTC.
 - Імʼя контакта в UI — `FollowupContact.display_name` (JS `fuName/fuSub`).

@@ -5270,6 +5270,7 @@ def api_followups_pipeline_config():
                    digest_enabled=bool(_cfg.get('digest_enabled', True)),
                    drip_auto_enabled=bool(ws.fu_auto_enabled) if ws else False,
                    auto_send_enabled=bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True)),
+                   auto_send_preview=_auto_send_preview(ws),
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
 
@@ -5492,7 +5493,8 @@ def api_followups_pipeline_config_save():
                    touch_hour=(ws.pipeline_config or {}).get('touch_hour', 'auto'),
                    digest_enabled=bool((ws.pipeline_config or {}).get('digest_enabled', True)),
                    drip_auto_enabled=bool(ws.fu_auto_enabled),
-                   auto_send_enabled=bool((ws.pipeline_config or {}).get('auto_send_enabled', True)))
+                   auto_send_enabled=bool((ws.pipeline_config or {}).get('auto_send_enabled', True)),
+                   auto_send_preview=_auto_send_preview(ws))
 
 
 @app.route('/api/replies/pipeline-tag', methods=['POST'])
@@ -6350,6 +6352,33 @@ def _would_auto_send(fc, ws):
     if fc.touch_enabled:
         return _cadence_for_stage(ws, fc.pipeline_stage or 1).get('mode') == 'auto'
     return False
+
+
+def _auto_send_preview(ws, hours=24):
+    """How many contacts the scheduler would email on its own in the next
+    `hours` (overdue included), split by path. Counted as if both the master
+    switch and the FU1–FU3 switch were on, so the Settings banner can update
+    live while the user flips them."""
+    from app.models import FollowupContact
+    out = {'drip': 0, 'touches': 0, 'scheduled': 0}
+    if not ws:
+        return out
+    horizon = _utcnow() + timedelta(hours=hours)
+    due = FollowupContact.query.filter(
+        FollowupContact.workspace_id == ws.id,
+        FollowupContact.state == 'active',
+        FollowupContact.next_followup_at.isnot(None),
+        FollowupContact.next_followup_at <= horizon,
+    ).all()
+    for fc in due:
+        if fc.scheduled_once or fc.recurring_enabled:
+            out['scheduled'] += 1
+        elif fc.is_followup_enabled:
+            if fc.stage in ('fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled'):
+                out['drip'] += 1
+        elif fc.touch_enabled and _cadence_for_stage(ws, fc.pipeline_stage or 1).get('mode') == 'auto':
+            out['touches'] += 1
+    return out
 
 
 def _prefetch_replies_before_sending(now):

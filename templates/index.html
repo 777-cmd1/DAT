@@ -653,6 +653,38 @@ select { cursor: pointer; }
 @media (max-width: 1080px) {
   .settings-grid { grid-template-columns: 1fr; }
 }
+/* Settings tabs: one tab's cards at a time, each tab has its own save bar */
+.settings-tabs {
+  display: flex; gap: 4px; margin: 0 0 18px; padding: 4px;
+  width: fit-content; max-width: 100%;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface2);
+}
+.settings-tab {
+  border: 0; background: transparent; color: var(--text2);
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 16px; border-radius: 9px; cursor: pointer;
+}
+.settings-tab:hover { color: var(--text); }
+.settings-tab.active { background: var(--accent-glow); color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.settings-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#settingsShell { max-width: 880px; }
+#settingsShell .settings-grid { display: contents; }
+#settingsShell[data-active="account"]    [data-stab]:not([data-stab="account"]),
+#settingsShell[data-active="sending"]    [data-stab]:not([data-stab="sending"]),
+#settingsShell[data-active="automation"] [data-stab]:not([data-stab="automation"]),
+#settingsShell[data-active="pipeline"]   [data-stab]:not([data-stab="pipeline"]) { display: none; }
+.auto-banner {
+  margin-bottom: 14px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface2);
+}
+.auto-banner.on  { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); background: var(--green-dim); }
+.auto-banner.on.idle { background: var(--surface2); }
+.auto-banner.off { border-color: color-mix(in srgb, var(--yellow) 50%, var(--border)); background: var(--yellow-dim); }
+.auto-banner-head { font-size: 14px; font-weight: 700; color: var(--text); }
+.auto-banner-sub { margin-top: 3px; font-size: 12px; color: var(--text2); }
+.auto-banner-unsaved { font-weight: 500; font-size: 12px; color: var(--text2); }
+.auto-sub-row { margin-left: 28px; }
+.settings-toggle-row.is-off { opacity: .5; }
 @media (max-width: 760px) {
   .settings-followup-grid { grid-template-columns: 1fr; }
   .settings-ready-row,
@@ -2428,10 +2460,10 @@ html:not([data-theme="dark"]) .send-cta-bar {
     <nav class="nav">
       <!-- PRIMARY: core workflow -->
       <div class="nav-section">Workflow</div>
-      <div class="nav-item" onclick="nav('dashboard',this)">
+      <div class="nav-item active" onclick="nav('dashboard',this)">
         <i class="nav-icon ph-bold ph-squares-four" aria-hidden="true"></i> Dashboard
       </div>
-      <div class="nav-item active" onclick="nav('send',this)">
+      <div class="nav-item" onclick="nav('send',this)">
         <i class="nav-icon ph-bold ph-paper-plane-tilt" aria-hidden="true"></i> Send
       </div>
       <div class="nav-item" onclick="nav('replies',this)">
@@ -2490,7 +2522,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
   <main class="main">
 
     <!-- SEND -->
-    <div class="page active" id="page-send">
+    <div class="page" id="page-send">
       <div class="page-header">
         <div class="page-title">Send Emails</div>
         <div class="page-sub">Paste DAT text → parse → send</div>
@@ -2911,7 +2943,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
 
     <!-- REPLIES TRIAGE QUEUE -->
     <!-- DASHBOARD PAGE -->
-    <div class="page" id="page-dashboard">
+    <div class="page active" id="page-dashboard">
       <div class="page-header">
         <div class="page-title">Dashboard</div>
         <div class="page-sub">Today's actions first, funnel and base health below</div>
@@ -3556,8 +3588,14 @@ html:not([data-theme="dark"]) .send-cta-bar {
         <div class="page-title">Settings</div>
         <div class="page-sub">Manage connection, sender identity, and default sending behavior</div>
       </div>
-      <div class="settings-shell">
-        <section class="settings-card">
+      <div class="settings-tabs" role="tablist">
+        <button class="settings-tab active" role="tab" data-tab="account" onclick="setSettingsTab('account')">Account</button>
+        <button class="settings-tab" role="tab" data-tab="sending" onclick="setSettingsTab('sending')">Sending</button>
+        <button class="settings-tab" role="tab" data-tab="automation" onclick="setSettingsTab('automation')">Automation</button>
+        <button class="settings-tab" role="tab" data-tab="pipeline" onclick="setSettingsTab('pipeline')">Pipeline</button>
+      </div>
+      <div class="settings-shell" id="settingsShell" data-active="account">
+        <section class="settings-card" data-stab="account">
           <div class="settings-card-head">
             <div>
               <div class="settings-title">Workspace Readiness</div>
@@ -3591,7 +3629,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
         </section>
 
         <div class="settings-grid">
-          <section class="settings-card">
+          <section class="settings-card" data-stab="account">
             <div class="settings-card-head">
               <div>
                 <div class="settings-title">Sender Identity</div>
@@ -3607,7 +3645,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
           </section>
 
-          <section class="settings-card">
+          <section class="settings-card" data-stab="sending">
             <div class="settings-card-head">
               <div>
                 <div class="settings-title">Sending Defaults</div>
@@ -3634,7 +3672,33 @@ html:not([data-theme="dark"]) .send-cta-bar {
           </section>
         </div>
 
-        <section class="settings-card">
+        <section class="settings-card" data-stab="automation">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-title">Automatic sending</div>
+              <div class="settings-sub">What the system may send on its own, without your click.</div>
+            </div>
+          </div>
+          <div id="autoSendBanner" class="auto-banner" aria-live="polite"></div>
+          <div class="settings-stack-sm">
+            <div class="settings-toggle-row auto-master-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">Allow automatic sending</div>
+                <div class="settings-toggle-sub">Master switch. Off = nothing is sent on its own (FU1–FU3, auto touches, scheduled, recurring) — everything waits for your click.</div>
+              </div>
+              <input id="plAutoSend" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
+            </div>
+            <div class="settings-toggle-row auto-sub-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">Include FU1–FU3 sequence</div>
+                <div class="settings-toggle-sub">Off = due FU1–FU3 wait in Overdue / Today's touches for a manual send. Touches per stage are set under Touch cadence below.</div>
+              </div>
+              <input id="plDripAuto" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-card" data-stab="automation">
           <div class="settings-card-head">
             <div>
               <div class="settings-title">Follow-up Defaults</div>
@@ -3674,19 +3738,19 @@ html:not([data-theme="dark"]) .send-cta-bar {
             </div>
             <div class="settings-toggle-row">
               <div class="settings-toggle-copy">
-                <div class="settings-toggle-title">Enable follow-up by default</div>
-                <div class="settings-toggle-sub">New follow-up contacts start in the scheduled flow automatically.</div>
+                <div class="settings-toggle-title">New contacts start the FU1–FU3 sequence</div>
+                <div class="settings-toggle-sub">Gives new pipeline contacts their FU1 date. Whether it is sent automatically is decided by the switches above.</div>
               </div>
               <input id="fuDefaultEnabled" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
             </div>
           </div>
         </section>
 
-        <section class="settings-card">
+        <section class="settings-card" data-stab="pipeline">
           <div class="settings-card-head">
             <div>
               <div class="settings-title">Pipeline / Kanban</div>
-              <div class="settings-sub">Customize the Kanban stages and reply-filter tags used by the Follow-up board. Saved separately below.</div>
+              <div class="settings-sub">Customize the Kanban stages and reply-filter tags used by the Follow-up board.</div>
             </div>
           </div>
           <div class="pl-cfg-subhead">Stages <span class="pl-cfg-hint">minimum 2 — these are the Kanban columns</span></div>
@@ -3697,22 +3761,44 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <div id="pipelineFiltersEditor" class="pl-cfg-list"></div>
           <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPipelineFilterRow()">+ Add Custom Filter</button>
 
-          <div class="pl-cfg-subhead" style="margin-top:18px">Touch cadence <span class="pl-cfg-hint">how often to re-touch contacts sitting in each stage once the FU1-3 drip is done. Manual = lands in Today's touches for a one-click send; Auto = a template is sent automatically.</span></div>
-          <div id="pipelineCadenceEditor" class="pl-cfg-list"></div>
+        </section>
 
-          <div style="margin-top:16px">
-            <button class="btn btn-primary" onclick="savePipelineConfig()">Save Pipeline Config</button>
+        <section class="settings-card" data-stab="automation">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-title">Touch cadence</div>
+              <div class="settings-sub">How often to re-touch contacts in each stage once the FU1–FU3 sequence is done. Manual = lands in Today's touches for a one-click send; Auto = a template is sent automatically (only while automatic sending is allowed).</div>
+            </div>
+          </div>
+          <div id="pipelineCadenceEditor" class="pl-cfg-list"></div>
+          <div class="settings-toggle-row" style="margin-top:10px">
+            <div class="settings-toggle-copy">
+              <div class="settings-toggle-title">Weekly digest email</div>
+              <div class="settings-toggle-sub">Mondays — a week summary to your own inbox.</div>
+            </div>
+            <input id="plDigest" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
           </div>
         </section>
 
-        <section class="settings-savebar">
-          <div class="settings-savecopy">
-            <div class="settings-title">Save Workspace Settings</div>
-            <div class="settings-sub">Connection, sender identity, cadence defaults, and follow-up timing will all be updated together.</div>
-          </div>
-          <div class="settings-actions">
-            <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
-          </div>
+        <section class="settings-savebar" data-stab="account">
+          <div class="settings-savecopy"><div class="settings-title">Save account</div>
+            <div class="settings-sub">Sender identity used in the sign-off of every email.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="saveSettings()">Save</button></div>
+        </section>
+        <section class="settings-savebar" data-stab="sending">
+          <div class="settings-savecopy"><div class="settings-title">Save sending defaults</div>
+            <div class="settings-sub">Delays between emails and the daily target for the Send queue.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="saveSettings()">Save</button></div>
+        </section>
+        <section class="settings-savebar" data-stab="automation">
+          <div class="settings-savecopy"><div class="settings-title">Save automation</div>
+            <div class="settings-sub">Automatic sending, follow-up timing, touch cadence and digest — saved together.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="saveAutomationTab()">Save</button></div>
+        </section>
+        <section class="settings-savebar" data-stab="pipeline">
+          <div class="settings-savecopy"><div class="settings-title">Save pipeline</div>
+            <div class="settings-sub">Kanban stages and reply filters.</div></div>
+          <div class="settings-actions"><button class="btn btn-primary" onclick="savePipelineConfig()">Save</button></div>
         </section>
       </div>
     </div>
@@ -3781,7 +3867,12 @@ async function loadCurrentUser() {
 }
 
 // ── NAV ──────────────────────────────────────────────────────────────────────
+let _navFromHistory = false;   // true while routing from the URL — don't push a new entry
+
 function nav(page, el) {
+  if (!_navFromHistory && location.hash !== '#/' + page) {
+    history.pushState({ page }, '', location.pathname + location.search + '#/' + page);
+  }
   // Save send page full state before leaving
   const datTxt = document.getElementById('datText');
   if (datTxt && datTxt.value) sessionStorage.setItem('dat_draft', datTxt.value);
@@ -5263,6 +5354,14 @@ async function deleteFuTmpl(id) {
 
 // ── SETTINGS ─────────────────────────────────────────────────────────────────
 async function loadSettings() {
+  {
+    const q = new URLSearchParams(window.location.search);
+    let tab = 'account';
+    if (!q.has('gmail_connected') && !q.has('gmail_error')) {
+      try { tab = localStorage.getItem('settings_tab') || 'account'; } catch (e) {}
+    }
+    setSettingsTab(tab);
+  }
   const [cfg, fu] = await Promise.all([
     (await fetch('/api/config')).json(),
     (await fetch('/api/settings/followup')).json(),
@@ -5297,18 +5396,18 @@ async function loadSettings() {
   document.getElementById('fuDefaultEnabled').checked = fu.default_followup_enabled !== false;
   renderSettingsPreview();
 
-  if (!_fuPipelineConfigLoaded) await loadPipelineConfig();
+  await loadPipelineConfig();
   renderPipelineConfigEditor();
 
   // Handle ?gmail_connected=1 redirect from OAuth callback
   const params = new URLSearchParams(window.location.search);
   if (params.has('gmail_connected')) {
     toast('Gmail connected successfully');
-    window.history.replaceState({}, '', window.location.pathname);
+    window.history.replaceState(history.state, '', window.location.pathname + window.location.hash);
   }
   if (params.has('gmail_error')) {
     toast('Gmail connection failed: ' + params.get('gmail_error'), true);
-    window.history.replaceState({}, '', window.location.pathname);
+    window.history.replaceState(history.state, '', window.location.pathname + window.location.hash);
   }
 }
 
@@ -5345,33 +5444,51 @@ async function disconnectGmail() {
   loadSettings();
 }
 
+// Account + Sending tabs (one /api/config record).
 async function saveSettings() {
+  const num = id => parseInt(document.getElementById(id).value);
   const data = {
     your_name:    document.getElementById('cfgName').value,
     your_company: document.getElementById('cfgCompany').value,
     your_phone:   document.getElementById('cfgPhone').value,
-    delay_min:    parseInt(document.getElementById('cfgDelayMin').value),
-    delay_max:    parseInt(document.getElementById('cfgDelayMax').value),
-    daily_target: parseInt(document.getElementById('cfgDailyTarget').value),
+    delay_min:    num('cfgDelayMin'),
+    delay_max:    num('cfgDelayMax'),
+    daily_target: num('cfgDailyTarget'),
   };
-  const fuData = {
-    fu1_delay_days: parseInt(document.getElementById('fuDelay1').value),
-    fu2_delay_days: parseInt(document.getElementById('fuDelay2').value),
-    fu3_delay_days: parseInt(document.getElementById('fuDelay3').value),
-    auto_stop_on_reply: document.getElementById('fuAutoStop').checked,
-    default_followup_enabled: document.getElementById('fuDefaultEnabled').checked,
-  };
-  await Promise.all([
-    fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)}),
-    fetch('/api/settings/followup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fuData)}),
-  ]);
-  const targetVal = parseInt(document.getElementById('cfgDailyTarget').value);
-  if (targetVal > 0) {
-    dailyTarget = targetVal;
+  for (const k of ['delay_min', 'delay_max', 'daily_target']) {
+    if (!Number.isFinite(data[k])) { toast('Delays and daily target must be numbers', true); return false; }
   }
+  try {
+    const res = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { toast('Error: ' + (out.error || 'save failed'), true); return false; }
+  } catch (e) { toast('Error: ' + e.message, true); return false; }
+  if (data.daily_target > 0) dailyTarget = data.daily_target;
   toast('Settings saved');
   loadDailyStats();
   renderSettingsPreview();
+  return true;
+}
+
+// Follow-up Defaults card (Automation tab).
+async function saveFollowupDefaults(quiet) {
+  const num = id => parseInt(document.getElementById(id).value);
+  const fuData = {
+    fu1_delay_days: num('fuDelay1'),
+    fu2_delay_days: num('fuDelay2'),
+    fu3_delay_days: num('fuDelay3'),
+    auto_stop_on_reply: document.getElementById('fuAutoStop').checked,
+    default_followup_enabled: document.getElementById('fuDefaultEnabled').checked,
+  };
+  if (![fuData.fu1_delay_days, fuData.fu2_delay_days, fuData.fu3_delay_days].every(v => Number.isFinite(v) && v >= 1)) {
+    toast('FU1–FU3 delays must be at least 1 day', true); return false;
+  }
+  try {
+    const res = await fetch('/api/settings/followup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fuData)});
+    if (!res.ok) { toast('Error: follow-up defaults not saved', true); return false; }
+  } catch (e) { toast('Error: ' + e.message, true); return false; }
+  if (!quiet) toast('Follow-up defaults saved');
+  return true;
 }
 
 // ── REPLIES ──────────────────────────────────────────────────────────────────
@@ -5999,6 +6116,7 @@ let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (UTC hour for cadence touche
 let pipelineDigest = true;        // weekly digest email on Mondays
 let pipelineDripAuto = true;      // scheduler auto-sends the FU1–FU3 drip sequence
 let pipelineAutoSend = true;      // master switch over every automatic send path
+let pipelineAutoPreview = { drip: 0, touches: 0, scheduled: 0 };   // due in next 24h, per path
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -6486,6 +6604,7 @@ async function loadPipelineConfig() {
     pipelineDigest = data.digest_enabled !== false;
     pipelineDripAuto = data.drip_auto_enabled !== false;
     pipelineAutoSend = data.auto_send_enabled !== false;
+    pipelineAutoPreview = data.auto_send_preview || pipelineAutoPreview;
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
   } catch(e) {
@@ -6959,27 +7078,78 @@ function renderPipelineCadenceEditor() {
     `<select id="plTouchHour"><option value="auto" ${pipelineTouchHour === 'auto' ? 'selected' : ''}>Auto — best reply hour</option>` +
     Array.from({length: 24}, (_, h) =>
       `<option value="${h}" ${String(pipelineTouchHour) === String(h) ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('') +
-    `</select></div>` +
-  `<div class="pl-cad-row"><span class="pl-cad-name">Weekly digest email</span>` +
-    `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
-    `<input type="checkbox" id="plDigest" ${pipelineDigest ? 'checked' : ''}> Mondays — week summary to your inbox</label></div>` +
-  `<div class="pl-cad-row"><span class="pl-cad-name">All automatic sending</span>` +
-    `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
-    `<input type="checkbox" id="plAutoSend" ${pipelineAutoSend ? 'checked' : ''}> ` +
-    `Master switch. Off = the scheduler sends nothing on its own (drip, scheduled, recurring, auto touches); everything waits for your click</label></div>` +
-  `<div class="pl-cad-row"><span class="pl-cad-name">Auto-send FU1–FU3 drip</span>` +
-    `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)">` +
-    `<input type="checkbox" id="plDripAuto" ${pipelineDripAuto ? 'checked' : ''}> ` +
-    `Scheduler emails due FU1–FU3 automatically. Off = they wait in Overdue / Today's touches for manual send</label></div>`;
+    `</select></div>`;
+  const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  setChk('plDigest', pipelineDigest);
+  setChk('plAutoSend', pipelineAutoSend);
+  setChk('plDripAuto', pipelineDripAuto);
+  renderAutoSendBanner();
 }
 
-async function savePipelineConfig() {
+// Banner over the Automation tab: is anything going out on its own, and how much.
+// live=true → reflects the unsaved switch positions.
+function renderAutoSendBanner(live) {
+  const box = document.getElementById('autoSendBanner');
+  if (!box) return;
+  const master = document.getElementById('plAutoSend');
+  const drip = document.getElementById('plDripAuto');
+  const on = master ? master.checked : pipelineAutoSend;
+  const dripOn = drip ? drip.checked : pipelineDripAuto;
+  if (drip) drip.disabled = !on;
+  drip?.closest('.settings-toggle-row')?.classList.toggle('is-off', !on);
+  const p = pipelineAutoPreview || {};
+  const parts = [];
+  if (dripOn && p.drip) parts.push(`${p.drip} FU1–FU3`);
+  if (p.touches) parts.push(`${p.touches} auto touch${p.touches === 1 ? '' : 'es'}`);
+  if (p.scheduled) parts.push(`${p.scheduled} scheduled/recurring`);
+  const n = (dripOn ? (p.drip || 0) : 0) + (p.touches || 0) + (p.scheduled || 0);
+  const unsaved = live && (on !== pipelineAutoSend || dripOn !== pipelineDripAuto)
+    ? ' <span class="auto-banner-unsaved">— not saved yet</span>' : '';
+  let head, sub;
+  if (!on) {
+    box.className = 'auto-banner off';
+    head = 'Auto-send OFF';
+    sub = 'Nothing is sent without your click.' +
+      (n ? ` If turned on, ~${n} email${n === 1 ? '' : 's'} would go out in the next 24 h.` : '');
+  } else if (n) {
+    box.className = 'auto-banner on';
+    head = `Auto-send ON: ~${n} email${n === 1 ? '' : 's'} in the next 24 h`;
+    sub = parts.join(' · ') + '. Replies are checked right before each send.';
+  } else {
+    box.className = 'auto-banner on idle';
+    head = 'Auto-send ON: nothing due in the next 24 h';
+    sub = 'Due FU1–FU3, auto touches and scheduled emails will go out on their own.';
+  }
+  box.innerHTML = `<div class="auto-banner-head">${head}${unsaved}</div><div class="auto-banner-sub">${esc(sub)}</div>`;
+}
+
+function setSettingsTab(tab) {
+  const shell = document.getElementById('settingsShell');
+  if (!shell) return;
+  if (!['account', 'sending', 'automation', 'pipeline'].includes(tab)) tab = 'account';
+  shell.dataset.active = tab;
+  document.querySelectorAll('.settings-tab').forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  try { localStorage.setItem('settings_tab', tab); } catch (e) {}
+}
+
+async function saveAutomationTab() {
+  const [a, b] = await Promise.all([saveFollowupDefaults(true), savePipelineConfig(true, 'automation')]);
+  if (a && b) toast('Automation saved');
+}
+
+// scope 'pipeline' = stages + reply filters (Pipeline tab);
+// scope 'automation' = cadence, touch hour, digest and the auto-send switches.
+async function savePipelineConfig(quiet, scope = 'pipeline') {
   const stages = [...document.querySelectorAll('#pipelineStagesEditor .pl-row')].map(r => ({
     id: r.dataset.id ? parseInt(r.dataset.id) : null,
     name: r.querySelector('.pl-stage-name').value.trim(),
     color: r.querySelector('.pl-stage-color').value,
   })).filter(s => s.name);
-  if (stages.length < 2) { toast('At least 2 stages required', true); return; }
+  if (scope === 'pipeline' && stages.length < 2) { toast('At least 2 stages required', true); return false; }
   const reply_filters = [...document.querySelectorAll('#pipelineFiltersEditor .pl-frow')].map(r => ({
     key: r.dataset.key || '',
     label: r.querySelector('.pl-filter-label').value.trim(),
@@ -6990,23 +7160,26 @@ async function savePipelineConfig() {
   })).filter(f => f.label);
   const cadence = {};
   document.querySelectorAll('#pipelineCadenceEditor .pl-cad-row').forEach(r => {
-    if (!r.dataset.sid) return;   // skip non-stage rows (touch hour, digest, drip toggle)
+    if (!r.dataset.sid) return;   // skip the touch-hour row
     cadence[r.dataset.sid] = {
       days: parseInt(r.querySelector('.pl-cad-days')?.value) || 3,
       mode: r.querySelector('.pl-cad-mode')?.value || 'off',
     };
   });
-  try {
-    const res = await fetch('/api/followups/pipeline-config', {
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ stages, reply_filters, cadence,
+  const body = scope === 'automation'
+    ? { cadence,
         touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
         digest_enabled: !!document.getElementById('plDigest')?.checked,
         drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked,
-        auto_send_enabled: !!document.getElementById('plAutoSend')?.checked })
+        auto_send_enabled: !!document.getElementById('plAutoSend')?.checked }
+    : { stages, reply_filters };
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
     });
     const data = await res.json();
-    if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return; }
+    if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return false; }
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
     pipelineFilterKeywords = data.filter_keywords || {};
@@ -7015,12 +7188,15 @@ async function savePipelineConfig() {
     pipelineDigest = data.digest_enabled !== false;
     pipelineDripAuto = data.drip_auto_enabled !== false;
     pipelineAutoSend = data.auto_send_enabled !== false;
-    renderPipelineConfigEditor();
-    toast('Pipeline config saved');
+    pipelineAutoPreview = data.auto_send_preview || pipelineAutoPreview;
+    if (scope === 'pipeline') renderPipelineConfigEditor();
+    else renderPipelineCadenceEditor();
+    if (!quiet) toast('Pipeline saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {
       await loadPipelineStats(); renderFuKanban();
     }
-  } catch(e) { toast('Error: ' + e.message, true); }
+    return true;
+  } catch(e) { toast('Error: ' + e.message, true); return false; }
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────
@@ -7854,7 +8030,22 @@ function toggleAnAdvanced() {
 function setEl2(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
 
 // ── STARTUP ─────────────────────────────────────────────────────────────────
+function _routeFromLocation() {
+  const params = new URLSearchParams(location.search);
+  let page = location.hash.replace(/^#\/?/, '');
+  if (!page && (params.has('gmail_connected') || params.has('gmail_error'))) page = 'settings';
+  if (!page || !document.getElementById('page-' + page)) page = 'dashboard';
+  const el = document.querySelector(`.nav-item[onclick*="'${page}'"]`);
+  _navFromHistory = true;
+  try { nav(page, el); } finally { _navFromHistory = false; }
+  if (location.hash !== '#/' + page) {   // unknown/empty hash → normalize the address
+    history.replaceState({ page }, '', location.pathname + location.search + '#/' + page);
+  }
+}
+window.addEventListener('popstate', () => _routeFromLocation());
+
 document.addEventListener('DOMContentLoaded', () => {
+  _routeFromLocation();
   loadCurrentUser();
   loadSettings();
   ['cfgName','cfgCompany','cfgPhone'].forEach(id => {

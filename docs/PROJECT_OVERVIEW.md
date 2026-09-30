@@ -57,7 +57,7 @@ tests/              — pytest: test_parser, test_triage, test_touch, test_pipel
   переходи стадій, завершення дрипа, лінивий sweep у `_normalize_followup_contact`.
 - Лічильники Overdue/Today: **будь-який активний контакт з датою** (прапорці enabled
   керують лише авто-відправкою). Шедулер (15-хв тред): Path 0-2 дрип/одноразові/recurring,
-  Path 3 авто-дотики (mode=auto), Path 4 тижневий дайджест (Пн ≥06:00 UTC, дедуп по даті).
+  Path 3 авто-дотики (mode=auto), Path 4 тижневий дайджест (Пн ≥06:00 за поясом юзера, дедуп по локальній даті).
 - UI: панель «Today's touches» (скрол, згортання) з Send touch/+1/+3/+7/Skip;
   швидкі дії на канбан-картках; таймлайн контакту (`/api/followups/timeline`) —
   drawer з усією історією (відправки, відповіді з текстом, події стадій, нотатки).
@@ -76,7 +76,10 @@ POST /api/replies/bulk-triage          — {category, action: ignore|followup|re
 GET  /api/replies/auto-processed       — стрічка Undo
 POST /api/replies/undo-auto            — відкат авто-дії
 GET/PUT /api/followups/pipeline-config — stages, reply_filters, filter_keywords,
-                                         triage_modes, cadence, touch_hour, digest_enabled
+                                         triage_modes, cadence, touch_hour, digest_enabled,
+                                         auto_send_enabled, drip_auto_enabled, timezone,
+                                         auto_send_preview (GET/PUT відповідь); PUT приймає
+                                         лише передані ключі (вкладки Settings шлють своє)
 POST /api/followups/touch              — {id, action: snooze|skip|clear_attention, days}
 GET  /api/followups/timeline?id=       — обʼєднана історія контакта
 POST /api/followups/action             — send-now (дрип) / free-send (дотик) / ...
@@ -87,7 +90,31 @@ POST /api/followups/action             — send-now (дрип) / free-send (до
   reply_filter_key, auto_advanced, classified_at
 - `followup_contacts`: touch_enabled, attention_at, pipeline_stage
 - Конфіг workspace — JSON `workspaces.pipeline_config`: stages, reply_filters,
-  filter_keywords, triage_modes, cadence, touch_hour, digest_enabled, last_digest_at
+  filter_keywords, triage_modes, cadence, touch_hour, digest_enabled, last_digest_at,
+  auto_send_enabled (головний вимикач), timezone (IANA)
+- `users.session_version` (logout/скидання пароля вбиває всі сесії);
+  `replies`: UNIQUE (user_id, msg_id) замість глобального UNIQUE (msg_id)
+
+## Цикл 2026-09 (аудит → пакети 2, 1, 3, 5, 4)
+- **Безпека**: OAuth `state` обовʼязковий; `/health` без адреси Redis; ProxyFix
+  (Railway = 1 хоп, `PROXY_HOPS` перевизначає); ліміти на reset-request (IP + email).
+- **Безпечна автовідправка**: перед кожним запуском шедулер сам тягне реплаї
+  (`_prefetch_replies_before_sending`, збій → утримання авто-відправок юзера);
+  `auto_send_enabled` гейтить шляхи 0–3; авто-дрип за замовчуванням вимкнений;
+  bounce → Stop List + Block; Block однаковий з Replies і Follow-up.
+- **UX**: адреси `#/page` (Back/Reload), старт — Dashboard; Settings на вкладках
+  Account / Sending / Automation / Pipeline, у кожної свій Save; банер
+  «Auto-send ON: ~N за 24 год» (`_auto_send_preview`); `FollowupContact.display_name`
+  — одне імʼя скрізь; таблиця показує стадію пайплайну і реальний наступний дотик;
+  словник термінів (виграш = **Booked**, в Analytics Follow-up/Needs Action/Ignored).
+- **Цілісність**: одне визначення Overdue/Today (`_fu_urgency`) для списку, лічильників
+  і select-all; **reply rate** = частка унікальних контактів, яким писали у вікні, що
+  відповіли з початку вікна (`_reply_cohort` + `_reply_rate`, 0..100%) — Dashboard,
+  Analytics, Intelligence, дайджест; пояс юзера (`_user_tz`, `_local_day_start`) для
+  «сьогодні», фіксованої години дотику й дайджесту (квоти й адмінка — UTC);
+  авто-FU3 одразу ставить дотик.
+- Міграції схеми на проді — у рантаймі при старті (`_migrations`,
+  `_migrate_reply_msg_id_per_user`); перевірено на локальному PostgreSQL 16.
 
 ## Конвенції процесу
 - Розробка на гілці `claude/kind-mayer-8okh8d`; **деплой тільки після апрува користувача**
@@ -104,7 +131,7 @@ POST /api/followups/action             — send-now (дрип) / free-send (до
 python -m pytest tests/ -q          # УВАГА: повний прогін має передіснуючі флейки ізоляції
 python -m pytest tests/test_triage.py tests/test_touch.py tests/test_pipeline_kanban.py -q
 ```
-Пофайлово все зелене (~100 тестів). JS перевіряється: `node --check` на витягнутих <script>.
+Пофайлово все зелене (~250 тестів, 22 файли). JS перевіряється: `node --check` на витягнутих <script>.
 
 ## Відомі нюанси
 - Dev SQLite не перевіряє FK, PostgreSQL перевіряє. Після деплою користувачу треба

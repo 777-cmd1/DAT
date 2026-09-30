@@ -123,3 +123,27 @@ def test_dashboard_and_intelligence_use_the_same_rate(app, db, client):
     assert (h['contacted_30d'], h['replied_30d'], h['reply_rate']) == (2, 1, 50.0)
     b = next(x for x in client.get('/api/intelligence').get_json()['brokers'] if x['domain'] == dom)
     assert b['replies'] == 1 and b['reply_rate'] == 50.0          # used to be 5 replies / 250%
+
+
+# ── Auto FU3 hands the contact to the cadence immediately ─────────────────────
+
+def test_auto_fu3_schedules_next_touch(app, db, monkeypatch):
+    from datetime import timedelta
+    from app.models import Workspace, EmailAccount, FollowupContact
+    u = _user(db)
+    ws = Workspace.query.filter_by(owner_id=u.id).first()
+    ws.fu_auto_enabled = True
+    ws.pipeline_config = {'cadence': {'1': {'days': 3, 'mode': 'manual'}}, 'touch_hour': 'auto'}
+    db.session.add(EmailAccount(user_id=u.id, workspace_id=ws.id, gmail_address='me@test.com', your_name='Me'))
+    fc = FollowupContact(user_id=u.id, workspace_id=ws.id, contact_email=f'{uuid.uuid4().hex[:8]}@c.com',
+                         state='active', stage='fu3_scheduled', is_followup_enabled=True, pipeline_stage=1,
+                         next_followup_at=_app._utcnow() - timedelta(hours=1))
+    db.session.add(fc); db.session.commit()
+    monkeypatch.setattr(_app, 'send_followup_email', lambda fu, tpl, cfg, uid=None: (True, None))
+    monkeypatch.setattr(_app, '_prefetch_replies_before_sending', lambda now: set())
+    _app._run_scheduled_followups()
+    db.session.expire_all()
+    fc = db.session.get(FollowupContact, fc.id)
+    assert fc.stage == 'completed_fu3' and not fc.is_followup_enabled
+    assert fc.touch_enabled and fc.next_followup_at is not None        # used to be None until a sweep
+    assert fc.next_followup_at > _app._utcnow() + timedelta(days=2)

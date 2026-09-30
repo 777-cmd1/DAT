@@ -6595,6 +6595,7 @@ def _run_scheduled_followups():
                         fc.is_followup_enabled = False
                         fc.next_followup_at = None
                         fc.completed_fu3_at = now
+                        _schedule_touch(fc, force=True)   # drip done → cadence takes over (same as manual send)
 
                     _record_event(fc, 'auto_send', actor_type='scheduler',
                                   from_stage=old_stage, to_stage=fc.stage)

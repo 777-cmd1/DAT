@@ -4299,7 +4299,7 @@ def api_intelligence():
         reply_by_domain[domain] = reply_by_domain.get(domain, 0) + 1
         if _is_rate_request(r.body):
             rr_by_domain[domain] = rr_by_domain.get(domain, 0) + 1
-        if r.status == 'interested':
+        if r.status in ('follow_up', 'interested'):   # same "Follow-up" as Analytics
             interested_by_domain[domain] = interested_by_domain.get(domain, 0) + 1
 
     brokers = []

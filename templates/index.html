@@ -1464,6 +1464,13 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .fu-search:focus { outline:none; border-color:var(--accent); }
 /* Stats bar */
 .fu-stats-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+.terms-btn { margin-left:8px; border:1px solid var(--border); background:transparent; color:var(--text2); font:inherit; font-size:11px; font-weight:600; padding:2px 9px; border-radius:10px; cursor:pointer; vertical-align:middle; }
+.terms-btn:hover { color:var(--text); border-color:var(--border-h); }
+.terms-group { margin-top:16px; }
+.terms-title { font-size:12px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.terms-title span { font-weight:500; color:var(--text3); margin-left:6px; }
+.terms-row { display:grid; grid-template-columns:120px 1fr; gap:10px; padding:5px 0; border-top:1px solid var(--border); font-size:12px; color:var(--text2); }
+.terms-row b { color:var(--text); font-weight:600; }
 .fu-pstage { display:inline-flex; align-items:baseline; gap:6px; font-size:12px; font-weight:600; color:var(--text); line-height:1.3; min-width:90px; }
 .fu-pstage-dot { width:8px; height:8px; border-radius:50%; flex:none; transform:translateY(-1px); }
 .fu-stat-pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; background:var(--surface); border:1px solid var(--border); color:var(--text3); white-space:nowrap; }
@@ -2777,7 +2784,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
         <div class="an-kpi-sub" id="anReplyRateSub"></div>
       </div>
       <div class="an-kpi">
-        <div class="an-kpi-label">Interested</div>
+        <div class="an-kpi-label" title="Replies you moved to Follow-up">Follow-up</div>
         <div class="an-kpi-value green" id="anInterested">—</div>
         <div class="an-kpi-sub" id="anInterestedSub"></div>
       </div>
@@ -2814,17 +2821,17 @@ html:not([data-theme="dark"]) .send-cta-bar {
     <div class="an-section-sub">Is targeting attracting the right kind of replies?</div>
     <div id="anQualityWrap">
       <div class="an-quality-row">
-        <div class="an-quality-label green-text">Interested</div>
+        <div class="an-quality-label green-text">Follow-up</div>
         <div class="an-quality-bar-wrap"><div class="an-quality-bar green-bar" id="anBarInterested" style="width:0%"></div></div>
         <div class="an-quality-stat" id="anStatInterested">—</div>
       </div>
       <div class="an-quality-row">
-        <div class="an-quality-label muted-text">Neutral</div>
+        <div class="an-quality-label muted-text">Needs Action</div>
         <div class="an-quality-bar-wrap"><div class="an-quality-bar blue-bar" id="anBarNeutral" style="width:0%"></div></div>
         <div class="an-quality-stat" id="anStatNeutral">—</div>
       </div>
       <div class="an-quality-row">
-        <div class="an-quality-label red-text">Not Interested</div>
+        <div class="an-quality-label red-text">Ignored</div>
         <div class="an-quality-bar-wrap"><div class="an-quality-bar red-bar" id="anBarNotInt" style="width:0%"></div></div>
         <div class="an-quality-stat" id="anStatNotInt">—</div>
       </div>
@@ -2959,7 +2966,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
     <div class="page" id="page-replies">
       <div class="page-header">
         <div class="page-title">Replies</div>
-        <div class="page-sub" id="fetchStatus">Lead triage queue — classify each contact in one click</div>
+        <div class="page-sub"><span id="fetchStatus">Lead triage queue — classify each contact in one click</span>
+          <button class="terms-btn" onclick="openTermsGlossary()" title="What the labels mean">ⓘ Terms</button></div>
       </div>
 
       <!-- Top bar: progress + check gmail -->
@@ -2999,7 +3007,8 @@ html:not([data-theme="dark"]) .send-cta-bar {
       <div class="fu-page-header">
         <div>
           <div class="page-title">Follow-up Queue</div>
-          <div class="page-sub">Urgency-first queue for daily follow-up execution</div>
+          <div class="page-sub">Urgency-first queue for daily follow-up execution
+            <button class="terms-btn" onclick="openTermsGlossary()" title="What the labels mean">ⓘ Terms</button></div>
         </div>
         <div class="fu-header-actions">
           <div class="fu-tabs fu-tabs-compact">
@@ -3041,7 +3050,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
                 <option value="active">Active</option>
                 <option value="paused">Paused</option>
                 <option value="warm">Warm</option>
-                <option value="loads">Loads</option>
+                <option value="loads">Booked</option>
                 <option value="blocked">Blocked</option>
                 <option value="closed">Closed</option>
               </select>
@@ -3076,7 +3085,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
               <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal(null, 'recurring')">Set Recurring</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('pause')">Pause</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('resume')">Resume</button>
-              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('loads')">Mark Loads</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('loads')">Mark Booked</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('warm')">Mark Warm</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('cancel-schedule')">Cancel Schedule</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('restart-fu1')">Restart Follow-up</button>
@@ -3343,7 +3352,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
             <th onclick="sortIntelTable('brokers','replies',this)">Replies ↕</th>
             <th onclick="sortIntelTable('brokers','reply_rate',this)">Reply Rate ↕</th>
             <th onclick="sortIntelTable('brokers','rate_requests',this)">Rate Reqs ↕</th>
-            <th onclick="sortIntelTable('brokers','interested',this)">Interested ↕</th>
+            <th onclick="sortIntelTable('brokers','interested',this)" title="Replies you moved to Follow-up">Follow-up ↕</th>
           </tr>
         </thead>
         <tbody id="intel-brokers-body">
@@ -4897,7 +4906,7 @@ function _renderIntelRecommendations(d) {
   if (bestDomain) {
     recs.push({
       title: `Prioritize ${bestDomain.domain}`,
-      body: `${bestDomain.replies} replies and ${bestDomain.interested} interested signals from ${bestDomain.emails_sent} sent make this domain one of the best current response sources.`,
+      body: `${bestDomain.replies} replies and ${bestDomain.interested} follow-up replies from ${bestDomain.emails_sent} sent make this domain one of the best current response sources.`,
       confidence: _intelConfidence(bestDomain.emails_sent, bestDomain.replies, bestDomain.reply_rate),
       action: 'Next move: Reuse the best-performing template for similar brokers on this domain.'
     });
@@ -4946,7 +4955,7 @@ function _renderIntelSignals(d) {
     .slice(0, 2)
     .forEach(b => opportunities.push(_intelSignalRow(
       b.domain,
-      `${b.interested} interested replies · ${b.replies} total replies · ${b.reply_rate}% reply rate`,
+      `${b.interested} follow-up replies · ${b.replies} total replies · ${b.reply_rate}% reply rate`,
       _intelConfidence(b.emails_sent, b.replies, b.reply_rate)
     )));
 
@@ -4966,7 +4975,7 @@ function _renderIntelSignals(d) {
     .slice(0, 2)
     .forEach(b => warnings.push(_intelSignalRow(
       b.domain,
-      `${b.emails_sent} sent with ${b.replies} replies but no interested signals yet.`,
+      `${b.emails_sent} sent with ${b.replies} replies but no follow-up replies yet.`,
       _intelConfidence(b.emails_sent, b.replies, b.reply_rate)
     )));
 
@@ -6386,7 +6395,7 @@ function getFuPrimaryActionLabel(c) {
   const terminal = ['warm','loads','blocked','closed'];
   if (terminal.includes(c.state)) return '';
   if (c.state === 'paused') return 'Resume';
-  if (c.stage === 'completed_fu3') return 'Mark Loads';
+  if (c.stage === 'completed_fu3') return 'Mark Booked';
   if (['fu1_scheduled','fu2_scheduled','fu3_scheduled'].includes(c.stage)) return 'Send Now';
   return '';
 }
@@ -6395,7 +6404,7 @@ function getFuPrimaryActionButton(c) {
   const label = getFuPrimaryActionLabel(c);
   if (!label) return `<span class="fu-time-sub">No action</span>`;
   if (label === 'Resume') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','resume')">Resume</button>`;
-  if (label === 'Mark Loads') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Mark Loads</button>`;
+  if (label === 'Mark Booked') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Mark Booked</button>`;
   return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send Now</button>`;
 }
 
@@ -6454,7 +6463,7 @@ function getFuStageInfo(stage) {
 function getFuStateInfo(state) {
   const map = {
     active:{label:'Active',cls:'fu-state-active'}, paused:{label:'Paused',cls:'fu-state-paused'},
-    warm:{label:'Warm',cls:'fu-state-warm'}, loads:{label:'Loads',cls:'fu-state-loads'},
+    warm:{label:'Warm',cls:'fu-state-warm'}, loads:{label:'Booked',cls:'fu-state-loads'},
     blocked:{label:'Blocked',cls:'fu-state-blocked'}, closed:{label:'Closed',cls:'fu-state-closed'},
   };
   return map[state] || {label:state,cls:'fu-state-active'};
@@ -6463,7 +6472,7 @@ function getFuPrimaryBtn(c) {
   const terminal = ['warm','loads','blocked','closed'];
   if (terminal.includes(c.state)) return '';
   if (c.state === 'paused') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','resume')">Resume</button>`;
-  if (c.stage === 'completed_fu3') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Loads</button>`;
+  if (c.stage === 'completed_fu3') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Booked</button>`;
   if (['fu1_scheduled','fu2_scheduled','fu3_scheduled'].includes(c.stage))
     return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send Now</button>`;
   return '';
@@ -7145,6 +7154,46 @@ function renderAutoSendBanner(live) {
   box.innerHTML = `<div class="auto-banner-head">${head}${unsaved}</div><div class="auto-banner-sub">${esc(sub)}</div>`;
 }
 
+// One glossary for the words used across Replies, Follow-up, Dashboard and Analytics.
+const TERMS_GLOSSARY = [
+  ['What the reply says', 'auto-detected, Replies page', [
+    ['Negative', 'a no — "we don\'t use…", "not at this time"'],
+    ['Rate request', 'asks for your rate on the lane'],
+    ['Gave info', 'shares availability, rate or load details'],
+    ['Auto-reply', 'out-of-office and other automatic answers'],
+  ]],
+  ['Your decision on a reply', 'Replies buttons, Analytics', [
+    ['Needs Action', 'waiting for your decision'],
+    ['Follow-up', 'worth pursuing — the contact goes into the pipeline'],
+    ['Ignored', 'not worth pursuing, no emails'],
+    ['Blocked', 'never email again (added to the Stop List)'],
+  ]],
+  ['Where the contact is', 'Follow-up page', [
+    ['FU1–FU3', 'the automatic follow-up sequence after a reply'],
+    ['Touch', 'a repeat email to a contact sitting in a pipeline stage (Touch cadence in Settings)'],
+    ['Pipeline stage', 'your Kanban columns — names are yours (Settings → Pipeline)'],
+    ['Active / Paused', 'in the queue / on hold'],
+    ['Warm', 'a hot lead handed to you for a personal answer'],
+    ['Booked', 'the carrier took a load — a win'],
+    ['Closed', 'finished without a win'],
+  ]],
+];
+function openTermsGlossary() {
+  document.getElementById('termsOverlay')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'fu-tl-overlay'; ov.id = 'termsOverlay';
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = `<div class="fu-tl terms-panel" role="dialog" aria-label="Terms">` +
+    `<button class="fu-tl-close" onclick="document.getElementById('termsOverlay').remove()" aria-label="Close">✕</button>` +
+    `<div class="fu-tl-name">Terms</div>` +
+    TERMS_GLOSSARY.map(([title, where, rows]) =>
+      `<div class="terms-group"><div class="terms-title">${esc(title)} <span>${esc(where)}</span></div>` +
+      rows.map(([t, d]) => `<div class="terms-row"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('') +
+      `</div>`).join('') +
+    `</div>`;
+  document.body.appendChild(ov);
+}
+
 function setSettingsTab(tab) {
   const shell = document.getElementById('settingsShell');
   if (!shell) return;
@@ -7250,8 +7299,8 @@ async function fuAction(id, action, reason, extraPayload) {
         : 'Moved to Warm — it may appear lower in the queue';
     } else if (action === 'loads') {
       msg = fuSpecialFilter || (fuStateFilter && fuStateFilter !== 'loads')
-        ? 'Moved to Loads — current view may hide it'
-        : 'Moved to Loads — it may appear lower in the queue';
+        ? 'Moved to Booked — current view may hide it'
+        : 'Moved to Booked — it may appear lower in the queue';
     } else if (action === 'block') {
       msg = 'Blocked — removed from active follow-up';
     } else if (action === 'close') {
@@ -7563,7 +7612,7 @@ function toggleFuDropdown(event, contactId) {
   }
   if (!isTerminal) {
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('warm')"><i class="ph-bold ph-fire"></i> Move to Warm</button>`;
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('loads')"><i class="ph-bold ph-truck"></i> Move to Loads</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('loads')"><i class="ph-bold ph-truck"></i> Move to Booked</button>`;
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('block')"><i class="ph-bold ph-prohibit"></i> Block contact</button>`;
     items += `<button class="fu-dd-item" onclick="fuDropdownAction('close')"><i class="ph-bold ph-check-circle"></i> Mark as Closed</button>`;
     items += `<div class="fu-dd-sep"></div>`;
@@ -7713,20 +7762,20 @@ function renderFuAnalytics(data) {
     <div class="fu-analytics-section">
       <div class="fu-analytics-title">Outcomes</div>
       <div class="fu-outcomes-grid">
-        <div class="fu-outcome-card fu-outcome-loads"><div class="fu-outcome-label">Loads</div><div class="fu-outcome-num">${o.loads||0}</div></div>
+        <div class="fu-outcome-card fu-outcome-loads"><div class="fu-outcome-label">Booked</div><div class="fu-outcome-num">${o.loads||0}</div></div>
         <div class="fu-outcome-card fu-outcome-warm"><div class="fu-outcome-label">Warm</div><div class="fu-outcome-num">${o.warm||0}</div></div>
         <div class="fu-outcome-card fu-outcome-blocked"><div class="fu-outcome-label">Blocked</div><div class="fu-outcome-num">${o.blocked||0}</div></div>
         <div class="fu-outcome-card fu-outcome-closed"><div class="fu-outcome-label">Closed</div><div class="fu-outcome-num">${o.closed||0}</div></div>
       </div>
     </div>
     <div class="fu-analytics-section">
-      <div class="fu-analytics-title">Conversion to Loads by Stage</div>
+      <div class="fu-analytics-title">Conversion to Booked by Stage</div>
       ${convRows.map(r=>`<div class="fu-conv-row">
         <div class="fu-conv-label">${r.label}</div>
         <div class="fu-conv-bar-wrap"><div class="fu-conv-bar" style="width:${Math.round(r.n*100/maxConv)}%"></div></div>
         <div class="fu-conv-num">${r.n}</div>
       </div>`).join('')}
-      <div style="font-size:11px;color:var(--text3);margin-top:10px">Total loads from follow-ups: <strong style="color:var(--green)">${loadsTotal}</strong></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px">Total booked from follow-ups: <strong style="color:var(--green)">${loadsTotal}</strong></div>
     </div>`;
 }
 
@@ -7919,7 +7968,7 @@ function renderAnKpis() {
   if (errors > 0) {
     summaryInsight = 'Reply rate is ' + (pct > 0 ? pct.toFixed(1) + '%' : '\u2014') + ', but there ' + (errors === 1 ? 'is 1 error' : 'are ' + errors + ' errors') + ' to review.';
   } else if (pct > 0 && interested > 0) {
-    summaryInsight = 'Reply rate is ' + pct.toFixed(1) + '% with ' + interested + ' interested repl' + (interested === 1 ? 'y' : 'ies') + ' in this period.';
+    summaryInsight = 'Reply rate is ' + pct.toFixed(1) + '% with ' + interested + ' follow-up repl' + (interested === 1 ? 'y' : 'ies') + ' in this period.';
   } else if (sent > 0) {
     summaryInsight = 'Outreach is live. Review what works and the best send windows below.';
   }
@@ -7942,8 +7991,8 @@ function renderAnQuality() {
   setEl2('anStatNeutral',    (rr.new || 0) + ' (' + nPct + '%)');
   setEl2('anStatNotInt',     (rr.not_interested || 0) + ' (' + notPct + '%)');
   let ins = iPct >= 30 ? 'Targeting looks strong \u2014 keep focusing on these routes.'
-          : iPct >= 15 ? 'Moderate interest \u2014 consider testing new templates.'
-          : total > 10 ? 'Low interest rate \u2014 review your targeting or templates.'
+          : iPct >= 15 ? 'Moderate follow-up rate \u2014 consider testing new templates.'
+          : total > 10 ? 'Low follow-up rate \u2014 review your targeting or templates.'
           : 'Early data \u2014 need more replies for meaningful insights.';
   setEl2('anQualityInsight', ins);
 }

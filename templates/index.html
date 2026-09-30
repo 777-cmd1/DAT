@@ -1252,7 +1252,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
   position:relative;
 }
 .tq-card:hover { box-shadow:0 4px 18px rgba(15,23,42,.07); border-color:var(--border-h); }
-.tq-card.state-new       { border-left-color:#f87171; }
+.tq-card.state-new       { border-left-color:var(--blue); }   /* no category yet — Negative owns red */
 .tq-card.state-viewed    { border-left-color:#60a5fa; }
 .tq-card.state-follow_up { border-left-color:#fb923c; }
 .tq-card.state-interested{ border-left-color:var(--accent); }
@@ -1778,7 +1778,10 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .tq-card.tq-cat-rate_request { border-left:3px solid #f59f00; }
 .tq-card.tq-cat-gave_info    { border-left:3px solid #37b24c; }
 .tq-card.tq-cat-auto_reply   { border-left:3px solid #868e96; }
-.tq-action.tq-emph { box-shadow:0 0 0 1.5px currentColor inset; font-weight:700; }
+.tq-action.tq-emph { background:color-mix(in srgb, currentColor 11%, transparent); }
+.tq-action-no.tq-emph { color:var(--text); }
+.tq-action-label { display:flex; flex-direction:column; align-items:flex-start; text-align:left; line-height:1.15; }
+.tq-rec-tag { font-size:8.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; opacity:.75; margin-top:2px; }
 .tq-auto-strip { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:8px 12px; font-size:12px; }
 .tq-auto-strip-head { display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text2); font-weight:600; }
 .tq-auto-strip-head .grow { flex:1; }
@@ -2965,8 +2968,6 @@ html:not([data-theme="dark"]) .send-cta-bar {
           <span class="tq-progress-label" id="tqProgressLabel">Loading...</span>
           <div class="tq-progress-track"><div class="tq-progress-fill" id="tqProgressFill" style="width:0%"></div></div>
           <span class="tq-inbox-zero" id="tqInboxZero" style="display:none">✓ All clear</span>
-          <span class="tq-queue-chip">Need decision <strong id="tqNeedsDecision">0</strong></span>
-          <span class="tq-queue-chip">Processed <strong id="tqProcessedCount">0</strong></span>
         </div>
         <button class="btn btn-primary" id="fetchBtn" onclick="fetchReplies()">
           <i class="ph-bold ph-arrows-clockwise" style="font-size:15px;margin-right:6px;vertical-align:middle"></i>Check Gmail
@@ -2978,8 +2979,7 @@ html:not([data-theme="dark"]) .send-cta-bar {
         <input id="repliesSearch" class="tq-search" placeholder="Search company or email..." oninput="queueRepliesRefresh()">
         <div class="tq-filters">
           <button class="tq-tab active" id="tqf-all"      onclick="setFilter('all')">All <span class="tq-tab-count" id="tqc-all">0</span></button>
-          <button class="tq-tab" id="tqf-needs_action"   onclick="setFilter('needs_action')">Needs Action <span class="tq-tab-count" id="tqc-needs_action">0</span></button>
-          <button class="tq-tab" id="tqf-new"             onclick="setFilter('new')">● New <span class="tq-tab-count" id="tqc-new">0</span></button>
+          <button class="tq-tab" id="tqf-needs_action"   onclick="setFilter('needs_action')" title="Replies still waiting for your decision">Needs Action <span class="tq-tab-count" id="tqc-needs_action">0</span></button>
           <button class="tq-tab" id="tqf-follow_up"       onclick="setFilter('follow_up')"><i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-tab-count" id="tqc-follow_up">0</span></button>
           <button class="tq-tab" id="tqf-ignored"         onclick="setFilter('ignored')"><i class="ph-bold ph-prohibit"></i> Ignored <span class="tq-tab-count" id="tqc-ignored">0</span></button>
         </div>
@@ -5885,12 +5885,14 @@ function tqCard(msgs) {
 
   // Right column: show actions only for unprocessed states; otherwise show reset
   const showActions = (state === 'new' || state === 'viewed');
+  const recLabel = (txt, on) => on
+    ? '<span class="tq-action-label">' + txt + '<span class="tq-rec-tag">Recommended</span></span>' : txt;
   const rightHtml = showActions
     ? '<div class="tq-card-right" onclick="event.stopPropagation()">' +
         '<button class="tq-action tq-action-fu' + (rec === 'followup' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
-          '<i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-action-key">F</span></button>' +
+          '<i class="ph-bold ph-clock-countdown"></i> ' + recLabel('Follow-up', rec === 'followup') + ' <span class="tq-action-key">F</span></button>' +
         '<button class="tq-action tq-action-no' + (rec === 'ignore' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
-          '<i class="ph-bold ph-x"></i> Ignore <span class="tq-action-key">X</span></button>' +
+          '<i class="ph-bold ph-x"></i> ' + recLabel('Ignore', rec === 'ignore') + ' <span class="tq-action-key">X</span></button>' +
         '<button class="tq-action tq-action-block" onclick="markContactStop(\'' + emailEsc + '\')" title="Block + Stop List [B]">' +
           '<i class="ph-bold ph-prohibit"></i> Block <span class="tq-action-key">B</span></button>' +
       '</div>'
@@ -5972,7 +5974,7 @@ function renderReplies() {
     follow_up: replyCounts.follow_up || 0,
     ignored: replyCounts.ignored || 0,
   };
-  ['all','needs_action','new','follow_up','ignored'].forEach(k => {
+  ['all','needs_action','follow_up','ignored'].forEach(k => {
     const el = document.getElementById('tqc-' + k);
     if (el) el.textContent = counts[k] || 0;
   });
@@ -5985,13 +5987,9 @@ function renderReplies() {
   const fill = document.getElementById('tqProgressFill');
   const label = document.getElementById('tqProgressLabel');
   const zero = document.getElementById('tqInboxZero');
-  const needEl = document.getElementById('tqNeedsDecision');
-  const processedEl = document.getElementById('tqProcessedCount');
   if (fill) fill.style.width = pct + '%';
-  if (label) label.textContent = unprocessed > 0 ? unprocessed + ' need' + (unprocessed>1?'s':'') + ' a decision · ' + done + ' processed' : done + ' processed';
+  if (label) label.textContent = unprocessed > 0 ? unprocessed + (unprocessed === 1 ? ' needs' : ' need') + ' a decision · ' + done + ' processed' : done + ' processed';
   if (zero) zero.style.display = unprocessed === 0 && total > 0 ? 'inline' : 'none';
-  if (needEl) needEl.textContent = unprocessed;
-  if (processedEl) processedEl.textContent = done;
 
   // Filter by active tab
   let filtered = replyGroups;

@@ -354,7 +354,7 @@ class Reply(db.Model):
     id           = db.Column(db.String(36), primary_key=True, default=_uuid)
     user_id      = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     workspace_id = db.Column(db.String(36), db.ForeignKey('workspaces.id'))
-    msg_id       = db.Column(db.String(512), unique=True, nullable=False)
+    msg_id       = db.Column(db.String(512), nullable=False)   # unique per user (uq_replies_user_msg)
     thread_id    = db.Column(db.String(255), nullable=True)   # Gmail threadId
     from_email   = db.Column(db.String(255), default='')
     from_name    = db.Column(db.String(255), default='')
@@ -378,6 +378,9 @@ class Reply(db.Model):
         db.Index('ix_reply_user_received', 'user_id', 'received_at'),
         db.Index('ix_reply_user_status', 'user_id', 'status'),
         db.Index('ix_reply_user_email', 'user_id', 'from_email'),
+        # The same email can land in two users' inboxes (CC, shared threads) —
+        # Message-ID is only unique within one mailbox.
+        db.UniqueConstraint('user_id', 'msg_id', name='uq_replies_user_msg'),
     )
 
     def to_dict(self):

@@ -2678,7 +2678,7 @@ def save_replies(replies, uid=None):
     if not uid: return
     from app.models import Reply
     for r in replies:
-        existing = Reply.query.filter_by(msg_id=r['msg_id']).first()
+        existing = Reply.query.filter_by(user_id=uid, msg_id=r['msg_id']).first()
         if existing:
             existing.status = r.get('status', existing.status)
         else:
@@ -4395,7 +4395,7 @@ def api_reply_status():
         })
     if status in ('interested', 'follow_up') and reply_obj:
         from app.models import Reply as ReplyModel
-        reply_db = ReplyModel.query.filter_by(msg_id=reply_obj['msg_id']).first()
+        reply_db = ReplyModel.query.filter_by(user_id=current_user_id(), msg_id=reply_obj['msg_id']).first()
         if reply_db:
             add_to_followups(reply_db)
     if add_to_stop and reply_obj:
@@ -6836,6 +6836,36 @@ def auto_create_admin():
         db.session.commit()
         print(f"✓ Admin account + workspace auto-created for {admin_email}")
 
+def _migrate_reply_msg_id_per_user():
+    """replies.msg_id used to be unique across ALL users, so an email that
+    reached two users made the second one's fetch update the first one's reply.
+    Swap the global unique constraint/index for UNIQUE (user_id, msg_id).
+    PostgreSQL only (prod); idempotent. SQLite dev DBs get it from create_all."""
+    if db.engine.dialect.name != 'postgresql':
+        return
+    with db.engine.connect() as conn:
+        msg_col = """(SELECT attnum FROM pg_attribute
+                      WHERE attrelid = 'replies'::regclass AND attname = 'msg_id')"""
+        old_constraints = [r[0] for r in conn.execute(db.text(f"""
+            SELECT conname FROM pg_constraint
+            WHERE conrelid = 'replies'::regclass AND contype = 'u'
+              AND conkey = ARRAY[{msg_col}]::smallint[]""")).fetchall()]
+        old_indexes = [r[0] for r in conn.execute(db.text(f"""
+            SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid
+            WHERE x.indrelid = 'replies'::regclass AND x.indisunique AND NOT x.indisprimary
+              AND x.indnatts = 1 AND x.indkey[0] = {msg_col}
+              AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid = x.indexrelid)""")).fetchall()]
+        conn.execute(db.text(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_replies_user_msg ON replies (user_id, msg_id)'))
+        for name in old_constraints:
+            conn.execute(db.text(f'ALTER TABLE replies DROP CONSTRAINT "{name}"'))
+        for name in old_indexes:
+            conn.execute(db.text(f'DROP INDEX IF EXISTS "{name}"'))
+        conn.commit()
+        if old_constraints or old_indexes:
+            print(f'✓ Migration: replies.msg_id now unique per user (dropped {old_constraints + old_indexes})')
+
+
 with app.app_context():
     db.create_all()   # Creates all tables if they don't exist (safe to run repeatedly)
     # Inline migrations — safe to run on every startup (idempotent ADD COLUMN IF NOT EXISTS)
@@ -6928,6 +6958,10 @@ with app.app_context():
             _conn.commit()
     except Exception:
         pass
+    try:
+        _migrate_reply_msg_id_per_user()
+    except Exception as _e:
+        print(f'replies msg_id migration skipped: {_e}')
     # Mark any DB jobs still "running" as "interrupted" (handles deploy mid-send)
     try:
         from app.models import SendJob

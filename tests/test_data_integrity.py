@@ -61,3 +61,65 @@ def test_marking_reply_does_not_change_other_users_copy(app, db, client):
     db.session.expire_all()
     assert Reply.query.filter_by(user_id=a.id, msg_id=mid).first().status == 'new'
     assert Reply.query.filter_by(user_id=b.id, msg_id=mid).first().status == 'not_interested'
+
+
+# ── One reply-rate definition ─────────────────────────────────────────────────
+
+def _send(db, u, to, when):
+    from app.models import Send
+    db.session.add(Send(user_id=u.id, recipient_email=to, status='sent', sent_at=when,
+                        origin='Laredo, TX', destination='Doral, FL'))
+    db.session.commit()
+
+
+def _got(db, u, frm, when, status='new', body='ok'):
+    from app.models import Reply
+    db.session.add(Reply(user_id=u.id, msg_id=f'<{uuid.uuid4().hex}@m>', from_email=frm,
+                         subject='Re: load', body=body, status=status, received_at=when))
+    db.session.commit()
+
+
+def test_reply_rate_is_share_of_contacts_emailed_in_window(app, db):
+    from datetime import timedelta
+    u = _user(db)
+    now = _app._utcnow()
+    since = now - timedelta(days=7)
+    for i in range(3):
+        _send(db, u, f'c{i}@acme.com', now - timedelta(days=2))
+    _send(db, u, 'c0@acme.com', now - timedelta(days=1))          # emailed twice → still 1 contact
+    _got(db, u, 'C0@acme.com', now - timedelta(hours=5))          # counted (case-insensitive)
+    _got(db, u, 'c0@acme.com', now - timedelta(hours=4))          # same contact again
+    _got(db, u, 'c1@acme.com', now - timedelta(days=30))          # replied before the window
+    _got(db, u, 'stranger@else.com', now - timedelta(hours=1))    # never emailed
+    assert _app._reply_cohort(u.id, since) == (3, 1)
+    assert _app._reply_rate(3, 1) == 33.3
+    assert _app._reply_rate(0, 0) is None
+
+
+def test_analytics_today_reply_rate_cannot_exceed_100(app, db, client):
+    from datetime import timedelta
+    u = _user(db, client)
+    now = _app._utcnow()
+    for i in range(4):                                             # emailed last week
+        _send(db, u, f'old{i}@acme.com', now - timedelta(days=5))
+        _got(db, u, f'old{i}@acme.com', now - timedelta(minutes=30))   # all reply today
+    _send(db, u, 'new@acme.com', now - timedelta(seconds=5))      # one email today
+    rr = client.get('/api/stats?period=today').get_json()['response_rate']
+    assert rr['contacted'] == 1 and rr['replied'] == 0 and rr['pct'] == 0   # used to be 400%
+    life = client.get('/api/stats?period=lifetime').get_json()['response_rate']
+    assert life['contacted'] == 5 and life['replied'] == 4 and life['pct'] == 80.0
+
+
+def test_dashboard_and_intelligence_use_the_same_rate(app, db, client):
+    from datetime import timedelta
+    u = _user(db, client)
+    now = _app._utcnow()
+    dom = f'{uuid.uuid4().hex[:6]}.com'
+    _send(db, u, f'a@{dom}', now - timedelta(days=3))
+    _send(db, u, f'b@{dom}', now - timedelta(days=3))
+    for _ in range(5):                                            # a chatty thread
+        _got(db, u, f'a@{dom}', now - timedelta(days=1))
+    h = _app._dashboard_data(u.id)['health']
+    assert (h['contacted_30d'], h['replied_30d'], h['reply_rate']) == (2, 1, 50.0)
+    b = next(x for x in client.get('/api/intelligence').get_json()['brokers'] if x['domain'] == dom)
+    assert b['replies'] == 1 and b['reply_rate'] == 50.0          # used to be 5 replies / 250%

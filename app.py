@@ -3115,11 +3115,10 @@ def get_stats(period='lifetime'):
         .group_by(Send.origin, Send.destination)\
         .order_by(func.count(Send.id).desc()).limit(10).all()
 
-    # ── Reply stats — contact-based (distinct from_email), lifetime ─────
+    # ── Reply stats — contact-based (distinct from_email), same period ────
     # Count unique contacts, not messages — prevents multi-message threads
-    # from inflating Reply Rate (1 broker sending 5 msgs = 1 reply, not 5).
-    from sqlalchemy import func as _sfunc
-    reply_contact_rows = db.session.query(
+    # from inflating the numbers (1 broker sending 5 msgs = 1 reply, not 5).
+    reply_contact_q = db.session.query(
         func.lower(Reply.from_email).label('em'),
         # Best status per contact: follow_up/interested > new/viewed > not_interested/ignored
         func.min(case(
@@ -3131,14 +3130,18 @@ def get_stats(period='lifetime'):
         Reply.user_id == uid,
         Reply.from_email.isnot(None),
         Reply.from_email != '',
-    ).group_by(func.lower(Reply.from_email)).all()
+    )
+    if period_cutoff is not None:
+        reply_contact_q = reply_contact_q.filter(Reply.received_at >= period_cutoff)
+    reply_contact_rows = reply_contact_q.group_by(func.lower(Reply.from_email)).all()
 
     tr = len(reply_contact_rows)                          # unique contacts who replied
     interested = sum(1 for r in reply_contact_rows if r.priority == 0)   # follow_up or interested
     not_int    = sum(1 for r in reply_contact_rows if r.priority == 2)   # ignored/not_interested
     new_r      = sum(1 for r in reply_contact_rows if r.priority == 1)   # new/viewed
 
-    response_rate_pct = round(100 * tr / sent, 1) if sent > 0 else 0
+    contacted, replied = _reply_cohort(uid, period_cutoff)
+    response_rate_pct = _reply_rate(contacted, replied) or 0
     interest_rate_pct = round(100 * interested / tr, 1) if tr > 0 else 0
 
     # ── Replied emails/domains (lifetime) ────────────────────────────────
@@ -3168,6 +3171,8 @@ def get_stats(period='lifetime'):
         "replied_emails": [{"email": e, "count": c, "status": rs.get(e, 'new')} for e, c in rc.most_common()],
         "replied_domains": [{"domain": d, "count": c} for d, c in dc.most_common()],
         "response_rate": {
+            "contacted": contacted,
+            "replied": replied,
             "total_replies": tr,
             "interested": interested,
             "not_interested": not_int,
@@ -4312,7 +4317,7 @@ def api_intelligence():
         replies_count = sum(1 for e in lane_email_set if e in reply_lookup)
         rr_count = sum(1 for e in lane_email_set if e in rate_request_emails)
 
-        reply_rate = round(100 * replies_count / row.emails_sent, 1) if row.emails_sent > 0 else 0
+        reply_rate = _reply_rate(len(lane_email_set), replies_count) or 0
         rr_rate    = round(100 * rr_count    / row.emails_sent, 1) if row.emails_sent > 0 else 0
 
         lanes.append({
@@ -4329,33 +4334,38 @@ def api_intelligence():
     # ── Broker Response Profile ───────────────────────────────────────────────
     # Group sends by domain
     sent_by_domain: dict = {}
+    contacted_by_domain: dict = {}
     all_sends = db.session.query(Send.recipient_email).filter_by(user_id=uid, status='sent').all()
     for s in all_sends:
         if not s.recipient_email or '@' not in s.recipient_email:
             continue
-        domain = s.recipient_email.lower().split('@')[1]
+        em = s.recipient_email.lower()
+        domain = em.split('@')[1]
         sent_by_domain[domain] = sent_by_domain.get(domain, 0) + 1
+        contacted_by_domain.setdefault(domain, set()).add(em)
 
-    # Group replies by domain
+    # Unique contacts per domain (not messages) — same basis as the reply rate
     reply_by_domain: dict = {}
     rr_by_domain: dict = {}
     interested_by_domain: dict = {}
     for r in all_replies:
         if not r.from_email or '@' not in r.from_email:
             continue
-        domain = r.from_email.lower().split('@')[1]
-        reply_by_domain[domain] = reply_by_domain.get(domain, 0) + 1
+        em = r.from_email.lower()
+        domain = em.split('@')[1]
+        if em in contacted_by_domain.get(domain, ()):
+            reply_by_domain.setdefault(domain, set()).add(em)
         if _is_rate_request(r.body):
-            rr_by_domain[domain] = rr_by_domain.get(domain, 0) + 1
+            rr_by_domain.setdefault(domain, set()).add(em)
         if r.status in ('follow_up', 'interested'):   # same "Follow-up" as Analytics
-            interested_by_domain[domain] = interested_by_domain.get(domain, 0) + 1
+            interested_by_domain.setdefault(domain, set()).add(em)
 
     brokers = []
     for domain, sent_count in sorted(sent_by_domain.items(), key=lambda x: -x[1]):
-        replies_count = reply_by_domain.get(domain, 0)
-        rr_count      = rr_by_domain.get(domain, 0)
-        interested    = interested_by_domain.get(domain, 0)
-        reply_rate    = round(100 * replies_count / sent_count, 1) if sent_count > 0 else 0
+        replies_count = len(reply_by_domain.get(domain, ()))
+        rr_count      = len(rr_by_domain.get(domain, ()))
+        interested    = len(interested_by_domain.get(domain, ()))
+        reply_rate    = _reply_rate(len(contacted_by_domain.get(domain, ())), replies_count) or 0
         brokers.append({
             'domain': domain,
             'emails_sent': sent_count,
@@ -4592,6 +4602,30 @@ def get_fu_templates():
         if level in core and r.body:
             core[level] = r.body
     return core
+
+def _reply_rate(contacted, replied):
+    """THE reply rate (Dashboard, Analytics, Intelligence, digest): the share of
+    unique contacts emailed in a window who replied — always 0..100%."""
+    return round(100.0 * replied / contacted, 1) if contacted else None
+
+
+def _reply_cohort(uid, since=None):
+    """(contacted, replied): unique recipients emailed since `since` (all time
+    when None) and how many of them have replied since then."""
+    from app.models import Send, Reply
+    from sqlalchemy import func, distinct
+    rq = db.session.query(func.lower(Send.recipient_email).label('em')).filter(
+        Send.user_id == uid, Send.status == 'sent')
+    if since is not None:
+        rq = rq.filter(Send.sent_at >= since)
+    recipients = rq.distinct().subquery()
+    contacted = db.session.query(func.count()).select_from(recipients).scalar() or 0
+    q = db.session.query(func.count(distinct(func.lower(Reply.from_email)))).filter(
+        Reply.user_id == uid, func.lower(Reply.from_email).in_(db.select(recipients.c.em)))
+    if since is not None:
+        q = q.filter(Reply.received_at >= since)
+    return contacted, (q.scalar() or 0)
+
 
 def _fu_urgency(uid, now=None):
     """The one definition of the Follow-up urgency buckets, used by the list,
@@ -5772,7 +5806,8 @@ def _dashboard_data(uid):
                                db.or_(FollowupContact.last_activity_at < rot_cut,
                                       FollowupContact.last_activity_at.is_(None))).count()
     f30 = _funnel(30)
-    reply_rate = round(100.0 * f30['replied'] / f30['sent'], 1) if f30['sent'] else None
+    contacted30, replied30 = _reply_cohort(uid, now - timedelta(days=30))
+    reply_rate = _reply_rate(contacted30, replied30)
 
     booked_ids = [r[0] for r in db.session.query(distinct(FollowupEvent.followup_contact_id)).join(
         FollowupContact, FollowupEvent.followup_contact_id == FollowupContact.id
@@ -5816,7 +5851,8 @@ def _dashboard_data(uid):
         replies_pending=replies_pending,
         funnel={'7': _funnel(7), '30': f30},
         health={'no_next_step': no_next, 'rotting': rotting,
-                'reply_rate': reply_rate, 'sends_30d': f30['sent'],
+                'reply_rate': reply_rate, 'contacted_30d': contacted30, 'replied_30d': replied30,
+                'sends_30d': f30['sent'],
                 'replies_30d': f30['replied'], 'avg_touches_to_booked': avg_touches},
         activity=activity,
         top_lanes=top_lanes,

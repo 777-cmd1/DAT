@@ -6799,7 +6799,7 @@ function renderDashboard() {
       <div class="dash-hint">stage ≥ Got info, no activity 14+ days</div></div>
     <div class="dash-card"><div class="dash-k">Reply rate · 30d</div>
       <div class="dash-big">${h.reply_rate !== null ? h.reply_rate + '<small>%</small>' : '—'}</div>
-      <div class="dash-hint">${h.replies_30d} repliers / ${h.sends_30d} sends</div></div>
+      <div class="dash-hint">${h.replied_30d ?? 0} of ${h.contacted_30d ?? 0} contacts emailed replied</div></div>
     <div class="dash-card"><div class="dash-k">Avg touches → booked</div>
       <div class="dash-big">${h.avg_touches_to_booked ?? '—'}</div>
       <div class="dash-hint">from pipeline event log</div></div>
@@ -8026,7 +8026,7 @@ function renderAnKpis() {
   countUp('anErrors', errors);
   renderSpark('anSentSpark', ((_anAiData && _anAiData.daily) || []).map(d => d.emails));
   setEl2('anSentSub', s.today ? s.today + ' today' : '');
-  setEl2('anReplyRateSub', pct > 0 ? (rr.total_replies || 0) + ' replies' : 'no replies yet');
+  setEl2('anReplyRateSub', rr.contacted ? (rr.replied || 0) + ' of ' + rr.contacted + ' contacts replied' : 'no emails in this period');
   setEl2('anInterestedSub', intPct > 0 ? intPct.toFixed(0) + '% of replies' : '');
   setEl2('anErrorsSub', errors > 0 ? 'review below' : 'all good');
   let summaryInsight = 'No outreach data yet for this period.';

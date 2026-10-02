@@ -711,8 +711,18 @@ tr:last-child td { border-bottom: none; }
 /* ── SEND PAGE ──────────────────────────────────────────────────────── */
 .send-layout { display:flex; flex-direction:column; gap:18px; }
 .send-main { display:flex; flex-direction:column; gap:14px; }
-.send-secondary-grid { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1.1fr) minmax(280px,.7fr); gap:14px; align-items:start; }
-.send-secondary-grid .sb-card { margin-top:0; }
+.send-status { display:flex; flex-wrap:wrap; align-items:center; row-gap:4px; }
+.send-status .ss-item { display:inline-flex; align-items:center; gap:4px; }
+.send-status .ss-item[hidden] { display:none; }
+.send-status .ss-item + .ss-item::before { content:'·'; color:var(--text3); margin:0 8px; }
+.send-status b { color:var(--text); font-weight:600; }
+.send-status .ss-warn, .send-status .ss-warn b { color:var(--yellow); }
+.send-status .ss-bad, .send-status .ss-bad b { color:var(--red); }
+.ss-link { background:none; border:0; padding:0; font:inherit; color:var(--text2); cursor:pointer;
+  text-decoration:underline dotted; text-underline-offset:3px; }
+.ss-link:hover { color:var(--accent); }
+.ss-track { width:56px; height:4px; border-radius:99px; background:var(--border); overflow:hidden; margin-left:6px; }
+.ss-fill { display:block; height:100%; width:0; background:var(--accent); border-radius:99px; transition:width .2s ease; }
 .send-section-note { font-size:12px; color:var(--text3); }
 
 /* ── DAT TEXTAREA — terminal style ─────────────────────────────────── */
@@ -844,8 +854,6 @@ tr:last-child td { border-bottom: none; }
 /* ── SIDEBAR — Broadcast Pulse ─────────────────────────────────────── */
 .sb-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
 .sb-card + .sb-card { margin-top:12px; }
-.send-secondary-grid .sb-card-head { padding-bottom:0; }
-.send-secondary-grid .sb-card-body { padding-top:14px; }
 .sb-card-head {
   padding:14px 16px 0; display:flex; align-items:center; justify-content:space-between;
 }
@@ -854,28 +862,6 @@ tr:last-child td { border-bottom: none; }
   color:var(--text3); display:flex; align-items:center; gap:6px;
 }
 .sb-card-body { padding:14px 16px 16px; }
-
-/* Broadcast Pulse — donut */
-.bp-donut-wrap { position:relative; width:140px; height:140px; margin:0 auto 10px; }
-.bp-donut-svg { filter:drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 10%, transparent)); transition:filter .5s; }
-.bp-donut-wrap:hover .bp-donut-svg { filter:drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 20%, transparent)); }
-.bp-donut-center {
-  position:absolute; inset:0; display:flex; flex-direction:column;
-  align-items:center; justify-content:center; gap:1px;
-}
-.bp-hero-num {
-  font-size:34px; font-weight:900; color:var(--text); line-height:1;
-  font-family:inherit; transition:color .4s ease;
-}
-.bp-hero-num.counting { color:var(--accent); }
-.bp-donut-divider {
-  width:24px; height:1px; background:var(--border); margin:3px 0;
-}
-.bp-donut-target {
-  font-size:13px; font-weight:600; color:var(--text3);
-  font-family:inherit; line-height:1;
-}
-.bp-label { font-size:12px; color:var(--text3); margin-bottom:10px; }
 
 /* ── Sending Progress — enhanced ─────────────────── */
 .sp-bar-wrap {
@@ -935,7 +921,6 @@ tr:last-child td { border-bottom: none; }
 .sp-counter.err { background:color-mix(in srgb, var(--red) 6%, transparent); border-color:color-mix(in srgb, var(--red) 18%, transparent); }
 .sp-counter.err .sp-counter-icon { background:color-mix(in srgb, var(--red) 12%, transparent); }
 .sp-counter.err .sp-counter-val { color:var(--red); }
-.bp-status { display:flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; color:var(--text3); }
 .bp-pulse-dot {
   width:6px; height:6px; border-radius:50%; background:var(--accent);
   box-shadow: none;
@@ -954,65 +939,6 @@ tr:last-child td { border-bottom: none; }
   0%,100% { opacity:1;   transform:scale(1);   box-shadow: none; }
   50%     { opacity:.85; transform:scale(1.5); box-shadow: none; }
 }
-
-/* Live dot in card header */
-.bp-live-dot {
-  width:5px; height:5px; border-radius:50%; background:var(--accent);
-  animation:bpDotPulse 2.5s ease-in-out infinite;
-  margin-left:2px; flex-shrink:0;
-}
-
-/* Metric strip — 3-column */
-.sb-metrics { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--border); border-top:1px solid var(--border); }
-.sb-metric {
-  background:var(--surface); padding:12px 10px; display:flex; flex-direction:column; align-items:center; gap:2px;
-  transition:background .15s;
-}
-.sb-metric:hover { background:var(--surface2); }
-.sb-metric-val { font-size:20px; font-weight:800; line-height:1; font-family:inherit; }
-.sb-metric-lbl { font-size:12px; font-weight:700; color:var(--text3); }
-
-/* Donut chart */
-.donut-wrap { position:relative; width:110px; height:110px; margin:0 auto 6px; }
-.donut-wrap svg { filter:drop-shadow(0 0 6px color-mix(in srgb, var(--blue) 8%, transparent)); transition:filter .5s; }
-.donut-wrap:hover svg { filter:drop-shadow(0 0 12px color-mix(in srgb, var(--blue) 15%, transparent)); }
-.donut-center {
-  position:absolute; inset:0; display:flex; flex-direction:column;
-  align-items:center; justify-content:center;
-}
-.donut-pct {
-  font-size:22px; font-weight:900; color:var(--text);
-  font-family:inherit; line-height:1;
-  transition:color .3s;
-}
-.donut-pct.counting { color:var(--blue); }
-.donut-sub { font-size:12px; font-weight:700; color:var(--text3); margin-top:2px; }
-.donut-info { text-align:center; font-size:12px; color:var(--text3); }
-.donut-info strong { color:var(--text2); font-weight:700; }
-
-/* Automation Impact — redesigned */
-.ai-speed-badge {
-  background:linear-gradient(135deg,var(--accent),var(--blue));
-  color:#fff; font-size:12px; font-weight:800; padding:3px 10px;
-  border-radius: var(--radius-lg); line-height:1.2;
-}
-.ai-kpis { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
-.ai-kpi {
-  background:var(--surface2); border:1px solid var(--border); border-radius:10px;
-  padding:10px; text-align:center;
-}
-.ai-kpi-icon { font-size:16px; margin-bottom:4px; }
-.ai-kpi-val { font-size:16px; font-weight:800; line-height:1; font-family:inherit; }
-.ai-kpi-lbl { font-size:12px; font-weight:700; color:var(--text3); margin-top:3px; }
-
-/* Comparison bars */
-.ai-compare { margin-top:2px; }
-.ai-compare-label { font-size:12px; font-weight:700; color:var(--text3); margin-bottom:8px; }
-.ai-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-.ai-bar-icon { width:20px; text-align:center; flex-shrink:0; }
-.ai-bar-track { flex:1; height:8px; border-radius:99px; overflow:hidden; }
-.ai-bar-fill { height:100%; border-radius:99px; transition:width .8s ease; }
-.ai-bar-val { font-size:12px; font-weight:700; width:50px; text-align:right; flex-shrink:0; }
 
 /* parseResults animation */
 @keyframes parseReveal {
@@ -1076,10 +1002,6 @@ tr:last-child td { border-bottom: none; }
 .live-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 .log-row-sent  { color: var(--accent); }
 .log-row-error { color: var(--red); }
-
-@media (max-width:1100px) {
-  .send-secondary-grid { grid-template-columns:1fr; }
-}
 
 @media (max-width:760px) {
   .send-cta-bar { flex-direction:column; align-items:flex-start; }
@@ -1421,7 +1343,7 @@ tr:last-child td { border-bottom: none; }
 .fu-filter-divider { width:1px; height:20px; background:var(--border); margin:0 2px; flex-shrink:0; }
 .fu-filter-btn { font-size:12px; font-weight:600; padding:4px 10px; border-radius:6px; cursor:pointer; border:1px solid var(--border); background:var(--surface2); color:var(--text3); transition:all .15s; white-space:nowrap; }
 .fu-filter-btn:hover { border-color:var(--border-h); color:var(--text); }
-.fu-filter-btn.active { background:var(--accent-d); border-color:var(--accent); color:var(--accent); }
+.fu-filter-btn.active { background:color-mix(in srgb, var(--accent) 12%, transparent); border-color:var(--accent); color:var(--accent); }
 .fu-filter-btn.needs-action.active { background:color-mix(in srgb, var(--accent) 10%, transparent); border-color:var(--purple); color:var(--purple); }
 .fu-filter-btn.overdue.active { background:var(--red-dim); border-color:var(--red); color:var(--red); }
 .fu-search { font-size:13px; padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-family:inherit; width:180px; }
@@ -1614,21 +1536,22 @@ tr:last-child td { border-bottom: none; }
 }
 .fu-table tbody tr:last-child td { border-bottom:none; }
 .fu-col-select { width:40px; }
-.fu-table thead th:nth-child(2) { width:26%; }
+.fu-table thead th:nth-child(2) { width:22%; }
 .fu-table thead th:nth-child(3) { width:12%; }
-.fu-table thead th:nth-child(4) { width:10%; }
-.fu-table thead th:nth-child(5) { width:15%; }
-.fu-table thead th:nth-child(6) { width:14%; }
-.fu-table thead th:nth-child(7) { width:15%; }
-.fu-table thead th:nth-child(8) { width:110px; }
-.fu-col-menu { width:62px; text-align:right; }
-.fu-table-row { transition:background .15s, box-shadow .15s; }
-.fu-table-row:hover td { background:rgba(255,255,255,.022); }
+.fu-table thead th:nth-child(4) { width:11%; }
+.fu-table thead th:nth-child(5) { width:12%; }
+.fu-col-action { width:252px; }
+.fu-table-row { transition:background .15s; }
+.fu-table-row:hover td { background:color-mix(in srgb, var(--text) 3%, transparent); }
 .fu-table-row.selected td { background:color-mix(in srgb, var(--accent) 10%, transparent); }
-.fu-table-row.overdue td { background:color-mix(in srgb, var(--red) 6%, transparent); }
-.fu-table-row.needs-action td { background:color-mix(in srgb, var(--accent) 7%, transparent); }
-.fu-table-row.selected.overdue td { background:linear-gradient(0deg, color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--accent) 8%, transparent)), color-mix(in srgb, var(--red) 6%, transparent); }
-.fu-table-row.selected.needs-action td { background:linear-gradient(0deg, color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--accent) 8%, transparent)), color-mix(in srgb, var(--accent) 7%, transparent); }
+/* group rows: the due block on top, everything else below */
+.fu-group-row td { background:var(--surface2); padding:7px 10px; font-size:12px; color:var(--text3); }
+.fu-group-title { font-weight:700; color:var(--text); }
+.fu-group-count { font-weight:700; color:var(--text2); margin-left:6px; }
+.fu-group-hint { margin-left:10px; }
+/* one primary per screen: row buttons stay quiet until the row is hovered */
+.fu-table .fu-btn-primary { background:transparent; color:var(--text2); border:1px solid var(--border); font-weight:600; }
+.fu-table-row:hover .fu-btn-primary, .fu-table .fu-btn-primary:focus-visible { background:var(--accent); border-color:var(--accent); color:#fff; }
 .fu-table-row.muted td { opacity:.68; }
 .fu-table-row.terminal td { opacity:.52; }
 .fu-contact-cell { min-width:0; }
@@ -1642,7 +1565,12 @@ tr:last-child td { border-bottom: none; }
 .fu-route-cell { max-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text3); }
 .fu-route-text { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fu-meta-stack { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
-.fu-row-action { display:flex; justify-content:flex-start; }
+.fu-row-action { display:flex; align-items:center; gap:4px; }
+.fu-row-action .fu-row-menu-btn { margin-left:auto; }
+.fu-qa-group { display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.fu-qa-group .fu-qa-btn { border:0; border-radius:0; background:transparent; padding:3px 7px; min-height:26px; }
+.fu-qa-group .fu-qa-btn + .fu-qa-btn { border-left:1px solid var(--border); }
+.fu-qa-group .fu-qa-btn:hover { background:var(--surface2); color:var(--accent); }
 .fu-row-menu-btn {
   font-size:12px; font-weight:700; padding:4px 8px; min-height:28px; border-radius:6px; cursor:pointer;
   border:1px solid var(--border); background:var(--surface2); color:var(--text2); transition:all .15s;
@@ -1682,8 +1610,6 @@ tr:last-child td { border-bottom: none; }
 .fu-pstat-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
 .fu-pstat-label { font-weight:700; color:var(--text2); letter-spacing:.02em; }
 .fu-pstat-val { font-family:inherit; font-weight:800; color:var(--text); }
-.fu-pstat.total { background:var(--accent-d); border-color:var(--accent); }
-.fu-pstat.total .fu-pstat-val, .fu-pstat.total .fu-pstat-label { color:var(--accent); }
 .fu-pstat.trans { background:var(--surface2); color:var(--text3); }
 .fu-pstat.trans .fu-pstat-label { color:var(--text3); font-weight:600; }
 /* Kanban board */
@@ -1796,10 +1722,6 @@ tr:last-child td { border-bottom: none; }
 .dash-table td { padding:6px 8px; border-bottom:1px dashed var(--border); color:var(--text2); font-variant-numeric:tabular-nums; }
 .dash-table td:first-child { color:var(--text); font-weight:600; }
 
-/* ── Today's touches panel (Follow-up cadence engine) ── */
-.fu-touch-panel { border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:10px 14px; margin-bottom:12px; }
-.fu-touch-head { font-size:13px; font-weight:700; color:var(--text); margin-bottom:6px; }
-.fu-touch-list { max-height:300px; overflow-y:auto; overscroll-behavior:contain; }
 /* ── Contact timeline drawer ── */
 .fu-tl-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:998; }
 .fu-tl { position:fixed; top:0; right:0; bottom:0; width:440px; max-width:94vw; background:var(--surface); border-left:1px solid var(--border); z-index:999; overflow-y:auto; padding:18px 20px; box-shadow: var(--shadow-lg); }
@@ -1816,13 +1738,6 @@ tr:last-child td { border-bottom: none; }
 .fu-tl-when { font-size:12px; color:var(--text3); margin-left:6px; font-weight:500; }
 .fu-tl-detail { font-size:13px; color:var(--text2); white-space:pre-wrap; word-break:break-word; margin-top:2px; max-height:120px; overflow-y:auto; }
 .fu-tl-item.reply { background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent); border-radius:8px; }
-.fu-touch-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px dashed var(--border); font-size:13px; color:var(--text2); }
-.fu-touch-row.hot { background:linear-gradient(90deg, color-mix(in srgb, var(--yellow) 9%, transparent), transparent); border-radius:8px; }
-.fu-touch-row .ft-who { min-width:0; flex:1 1 220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.fu-touch-row .ft-email { color:var(--text3); font-size:12px; margin-left:6px; }
-.fu-touch-row .ft-stage { font-size:12px; font-weight:700; padding:2px 8px; border-radius:9px; background:var(--surface); border:1px solid var(--border); white-space:nowrap; }
-.fu-touch-row .ft-route { color:var(--text3); font-size:12px; flex:0 1 200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.fu-touch-row .ft-actions { margin-left:auto; display:flex; gap:5px; flex-wrap:nowrap; }
 .pl-cad-row { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text2); padding:5px 0; }
 .pl-cad-row .pl-cad-name { min-width:170px; font-weight:600; color:var(--text); }
 .pl-cad-row input[type=number] { width:60px; padding:5px 7px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit; }
@@ -2424,12 +2339,12 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
 /* micro labels: sentence case, quiet, readable */
 .card-label, .stat-label, .settings-mini-label, .settings-preview-label, .sb-card-label, .intel-kpi-label,
 .tmpl-field-label, .fu-outcome-label, .fu-analytics-title, .loads-stat-label, .fu-summary-label,
-.dat-input-title, .loads-card-title, .tq-section-label, .ai-compare-label, .pl-cfg-subhead, .fu-pstat-label {
+.dat-input-title, .loads-card-title, .tq-section-label, .pl-cfg-subhead, .fu-pstat-label {
   font-size: 12px; font-weight: 600; color: var(--text3); letter-spacing: 0;
 }
 /* cards: one surface, one border, one radius, one shadow */
 .card, .stat-card, .settings-card, .settings-savebar, .dat-input-card, .loads-card, .sb-card, .dash-card,
-.fu-toolbar, .fu-table-wrap, .fu-touch-panel, .fu-analytics-section, .fu-kanban-col,
+.fu-toolbar, .fu-table-wrap, .fu-analytics-section, .fu-kanban-col,
 .intel-context-bar, .intel-kpi, .intel-section, .tmpl-followup-panel, .tmpl-preview-shell, .an-section, .an-kpi {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
 }
@@ -2582,7 +2497,11 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
     <div class="page active" id="page-send">
       <div class="page-header">
         <div class="page-title">Send Emails</div>
-        <div class="page-sub">Paste DAT text → parse → send</div>
+        <div class="page-sub send-status" id="sendStatus">
+          <span class="ss-item">Today <b class="num" id="dsSent">0</b> of <button type="button" class="ss-link num" id="dsTarget" onclick="editDailyTarget()" title="Daily target — change in Settings">100</button> sent<span class="ss-track" aria-hidden="true"><span class="ss-fill" id="dsFill"></span></span></span>
+          <span class="ss-item"><b class="num" id="dsReplied">0</b> <span id="dsRepliedLbl">replies</span></span>
+          <span class="ss-item" id="quotaStatus" hidden></span>
+        </div>
       </div>
 
       <div class="send-layout">
@@ -2698,109 +2617,9 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
           </div>
 
         </div>
-        <div class="send-secondary-grid">
-          <!-- ═══ BROADCAST PULSE ═══ -->
-          <div class="sb-card">
-            <div class="sb-card-head">
-              <span class="sb-card-label"><i class="ph-bold ph-broadcast" style="font-size:13px;color:var(--accent)"></i>Broadcast Pulse<span class="bp-live-dot" id="bpLiveDot"></span></span>
-              <span id="dsDate" style="font-size:12px;color:var(--text3)"></span>
-            </div>
-            <div class="sb-card-body" style="padding-top:18px;padding-bottom:14px">
-              <div class="bp-donut-wrap">
-                <svg width="140" height="140" viewBox="0 0 140 140" class="bp-donut-svg">
-                  <circle cx="70" cy="70" r="58" fill="none" stroke="var(--surface2)" stroke-width="11"/>
-                  <circle cx="70" cy="70" r="58" fill="none" stroke="var(--accent)" stroke-width="11"
-                    stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke-linecap="round"
-                    transform="rotate(-90 70 70)" id="bpDonutFill"
-                    style="transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1),stroke .4s"/>
-                </svg>
-                <div class="bp-donut-center">
-                  <div class="bp-hero-num" id="dsSent">0</div>
-                  <div class="bp-donut-divider"></div>
-                  <div class="bp-donut-target" id="dsProgressLabel">100</div>
-                </div>
-              </div>
-            </div>
-            <!-- Metric strip: Sent / Replied / Conv -->
-            <div class="sb-metrics">
-              <div class="sb-metric">
-                <div class="sb-metric-val" style="color:var(--accent)" id="dsSentMetric">0</div>
-                <div class="sb-metric-lbl">Sent</div>
-              </div>
-              <div class="sb-metric">
-                <div class="sb-metric-val" style="color:var(--blue)" id="dsReplied">0</div>
-                <div class="sb-metric-lbl">Replied</div>
-              </div>
-              <div class="sb-metric">
-                <div class="sb-metric-val" style="color:var(--yellow)" id="dsConversion">—</div>
-                <div class="sb-metric-lbl">Conv %</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- ═══ AUTOMATION IMPACT ═══ -->
-          <div class="sb-card" id="autoImpactSendCard">
-            <div class="sb-card-head">
-              <span class="sb-card-label"><i class="ph-bold ph-lightning" style="font-size:13px;color:var(--yellow)"></i>Automation Impact</span>
-              <span class="ai-speed-badge" id="aiSpeedMult">~4×</span>
-            </div>
-            <div class="sb-card-body">
-              <div class="ai-kpis">
-                <div class="ai-kpi">
-                  <div class="ai-kpi-icon" style="color:var(--blue)"><i class="ph-bold ph-clock-countdown"></i></div>
-                  <div class="ai-kpi-val" style="color:var(--blue)" id="aiTimeSavedToday">—</div>
-                  <div class="ai-kpi-lbl">Saved</div>
-                </div>
-                <div class="ai-kpi">
-                  <div class="ai-kpi-icon" style="color:var(--accent)"><i class="ph-bold ph-envelope-simple"></i></div>
-                  <div class="ai-kpi-val" style="color:var(--accent)" id="aiEmailsToday">0</div>
-                  <div class="ai-kpi-lbl">Auto</div>
-                </div>
-                <div class="ai-kpi">
-                  <div class="ai-kpi-icon" style="color:var(--yellow)"><i class="ph-bold ph-cursor-click"></i></div>
-                  <div class="ai-kpi-val" style="color:var(--yellow)" id="aiActionsToday">0</div>
-                  <div class="ai-kpi-lbl">Actions</div>
-                </div>
-              </div>
-              <div class="ai-compare">
-                <div class="ai-compare-label">Manual vs DAT Mailer</div>
-                <div class="ai-bar-row">
-                  <div class="ai-bar-icon"><i class="ph-bold ph-user" style="font-size:13px;color:var(--red)"></i></div>
-                  <div class="ai-bar-track" style="background:color-mix(in srgb, var(--red) 10%, transparent);border:1px solid color-mix(in srgb, var(--red) 12%, transparent)">
-                    <div class="ai-bar-fill" style="width:100%;background:linear-gradient(90deg,var(--red),var(--red))"></div>
-                  </div>
-                  <div class="ai-bar-val" style="color:var(--red)" id="aiManualBar">—</div>
-                </div>
-                <div class="ai-bar-row">
-                  <div class="ai-bar-icon"><i class="ph-bold ph-lightning" style="font-size:13px;color:var(--accent)"></i></div>
-                  <div class="ai-bar-track" style="background:color-mix(in srgb, var(--accent) 10%, transparent);border:1px solid color-mix(in srgb, var(--accent) 12%, transparent)">
-                    <div class="ai-bar-fill" id="aiAutoBarFill" style="width:1%;background:linear-gradient(90deg,var(--accent),var(--blue))"></div>
-                  </div>
-                  <div class="ai-bar-val" style="color:var(--accent)" id="aiAutoBar">—</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- ═══ DAILY QUOTA — compact ═══ -->
-          <div class="sb-card" id="quotaCard">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px">
-              <div style="display:flex;align-items:center;gap:8px">
-                <i class="ph-bold ph-gauge" style="font-size:14px;color:var(--blue)"></i>
-                <span style="font-size:12px;font-weight:700;color:var(--text2)">Quota</span>
-                <span style="font-size:13px;font-weight:800;color:var(--text);font-family:inherit" id="quotaUsedLabel">0</span>
-                <span style="font-size:12px;color:var(--text3)">/</span>
-                <span style="font-size:13px;font-weight:700;color:var(--text2);font-family:inherit" id="quotaLimitLabel">50</span>
-                <span style="font-size:12px;color:var(--text3)" id="quotaRemLabel">— 50 left</span>
-              </div>
-              <span id="quotaPlanBadge" style="font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:color-mix(in srgb, var(--accent) 12%, transparent);color:var(--accent);border:1px solid color-mix(in srgb, var(--accent) 20%, transparent)">free</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 
-    <!-- STATS -->
     <!-- LOG -->
     <div class="page" id="page-log">
       <div class="page-header">
@@ -3123,6 +2942,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
               <input class="fu-search fu-search-wide" id="fuSearch" placeholder="Search company, contact, or email..." oninput="renderFuCurrentView(); renderFuSelection()">
               <div class="fu-segment" id="fuUrgencySegment">
                 <button class="fu-segment-btn active" id="fuf-special-all" onclick="setFuSpecialFilter('')">All</button>
+                <button class="fu-segment-btn" id="fuf-special-touches" onclick="setFuSpecialFilter('touches')" title="Overdue, due today and 🔥 hot replies">Today's touches <span id="fuTouchesCount"></span></button>
                 <button class="fu-segment-btn" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')" title="Past due — needs action now">Overdue <span id="fuOverdueCount"></span></button>
                 <button class="fu-segment-btn" id="fuf-special-due_today" onclick="setFuSpecialFilter('due_today')" title="Due later today">Today <span id="fuTodayCount"></span></button>
                 <button class="fu-segment-btn" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')" title="FU1–FU3 sequence finished">Needs Action <span id="fuNeedsActionCount"></span></button>
@@ -3159,7 +2979,6 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
               <button class="btn btn-outline btn-sm" onclick="resetFuFilters()">Clear</button>
           </div>
 
-          <div id="fuTouchPanel" class="fu-touch-panel" style="display:none"></div>
 
 
           <div class="fu-bulk-bar" id="fuBulkBar" style="display:none">
@@ -3169,12 +2988,12 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
               <button class="fu-select-all-filtered" id="fuSelectAllFiltered" onclick="selectAllFilteredFu()" style="display:none"></button>
             </div>
             <div class="fu-bulk-group fu-bulk-actions">
-              <button class="btn btn-sm btn-primary" onclick="bulkFuAction('send-now')">Send Now</button>
+              <button class="btn btn-sm btn-primary" onclick="bulkFuAction('send-now')">Send now</button>
               <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal()">Schedule</button>
               <button class="btn btn-sm btn-secondary" onclick="openFuScheduleModal(null, 'recurring')">Set Recurring</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('pause')">Pause</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('resume')">Resume</button>
-              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('loads')">Mark Booked</button>
+              <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('loads')">Mark booked</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('warm')">Mark Warm</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('cancel-schedule')">Cancel Schedule</button>
               <button class="btn btn-sm btn-secondary" onclick="bulkFuAction('restart-fu1')">Restart Follow-up</button>
@@ -3204,13 +3023,11 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
                     <input type="checkbox" id="fuMasterCheckbox" onclick="fuMasterCheckboxChange(this)">
                   </th>
                   <th>Contact</th>
-                  <th>State</th>
-                  <th title="Pipeline stage (FU1–FU3 step shown while the sequence runs)">Stage</th>
+                  <th title="Pipeline stage; FU1–FU3 step while the sequence runs; state when not active">Stage</th>
                   <th class="fu-th-sort" onclick="setFuSort('next_followup_at')" title="Sort by next touch">Next touch <span class="fu-sort-arrow" id="fuSortArrow-next_followup_at"></span></th>
                   <th class="fu-th-sort" onclick="setFuSort('last_activity_at')" title="Sort by last activity">Last Activity <span class="fu-sort-arrow" id="fuSortArrow-last_activity_at"></span></th>
                   <th>Route</th>
-                  <th>Action</th>
-                  <th class="fu-col-menu">More</th>
+                  <th class="fu-col-action">Actions</th>
                 </tr>
               </thead>
               <tbody id="fuContactsList"></tbody>
@@ -3895,7 +3712,6 @@ function nav(page, el) {
   if (page === 'send') {
     loadDailyStats();
     loadQuota();
-    loadAutomationImpact();
     loadParseContext();
     const saved = sessionStorage.getItem('dat_draft');
     if (saved && datTxt && !datTxt.value) datTxt.value = saved;
@@ -4220,65 +4036,20 @@ async function loadDailyStats() {
       const d = raw ? new Date(raw.replace(' ', 'T') + (raw.length <= 16 ? ':00Z' : '')) : null;
       return d && !isNaN(d) && localDay(d) === todayStr;
     }).length;
-    const conversion = sent > 0 ? Math.round(repliedToday / sent * 100) : null;
-
-    // Update date
-    const dsDate = document.getElementById('dsDate');
-    if (dsDate) dsDate.textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
-
-    // Broadcast Pulse — hero number with count-up
-    const heroEl = document.getElementById('dsSent');
-    const metricEl = document.getElementById('dsSentMetric');
-    const prevSent = parseInt(heroEl?.textContent) || 0;
-    if (heroEl && sent !== prevSent) {
-      heroEl.classList.add('counting');
-      animateCount(heroEl, sent);
-      if (metricEl) animateCount(metricEl, sent);
-      setTimeout(() => heroEl.classList.remove('counting'), 850);
-    }
-    setEl('dsProgressLabel', dailyTarget);
-
-    // Metric strip — animate replied count
-    const dsReplied = document.getElementById('dsReplied');
-    const dsConv = document.getElementById('dsConversion');
-    if (dsReplied) {
-      const prevReplied = parseInt(dsReplied.textContent) || 0;
-      if (repliedToday !== prevReplied) animateCount(dsReplied, repliedToday);
-      else dsReplied.textContent = repliedToday;
-    }
-    if (dsConv) {
-      dsConv.textContent = conversion !== null ? conversion + '%' : '—';
-      dsConv.style.color = conversion === null ? 'var(--yellow)'
-        : conversion >= 30 ? 'var(--accent)'
-        : conversion >= 15 ? 'var(--yellow)' : 'var(--red)';
-    }
-
-    // Broadcast Pulse donut
-    const pct = dailyTarget > 0 ? Math.min(100, Math.round(sent / dailyTarget * 100)) : 0;
-    const bpFill = document.getElementById('bpDonutFill');
-    if (bpFill) {
-      const circumference = 2 * Math.PI * 58; // ~364.4
-      const offset = circumference * (1 - pct / 100);
-      setTimeout(() => {
-        bpFill.style.strokeDashoffset = offset;
-        bpFill.style.stroke = pct >= 100 ? 'var(--blue)'
-          : pct >= 60 ? 'var(--accent)' : 'var(--accent)';
-      }, 100);
-    }
-
-    // Live dot state
-    const liveDot = document.getElementById('bpLiveDot');
-    if (liveDot) {
-      if (pct >= 100) liveDot.style.background = 'var(--accent)';
-      else if (sent > 0) liveDot.style.background = '';
-      else liveDot.style.background = 'var(--border)';
-    }
+    // status line: plain numbers, the bar shows how close today is to the target
+    setEl('dsSent', sent);
+    setEl('dsTarget', dailyTarget);
+    setEl('dsReplied', repliedToday);
+    setEl('dsRepliedLbl', repliedToday === 1 ? 'reply' : 'replies');
+    const fill = document.getElementById('dsFill');
+    if (fill) fill.style.width = (dailyTarget > 0 ? Math.min(100, Math.round(sent / dailyTarget * 100)) : 0) + '%';
   } catch(e) { console.error('loadDailyStats:', e); }
 }
 
 function editDailyTarget() {
-  nav('settings', document.querySelector('.nav-item[onclick*=settings]'));
-  setTimeout(() => toast('Change Daily Target in Settings'), 300);
+  navTo('settings');
+  setSettingsTab('sending');
+  setTimeout(() => { const i = document.getElementById('cfgDailyTarget'); if (i) { i.focus(); i.select(); } }, 50);
 }
 
 // ── QUOTA ─────────────────────────────────────────────────────────────────────
@@ -4288,27 +4059,15 @@ async function loadQuota() {
     if (!res.ok) return;
     const q = await res.json();
 
-    const badge  = document.getElementById('quotaPlanBadge');
-    const used   = document.getElementById('quotaUsedLabel');
-    const rem    = document.getElementById('quotaRemLabel');
-    const bar    = document.getElementById('quotaBarFill');
-
-    if (badge) {
-      badge.textContent = q.plan;
-      const colors = {free:'color-mix(in srgb, var(--accent) 12%, transparent)/color-mix(in srgb, var(--accent) 20%, transparent)/var(--accent)', starter:'color-mix(in srgb, var(--green) 12%, transparent)/color-mix(in srgb, var(--green) 20%, transparent)/var(--green)', pro:'color-mix(in srgb, var(--yellow) 12%, transparent)/color-mix(in srgb, var(--yellow) 20%, transparent)/var(--yellow)'};
-      const [bg, border, color] = (colors[q.plan] || colors.free).split('/');
-      badge.style.background = bg; badge.style.borderColor = border; badge.style.color = color;
-    }
-    const limitEl = document.getElementById('quotaLimitLabel');
-    if (q.unlimited) {
-      if (used) used.textContent = q.used;
-      if (limitEl) limitEl.textContent = '∞';
-      if (rem) rem.textContent = '— Unlimited';
-    } else {
-      if (used) used.textContent = q.used;
-      if (limitEl) limitEl.textContent = q.limit;
-      if (rem) rem.textContent = '— ' + q.remaining + ' left';
-    }
+    const el = document.getElementById('quotaStatus');
+    if (!el) return;
+    if (q.unlimited) { el.hidden = true; return; }
+    el.hidden = false;
+    const low = q.remaining <= Math.ceil(q.limit * 0.1);
+    el.className = 'ss-item' + (q.remaining === 0 ? ' ss-bad' : low ? ' ss-warn' : '');
+    el.title = `${q.plan} plan · ${q.used} of ${q.limit} emails used today`;
+    el.innerHTML = q.remaining === 0 ? 'Daily quota reached'
+      : `Quota <b class="num">${q.remaining}</b> of ${q.limit} left`;
   } catch(e) { /* quota widget is non-critical */ }
 }
 
@@ -4788,9 +4547,6 @@ async function startSend() {
   const spc = document.getElementById('sendProgressCard');
   if (spc) spc.style.display = 'block';
   document.getElementById('liveLog').innerHTML = '';
-  // Update live dot to sending state
-  const ld = document.getElementById('bpLiveDot');
-  if (ld) { ld.style.background = ''; ld.style.animation = 'bpDotSend .8s ease-in-out infinite'; }
   const res = await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loads})});
   const data = await res.json();
   if (!data.ok) {
@@ -4835,8 +4591,6 @@ async function pollStatus() {
     toast(`Done! Sent: ${s.sent}, Errors: ${s.errors}`);
     loadDailyStats();
     loadParseContext();
-    const ld2 = document.getElementById('bpLiveDot');
-    if (ld2) { ld2.style.animation = ''; }
   }
 }
 
@@ -6415,6 +6169,8 @@ function updateFuBadge() {
   const ov = document.getElementById('fuOverdueCount');
   const sc = document.getElementById('fuScheduledCount');
   const td = document.getElementById('fuTodayCount');
+  const tc = document.getElementById('fuTouchesCount');
+  if (tc) tc.textContent = fuCounts.touches ? ` ${fuCounts.touches}` : '';
   if (td) td.textContent = fuCounts.due_today ? ` ${fuCounts.due_today}` : '';
   if (na) na.textContent = fuCounts.needs_action ? ` ${fuCounts.needs_action}` : '';
   if (ov) ov.textContent = fuCounts.overdue ? ` ${fuCounts.overdue}` : '';
@@ -6484,6 +6240,8 @@ function getFuUrgencyMeta(c) {
   endOfDay.setHours(23, 59, 59, 999);
   const isToday = next && next >= now && next <= endOfDay && c.state === 'active';
   const isScheduled = !!(c.scheduled_once && next && next > now);
+  // Today's touches (server bucket 'touches'): due by midnight, or a hot reply
+  const isDue = c.state === 'active' && !!(c.attention_at || (next && next <= endOfDay));
   let rank = 4;
   if (isOverdue) rank = 0;
   else if (isToday) rank = 1;
@@ -6491,7 +6249,7 @@ function getFuUrgencyMeta(c) {
   else if (isScheduled) rank = 3;
   else if (c.state === 'paused') rank = 6;
   else if (['warm','loads','blocked','closed'].includes(c.state)) rank = 7;
-  return { isNeedsAction, isOverdue, isToday, isScheduled, rank, next };
+  return { isNeedsAction, isOverdue, isToday, isScheduled, isDue, rank, next };
 }
 
 function getFuPrimaryActionLabel(c) {
@@ -6505,10 +6263,30 @@ function getFuPrimaryActionLabel(c) {
 
 function getFuPrimaryActionButton(c) {
   const label = getFuPrimaryActionLabel(c);
-  if (!label) return `<span class="fu-time-sub">No action</span>`;
+  if (!label) return '';
   if (label === 'Resume') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','resume')">Resume</button>`;
-  if (label === 'Mark Booked') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Mark Booked</button>`;
-  return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send Now</button>`;
+  if (label === 'Mark Booked') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Mark booked</button>`;
+  return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send now</button>`;
+}
+
+// Due rows: send the touch, or push it (the old Today's touches panel actions).
+function fuDueActions(c) {
+  const send = /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send';
+  return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','${send}')" title="Send the touch now">Send</button>` +
+    `<span class="fu-qa-group" role="group" aria-label="Snooze or skip">` +
+    [1, 3, 7].map(d => `<button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',${d})" title="Snooze ${d} day${d > 1 ? 's' : ''}">+${d}d</button>`).join('') +
+    `<button class="fu-qa-btn" onclick="fuTouch('${c.id}','skip')" title="Skip — reschedule by stage cadence" aria-label="Skip"><i class="ph-bold ph-arrow-bend-up-right"></i></button></span>`;
+}
+
+// What happened last: their reply or our email (the subject repeated the route).
+function fuLastEvent(c) {
+  const ms = iso => { const t = iso ? new Date(iso).getTime() : NaN; return isNaN(t) ? 0 : t; };
+  const r = ms(c.last_reply_at), s = ms(c.last_followup_sent_at);
+  if (!r && !s) return '';
+  const [label, iso] = r >= s ? ['Replied', c.last_reply_at] : ['You emailed', c.last_followup_sent_at];
+  const when = formatFuRelative(iso);
+  if (when === formatFuRelative(c.last_activity_at)) return label;
+  return label + ' ' + (/^(Today|Yesterday)$/.test(when) ? when.toLowerCase() : when);
 }
 
 // ── Contact queue rendering ────────────────────────────────────────────────────
@@ -6570,15 +6348,6 @@ function getFuStateInfo(state) {
     blocked:{label:'Blocked',cls:'fu-state-blocked'}, closed:{label:'Closed',cls:'fu-state-closed'},
   };
   return map[state] || {label:state,cls:'fu-state-active'};
-}
-function getFuPrimaryBtn(c) {
-  const terminal = ['warm','loads','blocked','closed'];
-  if (terminal.includes(c.state)) return '';
-  if (c.state === 'paused') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','resume')">Resume</button>`;
-  if (c.stage === 'completed_fu3') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Booked</button>`;
-  if (['fu1_scheduled','fu2_scheduled','fu3_scheduled'].includes(c.stage))
-    return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send Now</button>`;
-  return '';
 }
 function formatFuDate(iso) {
   if (!iso) return null;
@@ -6659,35 +6428,42 @@ function renderFuContacts() {
   wrap.style.display = '';
   empty.style.display = 'none';
 
-  const terminal = ['warm','loads','blocked','closed'];
-  container.innerHTML = list.map(c => {
-    const si = getFuStageInfo(c.stage);
-    const sti = getFuStateInfo(c.state);
-    const meta = getFuUrgencyMeta(c);
-    const isTerminal = terminal.includes(c.state);
-    const isMuted = c.state === 'paused';
-    const lastAct = formatFuRelative(c.last_activity_at);
-    const sentRec = fuSentRecency(c.last_followup_sent_at);
-    const sentBadge = sentRec === 'today'
-      ? `<span class="fu-sent-badge today" title="Follow-up sent today">Sent today</span>`
-      : sentRec === 'yesterday'
-      ? `<span class="fu-sent-badge yesterday" title="Follow-up sent yesterday">Sent yesterday</span>`
-      : '';
-    const route = esc(c.current_route || '—');
-    const ps = fuPipelineStage(c);
-    const nt = fuNextTouch(c);
-    const inDrip = c.is_followup_enabled && /^fu[123]_(scheduled|sent)$/.test(c.stage || '');
-    const rowCls = [
-      'fu-table-row',
-      meta.isOverdue ? 'overdue' : '',
-      meta.isNeedsAction ? 'needs-action' : '',
-      isMuted ? 'muted' : '',
-      isTerminal ? 'terminal' : '',
-      selectedFuIds.has(c.id) ? 'selected' : ''
-    ].filter(Boolean).join(' ');
-    const actionBtn = getFuPrimaryActionButton(c);
+  // Default order: the due block (🔥 first, then by date) on top of everything else.
+  // An explicit column sort shows one flat list; due rows keep their quick actions.
+  let html;
+  if (fuSortKey) html = list.map(fuRowHtml).join('');
+  else {
+    const due = list.filter(c => getFuUrgencyMeta(c).isDue).sort((a, b) =>
+      ((b.attention_at ? 1 : 0) - (a.attention_at ? 1 : 0)) ||
+      (new Date(a.next_followup_at || 0) - new Date(b.next_followup_at || 0)));
+    const rest = list.filter(c => !getFuUrgencyMeta(c).isDue);
+    const head = (title, n, hint) => `<tr class="fu-group-row"><td colspan="7"><span class="fu-group-title">${title}</span>` +
+      `<span class="fu-group-count">${n}</span>${hint ? `<span class="fu-group-hint">${hint}</span>` : ''}</td></tr>`;
+    html = due.length && rest.length
+      ? head("Today's touches", due.length, 'overdue, due today and 🔥 hot replies') + due.map(fuRowHtml).join('') +
+        head('Everything else', rest.length, '') + rest.map(fuRowHtml).join('')
+      : due.concat(rest).map(fuRowHtml).join('');
+  }
+  container.innerHTML = html;
+  renderFuSelection();
+}
 
-    return `<tr class="${rowCls}" id="fu-row-${c.id}">
+function fuRowHtml(c) {
+  const si = getFuStageInfo(c.stage);
+  const sti = getFuStateInfo(c.state);
+  const meta = getFuUrgencyMeta(c);
+  const route = esc(c.current_route || '—');
+  const ps = fuPipelineStage(c);
+  const nt = fuNextTouch(c);
+  const inDrip = c.is_followup_enabled && /^fu[123]_(scheduled|sent)$/.test(c.stage || '');
+  const rowCls = [
+    'fu-table-row',
+    meta.isDue ? 'due' : '',
+    c.state === 'paused' ? 'muted' : '',
+    ['warm','loads','blocked','closed'].includes(c.state) ? 'terminal' : '',
+    selectedFuIds.has(c.id) ? 'selected' : ''
+  ].filter(Boolean).join(' ');
+  return `<tr class="${rowCls}" id="fu-row-${c.id}">
       <td class="fu-col-select">
         <input type="checkbox" class="fu-checkbox" id="fu-cb-${c.id}" ${selectedFuIds.has(c.id)?'checked':''} onclick="toggleFuSelect('${c.id}',event)">
       </td>
@@ -6697,15 +6473,9 @@ function renderFuContacts() {
       </td>
       <td>
         <div class="fu-meta-stack">
-          <span class="fu-state-badge ${sti.cls}">${sti.label}</span>
-          ${sentBadge}
-          ${c.recurring_enabled ? `<span class="fu-state-badge" style="background:color-mix(in srgb, var(--blue) 12%, transparent);color:var(--blue)">Recurring</span>` : ''}
-        </div>
-      </td>
-      <td>
-        <div class="fu-meta-stack">
           <span class="fu-pstage"><span class="fu-pstage-dot" style="background:${esc(ps.color)}"></span>${esc(ps.name)}</span>
           ${inDrip ? `<span class="fu-stage-badge ${si.cls}" title="Follow-up sequence step">${si.label}</span>` : ''}
+          ${c.state !== 'active' ? `<span class="fu-state-badge ${sti.cls}">${sti.label}</span>` : ''}
         </div>
       </td>
       <td>
@@ -6716,18 +6486,14 @@ function renderFuContacts() {
       </td>
       <td>
         <div class="fu-time-cell">
-          <span class="fu-time-main">${lastAct}</span>
-          <span class="fu-time-sub">${c.reply_subject ? esc(c.reply_subject) : 'No subject'}</span>
+          <span class="fu-time-main">${formatFuRelative(c.last_activity_at)}</span>
+          <span class="fu-time-sub">${esc(fuLastEvent(c))}</span>
         </div>
       </td>
       <td class="fu-route-cell" title="${route}"><span class="fu-route-text">${route}</span></td>
-      <td><div class="fu-row-action">${actionBtn}</div></td>
-      <td class="fu-col-menu">
-        <button class="fu-row-menu-btn" onclick="toggleFuDropdown(event,'${c.id}')" title="More actions">•••</button>
-      </td>
+      <td><div class="fu-row-action">${meta.isDue ? fuDueActions(c) : getFuPrimaryActionButton(c)}` +
+        `<button class="fu-row-menu-btn" onclick="toggleFuDropdown(event,'${c.id}')" title="More actions" aria-label="More actions">•••</button></div></td>
     </tr>`;
-  }).join('');
-  renderFuSelection();
 }
 
 // ── Kanban / pipeline view ──────────────────────────────────────────────────────
@@ -6775,7 +6541,6 @@ function applyFuViewVisibility() {
 }
 
 function renderFuCurrentView() {
-  renderTouchPanel();
   if (fuViewMode === 'kanban') renderFuKanban();
   else renderFuContacts();
 }
@@ -6870,50 +6635,6 @@ function _vizTip(e) {
   tip.style.top = (e.clientY - tip.offsetHeight - 10) + 'px';
 }
 
-// ── Today's touches: due cadence touches + 🔥 warm replies, quick actions ──────
-function renderTouchPanel() {
-  const el = document.getElementById('fuTouchPanel');
-  if (!el) return;
-  const eod = new Date(); eod.setHours(23, 59, 59, 999);
-  // A set date is a commitment no matter which engine set it — flags only gate auto-sends
-  const due = (fuContacts || []).filter(c => c.state === 'active' && (
-    c.attention_at ||
-    (c.next_followup_at && new Date(c.next_followup_at) <= eod)
-  ));
-  if (!due.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  due.sort((a, b) =>
-    ((b.attention_at ? 1 : 0) - (a.attention_at ? 1 : 0)) ||
-    (new Date(a.next_followup_at || 0) - new Date(b.next_followup_at || 0)));
-  const stageName = id => (pipelineStages.find(s => s.id === id) || {}).name || ('Stage ' + id);
-  const now = new Date();
-  const rows = due.slice(0, 30).map(c => {
-    const late = c.next_followup_at && new Date(c.next_followup_at) < now;
-    // drip contacts advance the FU1-3 sequence; everyone else gets a cadence touch
-    const sendAction = /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send';
-    return `<div class="fu-touch-row${c.attention_at ? ' hot' : ''}">` +
-      `<span class="ft-ico">${c.attention_at ? '🔥' : (late ? '<i class="ph-bold ph-alarm" style="color:var(--red)"></i>' : '<i class="ph-bold ph-calendar-blank" style="color:var(--text3)"></i>')}</span>` +
-      `<span class="ft-who" style="cursor:pointer" onclick="openTimeline('${c.id}')" title="Open history"><b>${esc(fuName(c))}</b>` +
-        `<span class="ft-email">${esc(fuSub(c))}</span></span>` +
-      `<span class="ft-stage">${esc(stageName(c.pipeline_stage))}</span>` +
-      (c.current_route ? `<span class="ft-route">${esc(c.current_route)}</span>` : '') +
-      `<span class="ft-actions">` +
-        `<button class="fu-btn-primary" onclick="fuAction('${c.id}','${sendAction}')">Send touch</button>` +
-        `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',1)">+1d</button>` +
-        `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',3)">+3d</button>` +
-        `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','snooze',7)">+7d</button>` +
-        `<button class="tq-auto-undo" onclick="fuTouch('${c.id}','skip')" title="Skip — push by stage cadence">Skip</button>` +
-      `</span></div>`;
-  }).join('');
-  // Compact: header toggles, list scrolls inside — the panel must never push
-  // the table/kanban below the fold
-  el.innerHTML = `<div class="fu-touch-head" style="cursor:pointer" onclick="_touchOpen=!_touchOpen;renderTouchPanel()">` +
-    `<i class="ph-bold ph-clipboard-text"></i> Today's touches <b>${due.length}</b>` +
-    `<span style="float:right;font-weight:600;color:var(--text3)">${_touchOpen ? '▴ Hide' : '▾ Show'}</span></div>` +
-    (_touchOpen ? `<div class="fu-touch-list">${rows}</div>` : '');
-  el.style.display = 'block';
-}
-let _touchOpen = true;
-
 // ── Contact timeline drawer ───────────────────────────────────────────────────
 async function openTimeline(id) {
   let d;
@@ -6945,8 +6666,8 @@ async function openTimeline(id) {
     (d.notes ? `<div class="fu-tl-notes"><i class="ph-bold ph-note"></i> ${esc(d.notes)}</div>` : '') +
     `<div style="display:flex;gap:6px;margin-bottom:10px">` +
       `<button class="fu-btn-primary" onclick="closeTimeline();fuAction('${c.id}','${/^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send'}')"><i class="ph-bold ph-paper-plane-tilt"></i> Send touch</button>` +
-      `<button class="tq-auto-undo" onclick="closeTimeline();fuTouch('${c.id}','snooze',3)">+3d</button>` +
-      `<button class="tq-auto-undo" onclick="closeTimeline();fuTouch('${c.id}','snooze',7)">+7d</button>` +
+      `<button class="fu-qa-btn" onclick="closeTimeline();fuTouch('${c.id}','snooze',3)">+3d</button>` +
+      `<button class="fu-qa-btn" onclick="closeTimeline();fuTouch('${c.id}','snooze',7)">+7d</button>` +
     `</div>` + items + `</div>`;
   document.body.appendChild(ov);
   document.addEventListener('keydown', _tlEsc);
@@ -7020,7 +6741,7 @@ function fuKanbanCard(c) {
     <button class="fu-kanban-card-menu" onclick="event.stopPropagation();toggleFuDropdown(event,'${c.id}')" title="Actions">⋯</button>
     <div class="fu-kanban-card-title">${c.attention_at ? '🔥 ' : ''}${esc(fuName(c))}</div>
     <div class="fu-kanban-card-email">${esc(fuSub(c))}</div>
-    <div class="fu-kanban-card-meta"><span class="fu-state-badge ${sti.cls}">${sti.label}</span>${sentBadge}</div>
+    ${c.state !== 'active' || sentBadge ? `<div class="fu-kanban-card-meta">${c.state !== 'active' ? `<span class="fu-state-badge ${sti.cls}">${sti.label}</span>` : ''}${sentBadge}</div>` : ''}
     <div class="fu-kanban-card-foot"><i class="ph-bold ph-clock"></i> ${lastAct}${route}</div>
     <div class="fu-kanban-qa" onclick="event.stopPropagation()">
       <button class="fu-qa-btn fu-qa-send" onclick="fuAction('${c.id}','${/^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send'}')" title="Send touch now"><i class="ph-bold ph-paper-plane-tilt"></i> Send</button>
@@ -7869,47 +7590,6 @@ function checkScheduledDue() {}
 function renderScheduledBlock() {}
 
 
-// ── AUTOMATION IMPACT ────────────────────────────────────────────────────────
-// Mirrors backend time model exactly
-const AI = {
-  MANUAL_SEC:    40,   // per email
-  BATCH_SIZE:    30,
-  BATCH_SETUP:   20,   // sec per batch
-  DELAY_EMAIL:   10,   // sec per email send
-  ACTIONS:        4,
-  WORK_HOURS:     8,
-  MANUAL_SPD: 60/40,   // emails/min
-};
-
-let _aiData = null, _aiTab = 'lifetime';
-
-function aiFmt(s) {
-  s = Math.max(0, s);
-  if (s < 60)   return Math.round(s) + 's';
-  if (s < 3600) return (s/60).toFixed(1) + ' min';
-  return (s/3600).toFixed(1) + ' hr';
-}
-
-function aiCalc(n) {
-  if (!n) return { emails_sent:0, manual_time_sec:0, auto_time_sec:0, time_saved_sec:0,
-    time_saved_fmt:'0s', manual_time_fmt:'0s', auto_time_fmt:'0s',
-    manual_actions_avoided:0, speed_multiplier:1, manual_speed:AI.MANUAL_SPD,
-    auto_speed:0, hours_saved:0, working_days_saved:0 };
-  const batches    = Math.ceil(n / AI.BATCH_SIZE);
-  const manual_sec = n * AI.MANUAL_SEC;
-  const auto_sec   = batches * AI.BATCH_SETUP + n * AI.DELAY_EMAIL;
-  const saved_sec  = Math.max(0, manual_sec - auto_sec);
-  const mult       = auto_sec > 0 ? Math.round(manual_sec / auto_sec * 10) / 10 : 1;
-  const spd        = auto_sec > 0 ? Math.round(n / (auto_sec/60) * 10)/10 : 0;
-  const hrs        = Math.round(saved_sec / 3600 * 10) / 10;
-  return { emails_sent:n, manual_time_sec:manual_sec, auto_time_sec:auto_sec,
-    time_saved_sec:saved_sec, time_saved_fmt:aiFmt(saved_sec),
-    manual_time_fmt:aiFmt(manual_sec), auto_time_fmt:aiFmt(auto_sec),
-    manual_actions_avoided:n*AI.ACTIONS, speed_multiplier:mult,
-    manual_speed:Math.round(AI.MANUAL_SPD*10)/10, auto_speed:spd,
-    hours_saved:hrs, working_days_saved:Math.round(hrs/AI.WORK_HOURS*10)/10 };
-}
-
 function animateCount(el, target, dec, sfx) {
   if (!el) return;
   dec=dec||0; sfx=sfx||'';
@@ -7922,45 +7602,6 @@ function animateCount(el, target, dec, sfx) {
 }
 
 function setEl(id, v) { const e=document.getElementById(id); if(e) e.textContent=v; }
-
-async function loadAutomationImpact() {
-  try {
-    const res = await fetch('/api/automation-impact');
-    if (!res.ok) return;
-    _aiData = await res.json();
-    renderAiSendCard();
-    renderAiStats(_aiTab);
-  } catch(e) { console.error('AI impact:', e); }
-}
-
-function renderAiSendCard() {
-  if (!_aiData) return;
-  const d   = _aiData.today  || aiCalc(0);
-  const lft = _aiData.lifetime || aiCalc(0);
-  const mult = lft.speed_multiplier;
-
-  setEl('aiSpeedMult', '~' + mult + '×');
-  setEl('aiTimeSavedToday', d.time_saved_fmt || '0s');
-  const em = document.getElementById('aiEmailsToday');
-  if (em) animateCount(em, d.emails_sent);
-  const ac = document.getElementById('aiActionsToday');
-  if (ac) animateCount(ac, d.manual_actions_avoided);
-  setEl('aiSpeedToday', d.auto_speed ? d.auto_speed + '/min' : '—');
-  setEl('aiManualBar',  d.manual_time_fmt);
-  setEl('aiAutoBar',    d.auto_time_fmt);
-
-  const fill = document.getElementById('aiAutoBarFill');
-  if (fill && d.manual_time_sec > 0) {
-    const pct = Math.max(1, Math.round(d.auto_time_sec / d.manual_time_sec * 100));
-    setTimeout(() => fill.style.width = pct + '%', 200);
-  }
-}
-
-// setAiTab kept for legacy — no-op
-function setAiTab(tab) { _aiTab = tab; }
-// renderAiStats kept for legacy — no-op
-function renderAiStats(tab) {}
-
 
 // ── ANALYTICS REDESIGN ────────────────────────────────────────────────────────
 let _anStats = null;
@@ -8137,7 +7778,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   loadFollowups();
   loadQuota();
-  loadAutomationImpact();
   checkScheduledDue();
   // Load replies first, then daily stats (reuses cached allReplies)
   loadReplies().then(() => loadDailyStats());

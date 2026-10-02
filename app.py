@@ -5061,6 +5061,9 @@ def _fu_urgency(uid, now=None):
         'overdue':      db.and_(FC.next_followup_at < now, active),
         'due_today':    db.and_(FC.next_followup_at >= now, FC.next_followup_at < end_of_day, active),
         'scheduled':    db.and_(FC.scheduled_once == True, FC.next_followup_at > now),
+        # Today's touches: everything due by local midnight, plus hot (🔥) replies
+        'touches':      db.and_(active, db.or_(FC.attention_at.isnot(None),
+                                               FC.next_followup_at < end_of_day)),
     }
 
 
@@ -5111,6 +5114,7 @@ def api_followups_list():
         func.count(case((urg['due_today'], 1))).label('due_today'),
         func.count(case((FollowupContact.attention_at.isnot(None) & (FollowupContact.state == 'active'), 1))).label('attention'),
         func.count(case((urg['scheduled'], 1))).label('scheduled'),
+        func.count(case((urg['touches'], 1))).label('touches'),
     ).filter(FollowupContact.user_id == uid).first()
 
     counts = {
@@ -5120,6 +5124,7 @@ def api_followups_list():
         'due_today': count_q.due_today,
         'scheduled': count_q.scheduled,
         'attention': count_q.attention,
+        'touches': count_q.touches,
     }
     rmap = _latest_reply_filter_map(uid, {(c.contact_email or '').lower() for c in contacts})
     contacts_out = []

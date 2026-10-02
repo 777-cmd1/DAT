@@ -58,15 +58,19 @@ tests/              — pytest: test_parser, test_triage, test_touch, test_pipel
 - Лічильники Overdue/Today: **будь-який активний контакт з датою** (прапорці enabled
   керують лише авто-відправкою). Шедулер (15-хв тред): Path 0-2 дрип/одноразові/recurring,
   Path 3 авто-дотики (mode=auto), Path 4 тижневий дайджест (Пн ≥06:00 за поясом юзера, дедуп по локальній даті).
-- UI: панель «Today's touches» (скрол, згортання) з Send touch/+1/+3/+7/Skip;
+- UI: «Today's touches» — сегмент-фільтр (`filter=touches`, бакет `_fu_urgency`) і блок угорі
+  таблиці (due до локальної півночі + 🔥) з Send/+1d/+3d/+7d/Skip; State злитий у Stage
+  (показується, лише коли не Active); Last activity = остання подія (Replied / You emailed);
   швидкі дії на канбан-картках; таймлайн контакту (`/api/followups/timeline`) —
   drawer з усією історією (відправки, відповіді з текстом, події стадій, нотатки).
 
-### 4. Dashboard — головна сторінка
-`/api/dashboard` (спільний `_dashboard_data(uid)` з дайджестом): Touches today / 🔥 /
-Replies pending; воронка 7/30д (Sent→Replied→Got info→Repeat→Booked, з івент-логу);
-здоровʼя (no_next_step, rotting 14д+, reply rate, avg touches→booked); activity 14д;
-top lanes. Графіки — inline SVG, палітра з dataviz-валідатора, тема light/dark.
+### 4. Insights — одна сторінка замість Dashboard / Analytics / Intelligence (2026-10)
+Вкладки `#/insights/overview|lanes|domains|timing` (старі хеші редіректять). Overview:
+воронка 7/30д плитками з конверсією між кроками (з `/api/dashboard`, спільний
+`_dashboard_data(uid)` з дайджестом), здоровʼя бази, activity 14д — два малі графіки
+(відправки і відповіді окремо, ніколи дві осі), якість відповідей. Lanes & Rates: rate requests,
+Rate history (sparkline + «last $X vs avg»), сигнали, таблиця ліній. Стартова сторінка застосунку —
+Send; декоративні віджети Send (Broadcast Pulse, Automation Impact, Quota) замінив рядок статусу.
 
 ## Ключові API (нові відносно старої документації)
 ```

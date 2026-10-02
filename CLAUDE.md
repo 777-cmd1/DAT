@@ -113,11 +113,16 @@ URL: `/admin`
 - `Workspace.get_cadence()`: {stage_id: {days, mode}}; touch_hour ('auto' = найкраща
   година відповідей); шедулер Path 3 = авто-дотики, Path 4 = тижневий дайджест (Пн).
 - 🔥 attention_at: відповідь від контакта стадії ≥2; OOO-автопауза: +7 днів.
-- UI: Today's touches панель, швидкі дії на канбані, таймлайн (`/api/followups/timeline`).
+- UI: Today's touches — сегмент-фільтр (`filter=touches`, бакет у `_fu_urgency`: due до локальної
+  півночі + 🔥) і блок угорі таблиці з Send/+1d/+3d/+7d/Skip; швидкі дії на канбані; таймлайн
+  (`/api/followups/timeline`). Окремої панелі більше нема.
 
-## Dashboard
-Головна сторінка: `/api/dashboard` (спільне `_dashboard_data` з дайджестом) —
-дії дня, воронка 7/30д з івент-логу, здоровʼя бази, activity 14д, top lanes.
+## Insights (замість Dashboard / Analytics / Intelligence) — 2026-10
+Стартова сторінка — **Send** (над чергою — тонкий рядок «Today X of N sent · replies · quota»).
+`#/insights/<overview|lanes|domains|timing>`; старі `#/dashboard`, `#/stats`, `#/intelligence` редіректять.
+Overview бере `/api/dashboard` (спільне `_dashboard_data` з дайджестом) + `/api/stats`.
+Дизайн-система: токени тем у першому `<style>` + шар «DESIGN SYSTEM (2026-10)» в кінці; семантика
+кольорів accent=дія, red=проблема, yellow=увага, green=успіх, blue=інфо; одна головна кнопка на екран.
 
 ## Інваріанти циклу 2026-09 (деталі — docs/PROJECT_OVERVIEW.md)
 - Автовідправка: `pipeline_config.auto_send_enabled` — головний вимикач усіх авто-шляхів;

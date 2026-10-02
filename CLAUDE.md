@@ -126,6 +126,9 @@ URL: `/admin`
 - Відповідь колеги (писали dispatch@abc.com, відповів john@abc.com) — норма: `_ColleagueReplyMatcher`
   приймає її (тред Gmail або корпоративний домен + маршрут у темі), `Reply.matched_recipient` = кому писали;
   зупиняє дрип цього контакта і рахується в reply rate.
+- Дата відповіді = Gmail internalDate (`_gmail_internal_date`); старі рядки виправляє `_backfill_reply_dates`
+  (`replies.date_checked`). Пам'ять рейтів: `extract_rates` → `rate_quotes` (лінія + еквіпмент з нашого листа,
+  `_rate_quote_load`), звіт `/api/intelligence/rates` → секція Rate history на Intelligence.
 - «Сьогодні» — за поясом юзера (`pipeline_config.timezone`, `_user_tz`, `_local_day_start`);
   фіксована touch_hour — локальна година. БД-час лишається naive UTC.
 - Імʼя контакта в UI — `FollowupContact.display_name` (JS `fuName/fuSub`).

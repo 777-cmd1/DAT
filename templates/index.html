@@ -2456,6 +2456,13 @@ body { font-variant-numeric: tabular-nums; }
 .btn-primary { box-shadow: none; }
 .btn-primary:hover { background: var(--accent-d); }
 .brand-icon { box-shadow: none; }
+/* Insights */
+.ins-panel[hidden] { display: none; }
+.ins-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.ins-health { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+.ins-kpi-row { grid-template-columns: repeat(2, minmax(0, 260px)); }
+.intel-table td.lane-cell { white-space: nowrap; }
+.ins-timing-period { margin-bottom: 14px; }
 .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
 .btn-secondary:hover { border-color: var(--border-h); background: var(--surface3); }
 .sidebar { backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -2486,10 +2493,7 @@ body { font-variant-numeric: tabular-nums; }
     <nav class="nav">
       <!-- PRIMARY: core workflow -->
       <div class="nav-section">Workflow</div>
-      <div class="nav-item active" onclick="nav('dashboard',this)">
-        <i class="nav-icon ph-bold ph-squares-four" aria-hidden="true"></i> Dashboard
-      </div>
-      <div class="nav-item" onclick="nav('send',this)">
+      <div class="nav-item active" onclick="nav('send',this)">
         <i class="nav-icon ph-bold ph-paper-plane-tilt" aria-hidden="true"></i> Send
       </div>
       <div class="nav-item" onclick="nav('replies',this)">
@@ -2500,11 +2504,8 @@ body { font-variant-numeric: tabular-nums; }
         <i class="nav-icon ph-bold ph-arrows-clockwise" aria-hidden="true"></i> Follow-up
         <span id="fuBadge" class="nav-badge" style="display:none">0</span>
       </div>
-      <div class="nav-item" onclick="nav('stats',this)">
-        <i class="nav-icon ph-bold ph-chart-bar" aria-hidden="true"></i> Analytics
-      </div>
-      <div class="nav-item" onclick="nav('intelligence',this)">
-        <i class="nav-icon ph-bold ph-sparkle" aria-hidden="true"></i> Intelligence
+      <div class="nav-item" onclick="nav('insights',this)">
+        <i class="nav-icon ph-bold ph-chart-line-up" aria-hidden="true"></i> Insights
       </div>
       <!-- SECONDARY: config -->
       <div class="nav-section">Config</div>
@@ -2548,7 +2549,7 @@ body { font-variant-numeric: tabular-nums; }
   <main class="main">
 
     <!-- SEND -->
-    <div class="page" id="page-send">
+    <div class="page active" id="page-send">
       <div class="page-header">
         <div class="page-title">Send Emails</div>
         <div class="page-sub">Paste DAT text → parse → send</div>
@@ -2770,12 +2771,51 @@ body { font-variant-numeric: tabular-nums; }
     </div>
 
     <!-- STATS -->
-    <div id="page-stats" class="page">
-  <div class="page-header">
-    <div class="page-title">Analytics</div>
-    <div class="page-sub">Review outreach health, performance, and optimization targets</div>
-  </div>
+    <!-- LOG -->
+    <div class="page" id="page-log">
+      <div class="page-header">
+        <div class="page-title">Send Log</div>
+        <div class="page-sub" id="logSubtitle">All records</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <input id="logSearch" placeholder="Search email or route..." style="width:240px" oninput="filterLog()">
+        <select id="logStatus" onchange="filterLog()" style="width:140px">
+          <option value="">All statuses</option>
+          <option value="sent">Sent</option>
+          <option value="error">Error</option>
+        </select>
+        <input id="logDateFrom" type="date" onchange="filterLog()" style="width:148px">
+        <input id="logDateTo" type="date" onchange="filterLog()" style="width:148px">
+        <button class="btn btn-outline btn-sm" onclick="clearLogFilters()">✕ Clear</button>
+        <span id="logCount" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Email</th><th>Route</th><th>Date</th><th>EQ</th><th>Status</th><th>V</th></tr></thead>
+            <tbody id="logBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;align-items:center;justify-content:center" id="logPager"></div>
+    </div>
 
+    <!-- REPLIES TRIAGE QUEUE -->
+    <!-- DASHBOARD PAGE -->
+    <!-- INSIGHTS: results, lanes & rates, domains, timing (was Dashboard + Analytics + Intelligence) -->
+    <div class="page" id="page-insights">
+      <div class="page-header">
+        <div class="page-title">Insights</div>
+        <div class="page-sub">How your outreach performs — results, lanes and rates, domains, timing</div>
+      </div>
+      <div class="settings-tabs ins-tabs" role="tablist">
+        <button class="settings-tab active" role="tab" data-ins-tab="overview" onclick="setInsightsTab('overview')">Overview</button>
+        <button class="settings-tab" role="tab" data-ins-tab="lanes" onclick="setInsightsTab('lanes')">Lanes &amp; Rates</button>
+        <button class="settings-tab" role="tab" data-ins-tab="domains" onclick="setInsightsTab('domains')">Domains</button>
+        <button class="settings-tab" role="tab" data-ins-tab="timing" onclick="setInsightsTab('timing')">Timing</button>
+      </div>
+
+      <div class="ins-panel" data-ins="overview">
   <div class="analytics-period-tabs">
     <button class="an-tab" onclick="setAnPeriod('today')">Today</button>
     <button class="an-tab" onclick="setAnPeriod('week')">7 Days</button>
@@ -2811,23 +2851,25 @@ body { font-variant-numeric: tabular-nums; }
     <div class="an-insight" id="anSummaryInsight"></div>
   </div>
 
-  <div class="an-section an-works-section">
-    <div class="an-section-title">What Works</div>
-    <div class="an-section-sub">The strongest routes, domains, and templates right now</div>
-    <div class="an-three-col">
-      <div class="an-col-block">
-        <div class="an-col-head">Top Routes</div>
-        <div id="anTopRoutes" class="an-list"></div>
-      </div>
-      <div class="an-col-block">
-        <div class="an-col-head">Top Domains</div>
-        <div id="anTopDomains" class="an-list"></div>
-      </div>
-      <div class="an-col-block">
-        <div class="an-col-head">Top Templates</div>
-        <div id="anTopTemplates" class="an-list"></div>
-      </div>
+
+  <div class="an-section">
+    <div class="ins-card-head">
+      <div><div class="an-section-title">Funnel</div>
+        <div class="an-section-sub">Where contacts drop off between steps</div></div>
+      <div class="an-period-tabs-sm" id="insFunnelPeriod"></div>
     </div>
+    <div id="insFunnel"><div class="intel-empty">Loading…</div></div>
+  </div>
+
+  <div class="ins-health" id="insHealth"></div>
+
+  <div class="an-section">
+    <div class="ins-card-head">
+      <div><div class="an-section-title">Activity</div>
+        <div class="an-section-sub">Emails sent and replies received, last 14 days</div></div>
+      <div class="dash-legend" id="insActivityLegend"></div>
+    </div>
+    <div id="insActivity"><div class="intel-empty">Loading…</div></div>
   </div>
 
   <div class="an-section">
@@ -2853,128 +2895,132 @@ body { font-variant-numeric: tabular-nums; }
     </div>
   </div>
 
-  <div class="an-section an-timing-section">
-    <div class="an-section-title">Timing</div>
-    <div class="an-section-sub">Best send windows first, trend context second</div>
-    <div class="an-two-col">
-      <div class="an-col-block">
-        <div class="an-col-head">Best Hours</div>
-        <div id="anHourChart" class="an-hour-list"></div>
       </div>
-      <div class="an-col-block">
-        <div class="an-col-head">Volume — Last 14 Days</div>
-        <div class="an-chart-outer">
-          <div class="an-chart-grid">
-            <div class="an-chart-gridlines"><span></span><span></span><span></span><span></span></div>
-            <div class="an-chart-wrap" id="anVolumeChart"></div>
-          </div>
-        </div>
-      </div>
+
+      <div class="ins-panel" data-ins="lanes" hidden>
+  <div class="intel-kpi-row ins-kpi-row">
+    <div class="intel-kpi">
+      <div class="intel-kpi-label">Rate requests</div>
+      <div class="intel-kpi-value" id="intel-rr-total">—</div>
+      <div class="intel-kpi-sub">contacts who asked for your rate</div>
+    </div>
+    <div class="intel-kpi">
+      <div class="intel-kpi-label">Emails per rate request</div>
+      <div class="intel-kpi-value" id="intel-eprr">—</div>
+      <div class="intel-kpi-sub" id="intel-eprr-sub"></div>
     </div>
   </div>
 
-  <div class="an-section an-efficiency-section">
-    <div class="an-section-header-row">
+  <div class="intel-section rates" id="intelRatesSection">
+    <div class="intel-rates-head">
       <div>
-        <div class="an-section-title">Efficiency</div>
-        <div class="an-section-sub">How much automation is saving versus manual work</div>
+        <div class="intel-section-title">Rate history</div>
+        <div class="intel-section-sub">Rates quoted to you in replies, by lane and equipment. The date is when the reply arrived.</div>
       </div>
-      <div class="an-period-tabs-sm">
-        <button class="an-tab-sm active" onclick="setAnAiTab('today')">Today</button>
-        <button class="an-tab-sm" onclick="setAnAiTab('week')">7d</button>
-        <button class="an-tab-sm" onclick="setAnAiTab('lifetime')">All</button>
-      </div>
-    </div>
-    <div class="an-ai-strip" id="anAiStrip">
-      <div class="an-ai-stat"><div class="an-ai-val" id="anAiEmails">—</div><div class="an-ai-lbl">Emails</div></div>
-      <div class="an-ai-divider"></div>
-      <div class="an-ai-stat"><div class="an-ai-val accent" id="anAiTimeSaved">—</div><div class="an-ai-lbl">Time Saved</div></div>
-      <div class="an-ai-divider"></div>
-      <div class="an-ai-stat"><div class="an-ai-val" id="anAiActions">—</div><div class="an-ai-lbl">Actions Avoided</div></div>
-      <div class="an-ai-divider"></div>
-      <div class="an-ai-stat"><div class="an-ai-val yellow" id="anAiMult">—</div><div class="an-ai-lbl">Faster</div></div>
-      <div class="an-ai-divider"></div>
-      <div class="an-ai-stat"><div class="an-ai-val" id="anAiAutoSpeed">—</div><div class="an-ai-lbl">Auto Speed</div></div>
-      <div class="an-ai-divider"></div>
-      <div class="an-ai-stat"><div class="an-ai-val muted" id="anAiManSpeed">—</div><div class="an-ai-lbl">Manual Speed</div></div>
-      <div class="an-ai-divider"></div>
-      <div class="an-ai-stat"><div class="an-ai-val" id="anAiDays">—</div><div class="an-ai-lbl">Work Days Saved</div></div>
-    </div>
-  </div>
-
-  <div class="an-section an-health-section" id="anProblemsSection">
-    <div class="an-section-title">Health</div>
-    <div class="an-section-sub">Delivery issues and system friction to review</div>
-    <div class="an-problems-grid" id="anProblemsGrid">
-      <div class="an-problem-card">
-        <div class="an-problem-val" id="anProbFailed">—</div>
-        <div class="an-problem-lbl">Failed Sends</div>
-      </div>
-      <div class="an-problem-card">
-        <div class="an-problem-val" id="anProbBlocked">—</div>
-        <div class="an-problem-lbl">Blocked</div>
-      </div>
-      <div class="an-problem-card">
-        <div class="an-problem-val" id="anProbErrors">—</div>
-        <div class="an-problem-lbl">Total Errors</div>
+      <div class="intel-rates-filters">
+        <input id="intelRatesQ" class="intel-rates-input" placeholder="Search city…" oninput="queueIntelRates()">
+        <select id="intelRatesEquip" class="intel-rates-input" onchange="loadIntelRates()"><option value="">All equipment</option></select>
+        <select id="intelRatesDays" class="intel-rates-input" onchange="loadIntelRates()">
+          <option value="30">Last 30 days</option>
+          <option value="90" selected>Last 90 days</option>
+          <option value="365">Last 12 months</option>
+          <option value="0">All time</option>
+        </select>
       </div>
     </div>
-    <div id="anLastError" style="display:none" class="an-last-error"></div>
-  </div>
-
-  <!-- SECTION 7: ADVANCED (collapsed) -->
-  <div class="an-section">
-    <div class="an-advanced-toggle" onclick="toggleAnAdvanced()">
-      <span>Advanced · Daily Breakdown</span>
-      <span id="anAdvIcon">▼</span>
-    </div>
-    <div id="anAdvancedBody" style="display:none">
-      <table class="an-daily-table" id="anDailyTableNew">
-        <thead><tr><th>Date</th><th>Sent</th><th>Time Saved</th><th>vs Manual</th></tr></thead>
-        <tbody id="anDailyBodyNew"></tbody>
+    <div class="intel-table-wrap">
+      <table class="intel-table intel-rates-table">
+        <thead><tr><th>Rate</th><th>$/mile</th><th>From</th><th>Quote</th><th>Date</th><th></th></tr></thead>
+        <tbody id="intelRatesBody"><tr><td colspan="6" class="intel-empty">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
 
-</div>
 
-    <!-- LOG -->
-    <div class="page" id="page-log">
-      <div class="page-header">
-        <div class="page-title">Send Log</div>
-        <div class="page-sub" id="logSubtitle">All records</div>
+  <div class="intel-signal-grid">
+    <div class="intel-signal-card">
+      <div class="intel-signal-head">
+        <div class="intel-signal-title">Opportunities</div>
+        <div class="intel-confidence moderate">Scale</div>
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
-        <input id="logSearch" placeholder="Search email or route..." style="width:240px" oninput="filterLog()">
-        <select id="logStatus" onchange="filterLog()" style="width:140px">
-          <option value="">All statuses</option>
-          <option value="sent">Sent</option>
-          <option value="error">Error</option>
-        </select>
-        <input id="logDateFrom" type="date" onchange="filterLog()" style="width:148px">
-        <input id="logDateTo" type="date" onchange="filterLog()" style="width:148px">
-        <button class="btn btn-outline btn-sm" onclick="clearLogFilters()">✕ Clear</button>
-        <span id="logCount" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+      <div class="intel-signal-list" id="intel-opportunities">
+        <div class="intel-empty" style="padding:20px 0">Loading…</div>
       </div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Time</th><th>Email</th><th>Route</th><th>Date</th><th>EQ</th><th>Status</th><th>V</th></tr></thead>
-            <tbody id="logBody"></tbody>
-          </table>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:14px;align-items:center;justify-content:center" id="logPager"></div>
     </div>
 
-    <!-- REPLIES TRIAGE QUEUE -->
-    <!-- DASHBOARD PAGE -->
-    <div class="page active" id="page-dashboard">
-      <div class="page-header">
-        <div class="page-title">Dashboard</div>
-        <div class="page-sub">Today's actions first, funnel and base health below</div>
+    <div class="intel-signal-card warning">
+      <div class="intel-signal-head">
+        <div class="intel-signal-title">Warnings</div>
+        <div class="intel-confidence early">Watch</div>
       </div>
-      <div id="dashBody" class="dash-wrap"><div class="tq-empty">Loading…</div></div>
+      <div class="intel-signal-list" id="intel-warnings">
+        <div class="intel-empty" style="padding:20px 0">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="intel-section">
+    <div class="intel-section-title">Lanes</div>
+    <div class="intel-section-sub">Emails sent, replies and rate requests per lane</div>
+    <div class="intel-table-wrap">
+      <table class="intel-table">
+        <thead>
+          <tr>
+            <th onclick="sortIntelTable('lanes','lane',this)">Lane ↕</th>
+            <th onclick="sortIntelTable('lanes','emails_sent',this)" class="sorted">Sent ↕</th>
+            <th onclick="sortIntelTable('lanes','replies',this)">Replies ↕</th>
+            <th onclick="sortIntelTable('lanes','reply_rate',this)">Reply Rate ↕</th>
+            <th onclick="sortIntelTable('lanes','rate_requests',this)">Rate Reqs ↕</th>
+            <th onclick="sortIntelTable('lanes','rate_request_rate',this)">RR Rate ↕</th>
+          </tr>
+        </thead>
+        <tbody id="intel-lanes-body">
+          <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+      </div>
+
+      <div class="ins-panel" data-ins="domains" hidden>
+  <div class="intel-section">
+    <div class="intel-section-title">Domains</div>
+    <div class="intel-section-sub">How each company's domain responds to your emails</div>
+    <div class="intel-table-wrap">
+      <table class="intel-table">
+        <thead>
+          <tr>
+            <th onclick="sortIntelTable('brokers','domain',this)">Domain ↕</th>
+            <th onclick="sortIntelTable('brokers','emails_sent',this)" class="sorted">Sent ↕</th>
+            <th onclick="sortIntelTable('brokers','replies',this)">Replies ↕</th>
+            <th onclick="sortIntelTable('brokers','reply_rate',this)">Reply Rate ↕</th>
+            <th onclick="sortIntelTable('brokers','rate_requests',this)">Rate Reqs ↕</th>
+            <th onclick="sortIntelTable('brokers','interested',this)" title="Replies you moved to Follow-up">Follow-up ↕</th>
+          </tr>
+        </thead>
+        <tbody id="intel-brokers-body">
+          <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+      </div>
+
+      <div class="ins-panel" data-ins="timing" hidden>
+  <div class="analytics-period-tabs ins-timing-period">
+    <button class="an-tab" onclick="setAnPeriod('today')">Today</button>
+    <button class="an-tab" onclick="setAnPeriod('week')">7 Days</button>
+    <button class="an-tab active" onclick="setAnPeriod('lifetime')">All Time</button>
+  </div>
+
+
+  <div class="an-section">
+    <div class="an-section-title">Best hours to send</div>
+    <div class="an-section-sub">Hours with the most emails sent in the selected period (your time zone)</div>
+    <div id="anHourChart" class="an-hour-list"></div>
+  </div>
+      </div>
     </div>
 
     <div class="page" id="page-replies">
@@ -3262,148 +3308,6 @@ body { font-variant-numeric: tabular-nums; }
     </div>
 
 <!-- INTELLIGENCE -->
-<div class="page" id="page-intelligence">
-  <div class="page-header">
-    <div class="page-title">Intelligence</div>
-    <div class="page-sub">Use recent outreach signals to decide what to improve next</div>
-  </div>
-
-  <div class="intel-context-bar">
-    <div class="intel-context-text">Recommendations are based on sent volume, reply behavior, and detected rate-request signals.</div>
-    <div class="intel-context-pill">Recommendation Layer</div>
-  </div>
-
-  <div class="intel-kpi-row">
-    <div class="intel-kpi">
-      <div class="intel-kpi-label">Sent Volume</div>
-      <div class="intel-kpi-value" id="intel-total-sent">—</div>
-      <div class="intel-kpi-sub">recent outbound coverage</div>
-    </div>
-    <div class="intel-kpi">
-      <div class="intel-kpi-label">Replying Contacts</div>
-      <div class="intel-kpi-value" id="intel-replies-total">—</div>
-      <div class="intel-kpi-sub">unique engaged senders</div>
-    </div>
-    <div class="intel-kpi">
-      <div class="intel-kpi-label">Rate Requests</div>
-      <div class="intel-kpi-value" id="intel-rr-total">—</div>
-      <div class="intel-kpi-sub">strongest intent signal</div>
-    </div>
-    <div class="intel-kpi">
-      <div class="intel-kpi-label">Emails per Rate Request</div>
-      <div class="intel-kpi-value" id="intel-eprr">—</div>
-      <div class="intel-kpi-sub" id="intel-eprr-sub">efficiency signal</div>
-    </div>
-  </div>
-
-  <div class="intel-section recommendations">
-    <div class="intel-section-title">Top Recommendations</div>
-    <div class="intel-section-sub">The highest-value actions suggested by your recent outreach patterns</div>
-    <div class="intel-rec-grid" id="intel-rec-grid">
-      <div class="intel-empty">Loading recommendations…</div>
-    </div>
-  </div>
-
-  <div class="intel-signal-grid">
-    <div class="intel-signal-card">
-      <div class="intel-signal-head">
-        <div class="intel-signal-title">Opportunities</div>
-        <div class="intel-confidence moderate">Scale</div>
-      </div>
-      <div class="intel-signal-list" id="intel-opportunities">
-        <div class="intel-empty" style="padding:20px 0">Loading…</div>
-      </div>
-    </div>
-
-    <div class="intel-signal-card warning">
-      <div class="intel-signal-head">
-        <div class="intel-signal-title">Warnings</div>
-        <div class="intel-confidence early">Watch</div>
-      </div>
-      <div class="intel-signal-list" id="intel-warnings">
-        <div class="intel-empty" style="padding:20px 0">Loading…</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="intel-section rates" id="intelRatesSection">
-    <div class="intel-rates-head">
-      <div>
-        <div class="intel-section-title">Rate history</div>
-        <div class="intel-section-sub">Rates quoted to you in replies, by lane and equipment. The date is when the reply arrived.</div>
-      </div>
-      <div class="intel-rates-filters">
-        <input id="intelRatesQ" class="intel-rates-input" placeholder="Search city…" oninput="queueIntelRates()">
-        <select id="intelRatesEquip" class="intel-rates-input" onchange="loadIntelRates()"><option value="">All equipment</option></select>
-        <select id="intelRatesDays" class="intel-rates-input" onchange="loadIntelRates()">
-          <option value="30">Last 30 days</option>
-          <option value="90" selected>Last 90 days</option>
-          <option value="365">Last 12 months</option>
-          <option value="0">All time</option>
-        </select>
-      </div>
-    </div>
-    <div class="intel-table-wrap">
-      <table class="intel-table intel-rates-table">
-        <thead><tr><th>Rate</th><th>$/mile</th><th>From</th><th>Quote</th><th>Date</th><th></th></tr></thead>
-        <tbody id="intelRatesBody"><tr><td colspan="6" class="intel-empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="intel-section evidence">
-    <div class="intel-section-title">Evidence</div>
-    <div class="intel-section-sub">Supporting route and domain signals behind the recommendations</div>
-    <div class="intel-evidence-grid">
-      <div>
-        <div style="font-size:13px;font-weight:700;color:var(--text3);margin-bottom:12px">
-          Route Signals
-        </div>
-    <div class="intel-table-wrap">
-      <table class="intel-table">
-        <thead>
-          <tr>
-            <th onclick="sortIntelTable('lanes','lane',this)">Lane ↕</th>
-            <th onclick="sortIntelTable('lanes','emails_sent',this)" class="sorted">Sent ↕</th>
-            <th onclick="sortIntelTable('lanes','replies',this)">Replies ↕</th>
-            <th onclick="sortIntelTable('lanes','reply_rate',this)">Reply Rate ↕</th>
-            <th onclick="sortIntelTable('lanes','rate_requests',this)">Rate Reqs ↕</th>
-            <th onclick="sortIntelTable('lanes','rate_request_rate',this)">RR Rate ↕</th>
-          </tr>
-        </thead>
-        <tbody id="intel-lanes-body">
-          <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-      </div>
-
-      <div>
-        <div style="font-size:13px;font-weight:700;color:var(--text3);margin-bottom:12px">
-          Domain Signals
-        </div>
-    <div class="intel-table-wrap">
-      <table class="intel-table">
-        <thead>
-          <tr>
-            <th onclick="sortIntelTable('brokers','domain',this)">Domain ↕</th>
-            <th onclick="sortIntelTable('brokers','emails_sent',this)" class="sorted">Sent ↕</th>
-            <th onclick="sortIntelTable('brokers','replies',this)">Replies ↕</th>
-            <th onclick="sortIntelTable('brokers','reply_rate',this)">Reply Rate ↕</th>
-            <th onclick="sortIntelTable('brokers','rate_requests',this)">Rate Reqs ↕</th>
-            <th onclick="sortIntelTable('brokers','interested',this)" title="Replies you moved to Follow-up">Follow-up ↕</th>
-          </tr>
-        </thead>
-        <tbody id="intel-brokers-body">
-          <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div class="page" id="page-stop">
       <div class="page-header">
         <div class="page-title">Stop List</div>
@@ -3936,8 +3840,15 @@ async function loadCurrentUser() {
 // ── NAV ──────────────────────────────────────────────────────────────────────
 let _navFromHistory = false;   // true while routing from the URL — don't push a new entry
 
+function navTo(page) {
+  nav(page, document.querySelector(`.nav-item[onclick*="'${page}'"]`));
+}
+function _hashIsPage(page) {
+  const h = location.hash;
+  return h === '#/' + page || h.startsWith('#/' + page + '/');
+}
 function nav(page, el) {
-  if (!_navFromHistory && location.hash !== '#/' + page) {
+  if (!_navFromHistory && !_hashIsPage(page)) {
     history.pushState({ page }, '', location.pathname + location.search + '#/' + page);
   }
   // Save send page full state before leaving
@@ -3974,16 +3885,14 @@ function nav(page, el) {
     // Restore progress if send was running
     if (pollInterval) pollStatus();
   }
-  if (page === 'stats')         loadStats();
+  if (page === 'insights')      setInsightsTab(_insTab);
   if (page === 'log')           loadLog();
   if (page === 'stop')          loadStop();
   if (page === 'templates')     loadTemplates();
   if (page === 'settings')      loadSettings();
   if (page === 'replies')       initReplies();
-  if (page === 'dashboard')     loadDashboard();
   if (page === 'followup')      { loadFollowups(); resumeFuBulkIfRunning(); }
   if (page === 'pipeline')      loadPipeline();
-  if (page === 'intelligence')  loadIntelligence();
   const titles = { send:'Send', replies:'Replies', followup:'Follow-up', stats:'Analytics',
                    intelligence:'Intelligence', templates:'Templates', stop:'Stop List',
                    log:'Send Log', settings:'Settings', pipeline:'Pipeline' };
@@ -4945,54 +4854,6 @@ function _intelRecommendationCard(rec) {
   </div>`;
 }
 
-function _renderIntelRecommendations(d) {
-  const mount = document.getElementById('intel-rec-grid');
-  const lanes = [...(d.lanes || [])].sort((a, b) => (b.reply_rate - a.reply_rate) || (b.replies - a.replies));
-  const brokers = [...(d.brokers || [])].sort((a, b) => (b.interested - a.interested) || (b.reply_rate - a.reply_rate));
-  const bestLane = lanes.find(l => l.replies > 0);
-  const weakLane = [...(d.lanes || [])].filter(l => l.emails_sent >= 3).sort((a, b) => a.reply_rate - b.reply_rate)[0];
-  const bestDomain = brokers.find(b => b.interested > 0 || b.replies > 0);
-  const eprr = d.emails_per_rate_request;
-
-  const recs = [];
-  if (bestLane) {
-    recs.push({
-      title: `Scale ${bestLane.lane}`,
-      body: `${bestLane.replies} replies from ${bestLane.emails_sent} sent with a ${bestLane.reply_rate}% reply rate${bestLane.rate_requests ? ` and ${bestLane.rate_requests} detected rate requests` : ''}.`,
-      confidence: _intelConfidence(bestLane.emails_sent, bestLane.replies, bestLane.reply_rate),
-      action: 'Next move: Increase send volume on this lane while keeping the current targeting.'
-    });
-  }
-  if (bestDomain) {
-    recs.push({
-      title: `Prioritize ${bestDomain.domain}`,
-      body: `${bestDomain.replies} replies and ${bestDomain.interested} follow-up replies from ${bestDomain.emails_sent} sent make this domain one of the best current response sources.`,
-      confidence: _intelConfidence(bestDomain.emails_sent, bestDomain.replies, bestDomain.reply_rate),
-      action: 'Next move: Reuse the best-performing template for similar brokers on this domain.'
-    });
-  }
-  if (weakLane) {
-    recs.push({
-      title: `Reduce effort on ${weakLane.lane}`,
-      body: `${weakLane.emails_sent} emails produced only ${weakLane.replies} replies${weakLane.reply_rate ? ` (${weakLane.reply_rate}% reply rate)` : ''}, which makes this one of the weakest current lanes.`,
-      confidence: _intelConfidence(weakLane.emails_sent, weakLane.replies, weakLane.reply_rate),
-      action: 'Next move: Lower volume here or test a different template before scaling.'
-    });
-  }
-  if (recs.length < 3) {
-    recs.push({
-      title: 'Watch efficiency',
-      body: eprr !== null
-        ? `You currently need ${eprr} emails for each detected rate request. This is a useful benchmark for whether your targeting is getting sharper or weaker over time.`
-        : 'No rate requests are detected yet, so the system does not have a strong intent benchmark. Keep sending and review this once more replies arrive.',
-      confidence: eprr !== null ? 'Moderate' : 'Early',
-      action: 'Next move: Compare future rate-request efficiency after your next send batch.'
-    });
-  }
-
-  mount.innerHTML = recs.slice(0, 3).map(_intelRecommendationCard).join('');
-}
-
 function _renderIntelSignals(d) {
   const opp = document.getElementById('intel-opportunities');
   const warn = document.getElementById('intel-warnings');
@@ -5172,26 +5033,21 @@ async function loadIntelligence() {
     _intelData = d;
 
     // KPIs — funnel order: Sent → Replies → Rate Requests → Emails/RR
-    document.getElementById('intel-total-sent').textContent    = d.total_sent ?? 0;
-    document.getElementById('intel-replies-total').textContent = d.replies_total ?? 0;
     document.getElementById('intel-rr-total').textContent      = d.rate_requests_total ?? 0;
 
     const eprr = d.emails_per_rate_request;
     document.getElementById('intel-eprr').textContent = eprr !== null ? eprr : '—';
     document.getElementById('intel-eprr-sub').textContent = eprr !== null
-      ? `${d.total_sent} sent / ${d.rate_requests_total} rate req.`
+      ? `${d.total_sent} emails / ${d.rate_requests_total} rate requests`
       : 'No rate requests detected yet';
 
-    _renderIntelRecommendations(d);
     _renderIntelSignals(d);
     _renderIntelLanes(d.lanes);
     _renderIntelBrokers(d.brokers);
     loadIntelRates();
   } catch(e) {
-    const rec = document.getElementById('intel-rec-grid');
     const opp = document.getElementById('intel-opportunities');
     const warn = document.getElementById('intel-warnings');
-    if (rec) rec.innerHTML = '<div class="intel-empty">Failed to load recommendations</div>';
     if (opp) opp.innerHTML = '<div class="intel-empty" style="padding:20px 0">Failed to load opportunities</div>';
     if (warn) warn.innerHTML = '<div class="intel-empty" style="padding:20px 0">Failed to load warnings</div>';
     document.getElementById('intel-lanes-body').innerHTML =
@@ -5204,6 +5060,25 @@ async function loadIntelligence() {
 // ── STATS ────────────────────────────────────────────────────────────────────
 // loadStats is called by nav handler — delegate to new analytics loader
 async function loadStats() { loadAnalytics(); }
+
+// ── INSIGHTS tabs ────────────────────────────────────────────────────────────
+let _insTab = 'overview';
+const _INS_TABS = ['overview', 'lanes', 'domains', 'timing'];
+function setInsightsTab(tab) {
+  if (!_INS_TABS.includes(tab)) tab = 'overview';
+  _insTab = tab;
+  document.querySelectorAll('[data-ins-tab]').forEach(b => {
+    const on = b.dataset.insTab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.ins-panel').forEach(p => { p.hidden = p.dataset.ins !== tab; });
+  const want = '#/insights/' + tab;
+  if (location.hash !== want) history.replaceState({ page: 'insights' }, '', location.pathname + location.search + want);
+  if (tab === 'overview') { loadAnalytics(); loadDashboard(); }
+  else if (tab === 'timing') loadAnalytics();
+  else loadIntelligence();
+}
 
 // ── LOG ──────────────────────────────────────────────────────────────────────
 let allLogRows = [], filteredLogRows = [], logPage = 1, logTotal = 0, logPages = 0;
@@ -6865,75 +6740,36 @@ function _dashDark() { return (document.documentElement.getAttribute('data-theme
 
 async function loadDashboard() {
   try { _dash = await (await fetch('/api/dashboard')).json(); }
-  catch (e) { document.getElementById('dashBody').innerHTML = '<div class="tq-empty">Failed to load</div>'; return; }
+  catch (e) { const f = document.getElementById('insFunnel'); if (f) f.innerHTML = '<div class="intel-empty">Failed to load</div>'; return; }
   renderDashboard();
 }
 
 function renderDashboard() {
   const d = _dash; if (!d) return;
-  const t = d.touches, pend = d.replies_pending;
-  const pct = t.due_today ? Math.min(100, Math.round(100 * t.done_today / (t.done_today + t.due_today))) : 100;
-  const cats = pend.by_category || {};
-  const catStr = ['negative', 'rate_request', 'gave_info', 'auto_reply'].map(k => {
-    const c = TRIAGE_CATS[k]; return cats[k] ? `${c.emoji} ${cats[k]}` : '';
-  }).filter(Boolean).join(' · ') + (cats.other ? ` · other ${cats.other}` : '');
   const h = d.health;
-  let html = `
-  <div class="dash-row dash-r3">
-    <div class="dash-card click" onclick="nav('followup',document.querySelectorAll('.nav-item')[3])">
-      <div class="dash-k">📋 Touches today</div>
-      <div class="dash-big">${t.done_today}<small> done · ${t.due_today} due</small></div>
-      <div class="dash-bar"><i style="width:${pct}%"></i></div>
-      <div class="dash-hint">${t.next ? 'next: ' + esc(t.next.name) + (t.next.route ? ' — ' + esc(t.next.route) : '') : 'all clear'}</div>
-    </div>
-    <div class="dash-card click" onclick="nav('followup',document.querySelectorAll('.nav-item')[3])">
-      <div class="dash-k">🔥 Warm replies to answer</div>
-      <div class="dash-big" style="color:${d.attention ? 'var(--yellow)' : 'var(--text)'}">${d.attention}</div>
-      <div class="dash-hint">replied after "Got info" — answer today</div>
-    </div>
-    <div class="dash-card click" onclick="nav('replies',document.querySelectorAll('.nav-item')[2])">
-      <div class="dash-k">📨 Replies need decision</div>
-      <div class="dash-big">${pend.total}</div>
-      <div class="dash-hint">${esc(catStr) || 'inbox zero'}</div>
-    </div>
-  </div>
-  <div class="dash-card">
-    <div class="dash-head"><p class="dash-h2">Funnel — where the pipeline leaks</p>
-      <span class="seg" style="display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden">
-        <button onclick="_dashPeriod='7';renderDashboard()" style="border:0;font:inherit;font-size:12px;font-weight:600;padding:4px 11px;cursor:pointer;background:${_dashPeriod==='7'?'var(--accent)':'transparent'};color:${_dashPeriod==='7'?'#fff':'var(--text2)'}">7 days</button>
-        <button onclick="_dashPeriod='30';renderDashboard()" style="border:0;font:inherit;font-size:12px;font-weight:600;padding:4px 11px;cursor:pointer;background:${_dashPeriod==='30'?'var(--accent)':'transparent'};color:${_dashPeriod==='30'?'#fff':'var(--text2)'}">30 days</button>
-      </span></div>
-    <svg class="dash-svg" width="100%" height="205" viewBox="0 0 1000 205" preserveAspectRatio="none">${_dashFunnelSvg(d.funnel[_dashPeriod])}</svg>
-  </div>
-  <div class="dash-row dash-r4">
+  const seg = p => `<button class="an-tab-sm${_dashPeriod === p ? ' active' : ''}" onclick="_dashPeriod='${p}';renderDashboard()">${p} days</button>`;
+  const fp = document.getElementById('insFunnelPeriod');
+  if (fp) fp.innerHTML = seg('7') + seg('30');
+  const fe = document.getElementById('insFunnel');
+  if (fe) fe.innerHTML = `<svg class="dash-svg" width="100%" height="205" viewBox="0 0 1000 205" preserveAspectRatio="none">${_dashFunnelSvg(d.funnel[_dashPeriod])}</svg>`;
+  const he = document.getElementById('insHealth');
+  if (he) he.innerHTML = `
     <div class="dash-card"><div class="dash-k">No next step</div>
-      <div class="dash-big">${h.no_next_step} ${h.no_next_step === 0 ? '<span class="dash-pill good">✓ iron rule</span>' : ''}</div>
-      <div class="dash-hint">every active contact has a date</div></div>
-    <div class="dash-card click" onclick="nav('followup',document.querySelectorAll('.nav-item')[3])">
+      <div class="dash-big">${h.no_next_step} ${h.no_next_step === 0 ? '<span class="dash-pill good">all scheduled</span>' : ''}</div>
+      <div class="dash-hint">active contacts without a next date</div></div>
+    <div class="dash-card click" onclick="navTo('followup')">
       <div class="dash-k">Rotting warm (14d+)</div>
       <div class="dash-big" style="color:${h.rotting ? 'var(--yellow)' : 'var(--text)'}">${h.rotting} ${h.rotting ? '<span class="dash-pill warn">review</span>' : ''}</div>
       <div class="dash-hint">stage ≥ Got info, no activity 14+ days</div></div>
-    <div class="dash-card"><div class="dash-k">Reply rate · 30d</div>
-      <div class="dash-big">${h.reply_rate !== null ? h.reply_rate + '<small>%</small>' : '—'}</div>
-      <div class="dash-hint">${h.replied_30d ?? 0} of ${h.contacted_30d ?? 0} contacts emailed replied</div></div>
     <div class="dash-card"><div class="dash-k">Avg touches → booked</div>
       <div class="dash-big">${h.avg_touches_to_booked ?? '—'}</div>
-      <div class="dash-hint">from pipeline event log</div></div>
-  </div>
-  <div class="dash-card">
-    <div class="dash-head"><p class="dash-h2">Activity — last 14 days</p>
-      <div class="dash-legend"><span><span class="dash-dot" style="background:${_DASH_S[_dashDark()?'dark':'light'][0]}"></span><b>Sends</b></span>
-      <span><span class="dash-dot" style="background:${_DASH_S[_dashDark()?'dark':'light'][1]}"></span><b>Replies</b></span></div></div>
-    <svg class="dash-svg" width="100%" height="185" viewBox="0 0 1000 185" preserveAspectRatio="none">${_dashActivitySvg(d.activity)}</svg>
-  </div>
-  <div class="dash-card">
-    <div class="dash-head"><p class="dash-h2">Top lanes by carrier replies · 30d</p></div>
-    ${d.top_lanes.length ? `<div style="overflow-x:auto"><table class="dash-table">
-      <tr><th>Lane</th><th>Replies</th><th>Gave info</th></tr>
-      ${d.top_lanes.map(l => `<tr><td>${esc(l.lane)}</td><td>${l.replies}</td><td>${l.gave_info}</td></tr>`).join('')}
-    </table></div>` : '<div class="dash-hint">No routed replies in the last 30 days yet</div>'}
-  </div>`;
-  document.getElementById('dashBody').innerHTML = html;
+      <div class="dash-hint">emails sent before a contact booked</div></div>`;
+  const S = _DASH_S[_dashDark() ? 'dark' : 'light'];
+  const lg = document.getElementById('insActivityLegend');
+  if (lg) lg.innerHTML = `<span><span class="dash-dot" style="background:${S[0]}"></span><b>Sends</b></span>` +
+    `<span><span class="dash-dot" style="background:${S[1]}"></span><b>Replies</b></span>`;
+  const ae = document.getElementById('insActivity');
+  if (ae) ae.innerHTML = `<svg class="dash-svg" width="100%" height="185" viewBox="0 0 1000 185" preserveAspectRatio="none">${_dashActivitySvg(d.activity)}</svg>`;
 }
 
 function _dashFunnelSvg(f) {
@@ -8058,7 +7894,7 @@ function renderAiSendCard() {
   }
 }
 
-// setAiTab kept for legacy — no-op (analytics page now uses setAnAiTab)
+// setAiTab kept for legacy — no-op
 function setAiTab(tab) { _aiTab = tab; }
 // renderAiStats kept for legacy — no-op
 function renderAiStats(tab) {}
@@ -8068,7 +7904,6 @@ function renderAiStats(tab) {}
 let _anStats = null;
 let _anAiData = null;
 let _anPeriod = 'lifetime';
-let _anAiTab  = 'today';
 
 function setHtml(id, html) { const e = document.getElementById(id); if (e) e.innerHTML = html; }
 
@@ -8094,8 +7929,8 @@ function renderSpark(id, values) {
 }
 
 function staggerCharts() {
-  document.querySelectorAll('#page-stats .an-bar-fill').forEach((b, i) => b.style.animationDelay = (i * 35) + 'ms');
-  document.querySelectorAll('#page-stats .an-hour-bar').forEach((b, i) => b.style.animationDelay = (i * 45) + 'ms');
+  document.querySelectorAll('#page-insights .an-bar-fill').forEach((b, i) => b.style.animationDelay = (i * 35) + 'ms');
+  document.querySelectorAll('#page-insights .an-hour-bar').forEach((b, i) => b.style.animationDelay = (i * 45) + 'ms');
 }
 
 async function loadAnalytics() {
@@ -8112,7 +7947,7 @@ async function loadAnalytics() {
 
 function renderAnalytics() {
   if (!_anStats && !_anAiData) return;
-  renderAnKpis(); renderAnQuality(); renderAnWhatWorks(); renderAnTiming(); renderAnAi(); renderAnProblems();
+  renderAnKpis(); renderAnQuality(); renderAnTiming();
   staggerCharts();
 }
 
@@ -8120,12 +7955,6 @@ function setAnPeriod(p) {
   _anPeriod = p;
   document.querySelectorAll('.an-tab').forEach(b => b.classList.toggle('active', b.getAttribute('onclick').includes("'" + p + "'")));
   loadAnalytics();
-}
-
-function setAnAiTab(t) {
-  _anAiTab = t;
-  document.querySelectorAll('.an-tab-sm').forEach(b => b.classList.toggle('active', b.getAttribute('onclick').includes("'" + t + "'")));
-  renderAnAi();
 }
 
 function renderAnKpis() {
@@ -8182,25 +8011,6 @@ function anListRow(name, badge) {
   return '<div class="an-list-row"><span class="an-list-name" title="' + name + '">' + name + '</span><span class="an-list-badge">' + badge + '</span></div>';
 }
 
-function renderAnWhatWorks() {
-  const s = _anStats || {};
-  const routesEl = document.getElementById('anTopRoutes');
-  if (routesEl) {
-    const routes = (s.top_routes || []).slice(0, 6);
-    setHtml('anTopRoutes', routes.length ? routes.map(r => anListRow(r.route || r.key || '\u2014', r.count || 0)).join('') : '<div class="an-list-muted">No data yet</div>');
-  }
-  const domsEl = document.getElementById('anTopDomains');
-  if (domsEl) {
-    const doms = (s.replied_domains || []).slice(0, 6);
-    setHtml('anTopDomains', doms.length ? doms.map(d => anListRow(d.domain || d.key || '\u2014', (d.count || 0) + ' replies')).join('') : '<div class="an-list-muted">No replies yet</div>');
-  }
-  const tmplEl = document.getElementById('anTopTemplates');
-  if (tmplEl) {
-    const variants = (s.by_variant || []).slice(0, 6);
-    setHtml('anTopTemplates', variants.length ? variants.map(v => anListRow('Template ' + v.variant, v.count + ' sent')).join('') : '<div class="an-list-muted">No data yet</div>');
-  }
-}
-
 function anBarCol(pct, label, count) {
   const countHtml = count > 0
     ? '<div class="an-bar-count">' + count + '</div>'
@@ -8232,65 +8042,22 @@ function renderAnTiming() {
   }
 }
 
-function renderAnAi() {
-  if (!_anAiData) return;
-  const d = _anAiData[_anAiTab] || _anAiData.today || {};
-  setEl2('anAiEmails',    d.emails_sent || 0);
-  setEl2('anAiTimeSaved', d.time_saved_fmt || '\u2014');
-  setEl2('anAiActions',   d.manual_actions_avoided || 0);
-  setEl2('anAiMult',      d.speed_multiplier ? Math.abs(d.speed_multiplier).toFixed(2) + '\u00d7' : '\u2014');
-  setEl2('anAiAutoSpeed', d.auto_speed ? d.auto_speed + '/min' : '\u2014');
-  setEl2('anAiManSpeed',  d.manual_speed ? d.manual_speed + '/min' : '\u2014');
-  setEl2('anAiDays',      d.working_days_saved != null ? d.working_days_saved.toFixed(1) : '\u2014');
-  const tbody = document.getElementById('anDailyBodyNew');
-  if (tbody && _anAiData.daily) {
-    const rows = [..._anAiData.daily].reverse();
-    setHtml('anDailyBodyNew', rows.length ? rows.map(r =>
-      '<tr><td>' + (r.date||'\u2014') + '</td><td>' + (r.emails||0) + '</td><td>' + (r.time_saved_fmt||r.time_saved||'\u2014') + '</td><td>' + (r.manual_time_fmt||r.manual_time||'\u2014') + '</td></tr>'
-    ).join('') : '<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--text3)">No data yet</td></tr>');
-  }
-}
-
-function renderAnProblems() {
-  const s = _anStats || {};
-  const errors = s.errors || 0;
-  const blocked = s.stop_list_blocks || 0;
-  setEl2('anProbFailed',  errors);
-  setEl2('anProbBlocked', blocked);
-  setEl2('anProbErrors',  errors);
-  const grid = document.getElementById('anProblemsGrid');
-  if (grid) grid.classList.toggle('has-errors', errors > 0);
-  const lastErrEl = document.getElementById('anLastError');
-  if (lastErrEl) {
-    const errEmail = (s.replied_emails || []).find(e => e.status === 'error' || e.error);
-    if (errEmail && errEmail.error) {
-      lastErrEl.style.display = 'block';
-      lastErrEl.textContent = 'Last error: "' + errEmail.error + '" \u2014 ' + (errEmail.email || '');
-    } else { lastErrEl.style.display = 'none'; }
-  }
-}
-
-function toggleAnAdvanced() {
-  const body = document.getElementById('anAdvancedBody');
-  const icon = document.getElementById('anAdvIcon');
-  if (!body) return;
-  const open = body.style.display === 'none';
-  body.style.display = open ? 'block' : 'none';
-  if (icon) icon.textContent = open ? '\u25b2' : '\u25bc';
-}
-
 function setEl2(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
 
 // ── STARTUP ─────────────────────────────────────────────────────────────────
 function _routeFromLocation() {
   const params = new URLSearchParams(location.search);
-  let page = location.hash.replace(/^#\/?/, '');
+  let [page, sub] = location.hash.replace(/^#\/?/, '').split('/');
+  // pages merged into Insights keep working from old links / history
+  const legacy = { dashboard: ['insights', 'overview'], stats: ['insights', 'overview'], intelligence: ['insights', 'lanes'] };
+  if (legacy[page]) [page, sub] = legacy[page];
+  if (page === 'insights' && sub) _insTab = sub;
   if (!page && (params.has('gmail_connected') || params.has('gmail_error'))) page = 'settings';
-  if (!page || !document.getElementById('page-' + page)) page = 'dashboard';
+  if (!page || !document.getElementById('page-' + page)) page = 'send';
   const el = document.querySelector(`.nav-item[onclick*="'${page}'"]`);
   _navFromHistory = true;
   try { nav(page, el); } finally { _navFromHistory = false; }
-  if (location.hash !== '#/' + page) {   // unknown/empty hash → normalize the address
+  if (!_hashIsPage(page)) {   // unknown/empty hash → normalize the address
     history.replaceState({ page }, '', location.pathname + location.search + '#/' + page);
   }
 }

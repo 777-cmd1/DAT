@@ -244,3 +244,12 @@ def test_pro_user_ignores_quota(app, db):
         assert resp.status_code == 200
         data = resp.get_json()
         assert data.get('ok') is True
+
+
+def test_outreach_template_renders_route_token():
+    """The Templates page offers {route}; the outreach send used to leave it literal."""
+    load = {'origin': 'Chicago, IL', 'destination': 'Dallas, TX', 'date': '3/15', 'equip': 'V'}
+    cfg = {'your_name': 'Bo', 'your_company': 'Acme', 'your_phone': '555'}
+    out = _m.render_template_text('Load {route} on {date} ({equip}) — {name}, {company}, {phone} {unknown}', load, cfg)
+    assert out == 'Load Chicago, IL → Dallas, TX on 3/15 (V) — Bo, Acme, 555 {unknown}'
+    assert _m.render_template_text('{route}', {'origin': 'Chicago, IL'}, {}) == 'Chicago, IL'

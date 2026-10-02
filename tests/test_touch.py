@@ -180,6 +180,22 @@ def test_overdue_counts_any_dated_active_contact(app, db, client):
     ids = {c['id'] for c in client.get('/api/followups?filter=overdue').get_json()['contacts']}
     assert fc.id in ids
 
+def test_todays_touches_bucket_is_due_plus_hot(app, db, client):
+    """The "Today's touches" segment (filter=touches) replaced the separate panel:
+    active contacts due by local midnight, plus 🔥 hot replies whatever their date."""
+    user, ws = _mk(db, client)
+    now = _app._utcnow()
+    overdue = _fc(db, user, ws); overdue.next_followup_at = now - timedelta(hours=3)
+    hot = _fc(db, user, ws); hot.next_followup_at = now + timedelta(days=5); hot.attention_at = now
+    later = _fc(db, user, ws); later.next_followup_at = now + timedelta(days=5)
+    paused = _fc(db, user, ws, state='paused'); paused.next_followup_at = now - timedelta(hours=3)
+    db.session.commit()
+    data = client.get('/api/followups?filter=touches').get_json()
+    assert {c['id'] for c in data['contacts']} == {overdue.id, hot.id}
+    assert data['counts']['touches'] == 2
+    ids = set(client.get('/api/followups/ids?filter=touches').get_json()['ids'])
+    assert ids == {overdue.id, hot.id}
+
 
 # ── Config endpoint round-trip + sweep on save ────────────────────────────────
 

@@ -100,3 +100,14 @@ def test_automation_tab_save_leaves_stages_untouched(app, db, client):
     assert ws.fu_auto_enabled is True
     assert ws.pipeline_config['touch_hour'] == 9
     assert ws.get_cadence()['1'] == {'days': 4, 'mode': 'manual'}
+
+
+def test_new_workspace_gets_calm_stage_colors_existing_untouched(app, db):
+    from app.models import Workspace, PIPELINE_DEFAULT_STAGES, PIPELINE_NEW_WORKSPACE_STAGE_COLORS
+    user, ws = _mk(db)
+    assert [st['color'] for st in ws.get_stages()] == list(PIPELINE_NEW_WORKSPACE_STAGE_COLORS.values())
+    assert [st['name'] for st in ws.get_stages()] == [st['name'] for st in PIPELINE_DEFAULT_STAGES]
+    # a workspace that already stores stages keeps them
+    custom = [{'id': 1, 'name': 'A', 'color': '#ff0000'}, {'id': 2, 'name': 'B', 'color': '#00ff00'}]
+    u2, ws2 = _mk(db, cfg={'stages': custom})
+    assert ws2.get_stages() == custom

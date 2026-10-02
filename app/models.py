@@ -54,6 +54,11 @@ PIPELINE_DEFAULT_STAGES = [
     {"id": 5, "name": "Booked",               "color": "#9c36b5"},
 ]
 
+# Workspaces created from 2026-10 get a calm sequential palette (grey → blue →
+# teal → green, Booked purple) stored in their config; existing workspaces keep
+# whatever they show today (their stored stages, or the defaults above).
+PIPELINE_NEW_WORKSPACE_STAGE_COLORS = {1: "#8a94a6", 2: "#4f7cf0", 3: "#14a3a3", 4: "#22a06b", 5: "#7c5cff"}
+
 # Triage categories drive the semi-automatic reply queue: each category maps to a
 # recommended action (negative/auto_reply → ignore; gave_info/rate_request → follow-up
 # + advance to the filter's auto_advance_to stage).
@@ -366,6 +371,9 @@ class Reply(db.Model):
     # Set when a colleague answered for the address we emailed (we wrote to
     # dispatch@abc.com, john@abc.com replied): the original recipient, lowercased.
     matched_recipient = db.Column(db.String(255), nullable=True)
+    # received_at confirmed from Gmail's own timestamp (older rows hold the fetch time)
+    date_checked = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    rates_parsed = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     auto_advanced    = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     # Semi-automatic triage: category detected at ingest + what (if anything) was auto-applied
     triage_category   = db.Column(db.String(20), nullable=True)   # 'negative'|'gave_info'|'rate_request'|'auto_reply'|NULL
@@ -400,6 +408,31 @@ class Reply(db.Model):
             'auto_action': self.auto_action or '',
             'received_at': self.received_at.strftime('%Y-%m-%d %H:%M') if self.received_at else '',
         }
+
+
+class RateQuote(db.Model):
+    """A rate a carrier quoted in a reply, tied to the lane + equipment of the
+    load we emailed them about. The quote date is the reply's received_at."""
+    __tablename__ = 'rate_quotes'
+
+    id            = db.Column(db.String(36), primary_key=True, default=_uuid)
+    user_id       = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    reply_id      = db.Column(db.String(36), db.ForeignKey('replies.id', ondelete='CASCADE'), nullable=False)
+    origin        = db.Column(db.String(255), default='')
+    destination   = db.Column(db.String(255), default='')
+    equipment     = db.Column(db.String(50), default='')     # load code from DAT/Truckstop (V, F, R, ...)
+    rate          = db.Column(db.Integer, nullable=True)     # flat $ for the load
+    rate_per_mile = db.Column(db.Float, nullable=True)       # $/mile when quoted that way
+    contact_email = db.Column(db.String(255), default='')    # the address we emailed
+    snippet       = db.Column(db.String(300), default='')
+    hidden        = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    created_at    = db.Column(db.DateTime, default=_utcnow)
+
+    reply = db.relationship('Reply', backref=db.backref('rate_quotes', cascade='all, delete-orphan'))
+
+    __table_args__ = (
+        db.Index('ix_rate_quotes_user_lane', 'user_id', 'origin', 'destination'),
+    )
 
 
 # ── FOLLOW-UPS ───────────────────────────────────────────────────────────────
@@ -773,3 +806,12 @@ db.Index('ix_sends_user_sent',    Send.user_id,        Send.sent_at)
 db.Index('ix_followups_status',   FollowUp.status,     FollowUp.level)
 db.Index('ix_replies_user_id',    Reply.user_id)
 db.Index('ix_audit_user_id',      AuditLog.user_id)
+
+
+@db.event.listens_for(Workspace, 'before_insert')
+def _seed_new_workspace_stages(mapper, connection, ws):
+    cfg = dict(ws.pipeline_config or {})
+    if 'stages' not in cfg:
+        cfg['stages'] = [dict(st, color=PIPELINE_NEW_WORKSPACE_STAGE_COLORS.get(st['id'], st['color']))
+                         for st in PIPELINE_DEFAULT_STAGES]
+        ws.pipeline_config = cfg

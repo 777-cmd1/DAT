@@ -113,11 +113,19 @@ URL: `/admin`
 - `Workspace.get_cadence()`: {stage_id: {days, mode}}; touch_hour ('auto' = найкраща
   година відповідей); шедулер Path 3 = авто-дотики, Path 4 = тижневий дайджест (Пн).
 - 🔥 attention_at: відповідь від контакта стадії ≥2; OOO-автопауза: +7 днів.
-- UI: Today's touches панель, швидкі дії на канбані, таймлайн (`/api/followups/timeline`).
+- UI: Today's touches — сегмент-фільтр (`filter=touches`, бакет у `_fu_urgency`: due до локальної
+  півночі + 🔥) і блок угорі таблиці з Send/+1d/+3d/+7d/Skip; швидкі дії на канбані; таймлайн
+  (`/api/followups/timeline`). Окремої панелі більше нема.
 
-## Dashboard
-Головна сторінка: `/api/dashboard` (спільне `_dashboard_data` з дайджестом) —
-дії дня, воронка 7/30д з івент-логу, здоровʼя бази, activity 14д, top lanes.
+## Insights (замість Dashboard / Analytics / Intelligence) — 2026-10
+Стартова сторінка — **Send** (над чергою — тонкий рядок «Today X of N sent · replies · quota»).
+`#/insights/<overview|lanes|domains|timing>`; старі `#/dashboard`, `#/stats`, `#/intelligence` редіректять.
+Overview бере `/api/dashboard` (спільне `_dashboard_data` з дайджестом) + `/api/stats`.
+Дизайн-система: токени тем у першому `<style>` + шар «DESIGN SYSTEM (2026-10)» в кінці; семантика
+кольорів accent=дія, red=проблема, yellow=увага, green=успіх, blue=інфо; одна головна кнопка на екран.
+Undo: Pause / Block (Follow-up, і bulk), Ignore / Block (Replies), прибрати рейт — `toastUndo(msg, commit, revert)`:
+дія чекає 5 с і лише тоді йде на сервер (pagehide → одразу, fetch keepalive); Undo = просто відкат вигляду.
+Рух — 150-200 мс, лише функціональний; reduced-motion шанується і в JS. Сайдбар згортається (`sb-collapsed`).
 
 ## Інваріанти циклу 2026-09 (деталі — docs/PROJECT_OVERVIEW.md)
 - Автовідправка: `pipeline_config.auto_send_enabled` — головний вимикач усіх авто-шляхів;
@@ -126,6 +134,9 @@ URL: `/admin`
 - Відповідь колеги (писали dispatch@abc.com, відповів john@abc.com) — норма: `_ColleagueReplyMatcher`
   приймає її (тред Gmail або корпоративний домен + маршрут у темі), `Reply.matched_recipient` = кому писали;
   зупиняє дрип цього контакта і рахується в reply rate.
+- Дата відповіді = Gmail internalDate (`_gmail_internal_date`); старі рядки виправляє `_backfill_reply_dates`
+  (`replies.date_checked`). Пам'ять рейтів: `extract_rates` → `rate_quotes` (лінія + еквіпмент з нашого листа,
+  `_rate_quote_load`), звіт `/api/intelligence/rates` → секція Rate history на Intelligence.
 - «Сьогодні» — за поясом юзера (`pipeline_config.timezone`, `_user_tz`, `_local_day_start`);
   фіксована touch_hour — локальна година. БД-час лишається naive UTC.
 - Імʼя контакта в UI — `FollowupContact.display_name` (JS `fuName/fuSub`).

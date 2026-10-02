@@ -54,6 +54,11 @@ PIPELINE_DEFAULT_STAGES = [
     {"id": 5, "name": "Booked",               "color": "#9c36b5"},
 ]
 
+# Workspaces created from 2026-10 get a calm sequential palette (grey → blue →
+# teal → green, Booked purple) stored in their config; existing workspaces keep
+# whatever they show today (their stored stages, or the defaults above).
+PIPELINE_NEW_WORKSPACE_STAGE_COLORS = {1: "#8a94a6", 2: "#4f7cf0", 3: "#14a3a3", 4: "#22a06b", 5: "#7c5cff"}
+
 # Triage categories drive the semi-automatic reply queue: each category maps to a
 # recommended action (negative/auto_reply → ignore; gave_info/rate_request → follow-up
 # + advance to the filter's auto_advance_to stage).
@@ -801,3 +806,12 @@ db.Index('ix_sends_user_sent',    Send.user_id,        Send.sent_at)
 db.Index('ix_followups_status',   FollowUp.status,     FollowUp.level)
 db.Index('ix_replies_user_id',    Reply.user_id)
 db.Index('ix_audit_user_id',      AuditLog.user_id)
+
+
+@db.event.listens_for(Workspace, 'before_insert')
+def _seed_new_workspace_stages(mapper, connection, ws):
+    cfg = dict(ws.pipeline_config or {})
+    if 'stages' not in cfg:
+        cfg['stages'] = [dict(st, color=PIPELINE_NEW_WORKSPACE_STAGE_COLORS.get(st['id'], st['color']))
+                         for st in PIPELINE_DEFAULT_STAGES]
+        ws.pipeline_config = cfg

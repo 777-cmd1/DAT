@@ -71,6 +71,9 @@ tests/              — pytest: test_parser, test_triage, test_touch, test_pipel
 (відправки і відповіді окремо, ніколи дві осі), якість відповідей. Lanes & Rates: rate requests,
 Rate history (sparkline + «last $X vs avg»), сигнали, таблиця ліній. Стартова сторінка застосунку —
 Send; декоративні віджети Send (Broadcast Pulse, Automation Impact, Quota) замінив рядок статусу.
+Відгук (етап 4): деструктивні дії з тостом Undo (`toastUndo` — відкладений коміт 5 с, без серверного
+відкату), скелетони замість «Loading…», focus-visible / press стани, сайдбар згортається до іконок,
+превʼю шаблону підписується реальними даними з Settings; `{route}` тепер підставляється і в outreach.
 
 ## Ключові API (нові відносно старої документації)
 ```

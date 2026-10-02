@@ -240,7 +240,7 @@ body {
 .sidebar-user-avatar {
   width: 28px; height: 28px;
   border-radius: 50%;
-  background: var(--accent-d);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
   font-size: 13px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
@@ -304,10 +304,10 @@ body {
   min-height: 100vh;
   overflow-y: auto;
 }
-.page { display: none; padding: 32px 40px; animation: pageIn .3s var(--ease); }
+.page { display: none; padding: 32px 40px; animation: pageIn .16s var(--ease); }
 .page.active { display: block; }
 @keyframes pageIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .page-header { margin-bottom: 28px; }
@@ -736,7 +736,7 @@ tr:last-child td { border-bottom: none; }
 .dat-input-title { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:var(--text2); }
 .dat-input-hint { font-size:12px; color:var(--text3); font-family:inherit; }
 .dat-input-status { display:flex; align-items:center; gap:6px; }
-.dat-parse-dot { width:7px; height:7px; border-radius:50%; background:var(--border); transition:background .3s; flex-shrink:0; }
+.dat-parse-dot { width:7px; height:7px; border-radius:50%; background:var(--border); transition:background .2s; flex-shrink:0; }
 .dat-parse-dot.ready   { background:var(--accent); box-shadow: none; }
 .dat-parse-dot.parsing { background:var(--yellow); animation:dotPulse 1s ease-in-out infinite; }
 @keyframes dotPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
@@ -872,26 +872,9 @@ tr:last-child td { border-bottom: none; }
 .sp-bar-fill {
   height:100%; border-radius:10px;
   background:var(--accent);
-  background-size:200% 100%;
-  animation:spGradientShift 3s ease infinite;
-  transition:width .5s cubic-bezier(.4,0,.2,1);
+  transition:width .2s var(--ease);
   box-shadow: none;
   position:relative;
-}
-.sp-bar-fill::after {
-  content:''; position:absolute; inset:0;
-  background:linear-gradient(90deg,transparent 60%,rgba(255,255,255,.12) 80%,transparent 100%);
-  background-size:200% 100%;
-  animation:spShimmer 2s ease-in-out infinite;
-}
-@keyframes spGradientShift {
-  0%   { background-position:0% 50%; }
-  50%  { background-position:100% 50%; }
-  100% { background-position:0% 50%; }
-}
-@keyframes spShimmer {
-  0%   { background-position:200% 0; }
-  100% { background-position:-200% 0; }
 }
 .sp-bar-label {
   position:absolute; inset:0; display:flex; align-items:center;
@@ -924,28 +907,18 @@ tr:last-child td { border-bottom: none; }
 .bp-pulse-dot {
   width:6px; height:6px; border-radius:50%; background:var(--accent);
   box-shadow: none;
-  animation:bpDotPulse 2s ease-in-out infinite;
 }
 .bp-pulse-dot.idle { background:var(--border); box-shadow:none; animation:none; }
 .bp-pulse-dot.sending {
   background:var(--accent);
-  animation:bpDotSend .8s ease-in-out infinite;
-}
-@keyframes bpDotPulse {
-  0%,100% { opacity:.6; transform:scale(1); }
-  50%     { opacity:1;  transform:scale(1.3); }
-}
-@keyframes bpDotSend {
-  0%,100% { opacity:1;   transform:scale(1);   box-shadow: none; }
-  50%     { opacity:.85; transform:scale(1.5); box-shadow: none; }
 }
 
 /* parseResults animation */
 @keyframes parseReveal {
-  from { opacity:0; transform:translateY(10px); }
+  from { opacity:0; transform:translateY(6px); }
   to   { opacity:1; transform:translateY(0); }
 }
-#parseResults.visible { animation:parseReveal .3s var(--ease) both; }
+#parseResults.visible { animation:parseReveal .18s var(--ease) both; }
 
 /* ── PARSE BADGES ───────────────────────────────────────────────────── */
 .parse-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -974,16 +947,9 @@ tr:last-child td { border-bottom: none; }
 }
 .progress-bar-fill {
   background: var(--accent);
-  background-size: 200% 100%;
   height: 100%;
   border-radius: 99px;
-  transition: width .8s cubic-bezier(.4,0,.2,1);
-  box-shadow: none;
-  animation: barShimmer 2.5s ease-in-out infinite;
-}
-@keyframes barShimmer {
-  0%,100% { background-position: 0% 50%; }
-  50%      { background-position: 100% 50%; }
+  transition: width .2s var(--ease);
 }
 .progress-info { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 10px; }
 .live-log {
@@ -1096,7 +1062,7 @@ tr:last-child td { border-bottom: none; }
 .tq-progress-wrap { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .tq-progress-label { font-size:13px; color:var(--text2); white-space:nowrap; font-weight:600; }
 .tq-progress-track { width:140px; height:5px; background:var(--surface2); border-radius:99px; overflow:hidden; }
-.tq-progress-fill { height:100%; background:var(--accent); border-radius:99px; transition:width .5s var(--ease); }
+.tq-progress-fill { height:100%; background:var(--accent); border-radius:99px; transition:width .2s var(--ease); }
 .tq-inbox-zero { font-size:13px; color:var(--accent); font-weight:600; }
 .tq-queue-chip {
   display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px;
@@ -1250,8 +1216,8 @@ tr:last-child td { border-bottom: none; }
   from { opacity:0; transform:translateY(6px); }
   to   { opacity:1; transform:translateY(0); }
 }
-.tq-card { animation:tqSlideIn .22s var(--ease) both; }
-.tq-card.exiting { animation:tqSlideOut .3s var(--ease) forwards; pointer-events:none; overflow:hidden; }
+.tq-card { animation:tqSlideIn .16s var(--ease) both; }
+.tq-card.exiting { animation:tqSlideOut .2s var(--ease) forwards; pointer-events:none; overflow:hidden; }
 
 /* Compact row (processed) */
 .tq-compact {
@@ -2047,6 +2013,14 @@ tr:last-child td { border-bottom: none; }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.error { color: var(--red); border-color: color-mix(in srgb, var(--red) 35%, transparent); }
+.toast.undo { pointer-events: auto; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 18px; overflow: hidden; }
+.toast-undo { font: inherit; font-weight: 700; color: var(--accent); background: none; border: 0; padding: 6px 10px;
+  border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.toast-undo:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.toast-count { color: var(--text3); font-weight: 600; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.toast-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent);
+  transform-origin: left; animation: toastTimer 5s linear forwards; }
+@keyframes toastTimer { to { transform: scaleX(0); } }
 
 /* ── ANALYTICS REDESIGN ─────────────────────────────────── */
 .analytics-period-tabs {
@@ -2208,14 +2182,10 @@ tr:last-child td { border-bottom: none; }
 .an-bar-fill {
   width:100%; border-radius:10px 10px 2px 2px;
   background: var(--accent);
-  transition: height .5s cubic-bezier(.4,0,.2,1);
+  transition: height .2s var(--ease);
   min-height:3px;
   position:relative;
-  box-shadow: var(--shadow);
-  transform-origin:bottom;
-  animation:barGrow .45s var(--ease) backwards;
 }
-@keyframes barGrow { from { transform:scaleY(0); } }
 .an-bar-fill:hover { filter:brightness(1.1); cursor:default; }
 .an-bar-label { font-size:12px; color:var(--text3); margin-top:8px; white-space:nowrap; font-weight:600; }
 
@@ -2237,8 +2207,8 @@ tr:last-child td { border-bottom: none; }
 }
 .an-hour-label { width:40px; color:var(--text2); flex-shrink:0; font-weight:700; }
 .an-hour-bar-wrap { flex:1; height:8px; background:var(--bg2,rgba(0,0,0,.05)); border-radius:99px; overflow:hidden; }
-.an-hour-bar { height:100%; border-radius:99px; background:var(--accent); transition:width .4s; transform-origin:left; animation:hbarGrow .45s var(--ease) backwards; }
-@keyframes hbarGrow { from { transform:scaleX(0); } }
+.an-hour-bar { height:100%; border-radius:99px; background:var(--accent); transition:width .2s var(--ease); }
+
 .an-hour-count { width:24px; text-align:right; color:var(--text); flex-shrink:0; font-weight:700; }
 
 /* Automation Impact strip */
@@ -2411,6 +2381,40 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
 .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
 .btn-secondary:hover { border-color: var(--border-h); background: var(--surface3); }
 .sidebar { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ── feedback (2026-10, phase 4) ── */
+:where(button, a, summary, [tabindex], .nav-item, .theme-toggle, .logout-btn, .sidebar-collapse):focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+:where(button, .btn, .fu-qa-btn, .nav-item):not(:disabled):active { transform: translateY(1px); }
+.skel { display: block; height: 12px; border-radius: 6px; background: var(--surface2); animation: skelPulse 1.4s ease-in-out infinite; }
+.skel-lines { padding: 14px 0; }
+.skel-lines .skel + .skel { margin-top: 10px; }
+.skel.w80 { width: 80%; } .skel.w60 { width: 60%; }
+.skel-block { height: 120px; border-radius: var(--radius); }
+@keyframes skelPulse { 50% { opacity: .5; } }
+.tmpl-preview-note { font-size: 12px; color: var(--text3); margin-top: 8px; }
+.tmpl-preview-note a { color: var(--accent); cursor: pointer; }
+/* collapsible sidebar */
+.sidebar, .main { transition: width .2s var(--ease), margin-left .2s var(--ease); }
+.sidebar-collapse { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin-bottom: 6px; border-radius: 8px;
+  cursor: pointer; color: var(--text2); font-size: 12px; }
+.sidebar-collapse:hover { background: var(--surface2); color: var(--text); }
+.sidebar-collapse i { font-size: 16px; }
+html.sb-collapsed .sidebar { width: 64px; }
+html.sb-collapsed .main { margin-left: 64px; }
+html.sb-collapsed .brand-name, html.sb-collapsed .brand-sub, html.sb-collapsed .nav-label,
+html.sb-collapsed .nav-section, html.sb-collapsed .sidebar-user-info, html.sb-collapsed #themeLabel,
+html.sb-collapsed .logout-label { display: none; }
+html.sb-collapsed .sidebar-top { padding: 20px 0 16px; }
+html.sb-collapsed .brand { justify-content: center; }
+html.sb-collapsed .nav { padding: 10px 8px; }
+html.sb-collapsed .nav-item, html.sb-collapsed .sidebar-collapse, html.sb-collapsed .logout-btn,
+html.sb-collapsed .theme-toggle, html.sb-collapsed .sidebar-user { justify-content: center; padding-left: 0; padding-right: 0; }
+html.sb-collapsed .nav-section + .nav-item { margin-top: 12px; }
+html.sb-collapsed .nav-badge { position: absolute; top: 5px; right: 9px; width: 8px; height: 8px; min-width: 0; padding: 0;
+  font-size: 0; background: var(--accent); }
+html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 </style>
   <!-- Phosphor Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
@@ -2439,32 +2443,32 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
       <!-- PRIMARY: core workflow -->
       <div class="nav-section">Workflow</div>
       <div class="nav-item active" onclick="nav('send',this)">
-        <i class="nav-icon ph-bold ph-paper-plane-tilt" aria-hidden="true"></i> Send
+        <i class="nav-icon ph-bold ph-paper-plane-tilt" aria-hidden="true"></i> <span class="nav-label">Send</span>
       </div>
       <div class="nav-item" onclick="nav('replies',this)">
-        <i class="nav-icon ph-bold ph-chat-circle-text" aria-hidden="true"></i> Replies
+        <i class="nav-icon ph-bold ph-chat-circle-text" aria-hidden="true"></i> <span class="nav-label">Replies</span>
         <span id="repliesBadge" class="nav-badge" style="display:none">0</span>
       </div>
       <div class="nav-item" onclick="nav('followup',this)">
-        <i class="nav-icon ph-bold ph-arrows-clockwise" aria-hidden="true"></i> Follow-up
+        <i class="nav-icon ph-bold ph-arrows-clockwise" aria-hidden="true"></i> <span class="nav-label">Follow-up</span>
         <span id="fuBadge" class="nav-badge" style="display:none">0</span>
       </div>
       <div class="nav-item" onclick="nav('insights',this)">
-        <i class="nav-icon ph-bold ph-chart-line-up" aria-hidden="true"></i> Insights
+        <i class="nav-icon ph-bold ph-chart-line-up" aria-hidden="true"></i> <span class="nav-label">Insights</span>
       </div>
       <!-- SECONDARY: config -->
       <div class="nav-section">Config</div>
       <div class="nav-item" onclick="nav('templates',this)">
-        <i class="nav-icon ph-bold ph-note-pencil" aria-hidden="true"></i> Templates
+        <i class="nav-icon ph-bold ph-note-pencil" aria-hidden="true"></i> <span class="nav-label">Templates</span>
       </div>
       <div class="nav-item" onclick="nav('stop',this)">
-        <i class="nav-icon ph-bold ph-prohibit" aria-hidden="true"></i> Stop List
+        <i class="nav-icon ph-bold ph-prohibit" aria-hidden="true"></i> <span class="nav-label">Stop List</span>
       </div>
       <div class="nav-item" onclick="nav('log',this)">
-        <i class="nav-icon ph-bold ph-file-text" aria-hidden="true"></i> Send Log
+        <i class="nav-icon ph-bold ph-file-text" aria-hidden="true"></i> <span class="nav-label">Send Log</span>
       </div>
       <div class="nav-item" onclick="nav('settings',this)">
-        <i class="nav-icon ph-bold ph-gear" aria-hidden="true"></i> Settings
+        <i class="nav-icon ph-bold ph-gear" aria-hidden="true"></i> <span class="nav-label">Settings</span>
       </div>
     </nav>
 
@@ -2473,9 +2477,12 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
       <div class="sidebar-user" id="sidebarUser">
         <div class="sidebar-user-avatar" id="sidebarAvatar">?</div>
         <div class="sidebar-user-info">
-          <div class="sidebar-user-name" id="sidebarUserName">Loading…</div>
+          <div class="sidebar-user-name" id="sidebarUserName"><span class="skel w80"></span></div>
           <div class="sidebar-user-role" id="sidebarUserRole">User</div>
         </div>
+      </div>
+      <div class="sidebar-collapse" onclick="toggleSidebar()" title="Collapse sidebar">
+        <i class="ph-bold ph-sidebar-simple" aria-hidden="true"></i><span class="nav-label">Collapse</span>
       </div>
       <!-- Theme toggle -->
       <div class="theme-toggle" onclick="toggleTheme()">
@@ -2485,7 +2492,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
       <!-- Logout -->
       <div class="logout-btn" onclick="logout()">
         <i class="ph-bold ph-sign-out" style="font-size:13px" aria-hidden="true"></i>
-        Sign out
+        <span class="logout-label">Sign out</span>
       </div>
     </div>
   </aside>
@@ -2707,7 +2714,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
         <div class="an-section-sub">Where contacts drop off between steps</div></div>
       <div class="an-period-tabs-sm" id="insFunnelPeriod"></div>
     </div>
-    <div id="insFunnel"><div class="intel-empty">Loading…</div></div>
+    <div id="insFunnel"><div class="skel skel-block"></div></div>
   </div>
 
   <div class="ins-health" id="insHealth"></div>
@@ -2717,7 +2724,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
       <div><div class="an-section-title">Activity</div>
         <div class="an-section-sub">Emails sent and replies received, last 14 days</div></div>
     </div>
-    <div id="insActivity"><div class="intel-empty">Loading…</div></div>
+    <div id="insActivity"><div class="skel skel-block"></div></div>
   </div>
 
   <div class="an-section">
@@ -2779,7 +2786,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
     <div class="intel-table-wrap">
       <table class="intel-table intel-rates-table">
         <thead><tr><th>Rate</th><th>$/mile</th><th>From</th><th>Quote</th><th>Date</th><th></th></tr></thead>
-        <tbody id="intelRatesBody"><tr><td colspan="6" class="intel-empty">Loading…</td></tr></tbody>
+        <tbody id="intelRatesBody"><tr><td colspan="6"><div class="skel-lines"><span class="skel"></span><span class="skel w80"></span><span class="skel w60"></span></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -2792,7 +2799,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
         <div class="intel-confidence moderate">Scale</div>
       </div>
       <div class="intel-signal-list" id="intel-opportunities">
-        <div class="intel-empty" style="padding:20px 0">Loading…</div>
+        <div class="skel-lines"><span class="skel"></span><span class="skel w80"></span><span class="skel w60"></span></div>
       </div>
     </div>
 
@@ -2802,7 +2809,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
         <div class="intel-confidence early">Watch</div>
       </div>
       <div class="intel-signal-list" id="intel-warnings">
-        <div class="intel-empty" style="padding:20px 0">Loading…</div>
+        <div class="skel-lines"><span class="skel"></span><span class="skel w80"></span><span class="skel w60"></span></div>
       </div>
     </div>
   </div>
@@ -2824,7 +2831,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
           </tr>
         </thead>
         <tbody id="intel-lanes-body">
-          <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
+          <tr><td colspan="6"><div class="skel-lines"><span class="skel"></span><span class="skel w80"></span><span class="skel w60"></span></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -2848,7 +2855,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
           </tr>
         </thead>
         <tbody id="intel-brokers-body">
-          <tr><td colspan="6" class="intel-empty">Loading…</td></tr>
+          <tr><td colspan="6"><div class="skel-lines"><span class="skel"></span><span class="skel w80"></span><span class="skel w60"></span></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -2881,7 +2888,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
       <!-- Top bar: progress + check gmail -->
       <div class="tq-header">
         <div class="tq-progress-wrap" id="tqProgressWrap">
-          <span class="tq-progress-label" id="tqProgressLabel">Loading...</span>
+          <span class="tq-progress-label" id="tqProgressLabel"><span class="skel" style="width:140px"></span></span>
           <div class="tq-progress-track"><div class="tq-progress-fill" id="tqProgressFill" style="width:0%"></div></div>
           <span class="tq-inbox-zero" id="tqInboxZero" style="display:none">✓ All clear</span>
         </div>
@@ -3219,6 +3226,8 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
               <span class="tmpl-token">{name}</span>
               <span class="tmpl-token">{company}</span>
               <span class="tmpl-token">{phone}</span>
+              <span class="tmpl-token">{date}</span>
+              <span class="tmpl-token">{equip}</span>
             </div>
 
             <div class="tmpl-editor-grid">
@@ -3231,6 +3240,7 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
                 <div class="tmpl-preview-shell">
                   <div class="tmpl-preview-body" id="tmplPreviewBody"></div>
                 </div>
+                <div class="tmpl-preview-note" id="tmplPreviewNote"></div>
               </div>
             </div>
           </div>
@@ -3637,6 +3647,7 @@ const CSRF_TOKEN = '{{ csrf_token|default("", true) }}';
     const headers = new Headers(init.headers || request.headers || {});
     if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', CSRF_TOKEN);
     nextInit.headers = headers;
+    if (window._fetchKeepalive) nextInit.keepalive = true;
     return _nativeFetch(resource, nextInit);
   };
 })();
@@ -3659,6 +3670,32 @@ function toggleTheme() {
   document.documentElement.dataset.theme = t;
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark mode' : 'Light mode';
+  });
+})();
+
+// ── Sidebar: collapsible to icons, keyboard reachable ───────────────────────
+function toggleSidebar(force) {
+  const on = typeof force === 'boolean' ? force : !document.documentElement.classList.contains('sb-collapsed');
+  document.documentElement.classList.toggle('sb-collapsed', on);
+  const b = document.querySelector('.sidebar-collapse');
+  if (b) b.title = on ? 'Expand sidebar' : 'Collapse sidebar';
+  try { localStorage.setItem('sidebar_collapsed', on ? '1' : '0'); } catch (e) {}
+}
+(function() {
+  let on = false;
+  try { on = localStorage.getItem('sidebar_collapsed') === '1'; } catch (e) {}
+  if (on) document.documentElement.classList.add('sb-collapsed');
+  document.addEventListener('DOMContentLoaded', () => {
+    if (on) toggleSidebar(true);
+    document.querySelectorAll('.nav-item, .theme-toggle, .logout-btn, .sidebar-collapse').forEach(el => {
+      el.tabIndex = 0;
+      el.setAttribute('role', el.classList.contains('nav-item') ? 'link' : 'button');
+      const lab = el.querySelector('.nav-label');
+      if (lab && el.classList.contains('nav-item')) el.title = lab.textContent;   // names icons when collapsed
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+      });
+    });
   });
 })();
 
@@ -4105,12 +4142,55 @@ function showConfirm(msg, opts = {}) {
 }
 
 function toast(msg, isErr) {
+  if (_undo) flushUndo();               // a new message ends the Undo window
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show' + (isErr ? ' error' : '');
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), 2800);
 }
+
+// ── Undo toast ───────────────────────────────────────────────────────────────
+// The action waits 5 s behind the toast and only then reaches the server (or
+// right away when the page is left), so Undo just restores the view — exact,
+// no server-side reversal. One pending action at a time; a new one commits it.
+var _undo = null;     // var: toast() may run before this line
+function toastUndo(msg, commit, revert) {
+  if (_undo) flushUndo();
+  const t = document.getElementById('toast');
+  clearTimeout(t._timer);
+  const u = { commit, revert, left: 5 };
+  _undo = u;
+  t.className = 'toast show undo';
+  t.innerHTML = `<span class="toast-msg">${esc(msg)}</span>` +
+    `<button type="button" class="toast-undo" onclick="undoNow()" title="Undo (Ctrl+Z)">Undo <span class="toast-count">5</span></button>` +
+    `<span class="toast-timer" aria-hidden="true"></span>`;
+  u.timer = setInterval(() => {
+    u.left -= 1;
+    if (u.left <= 0) { flushUndo(); return; }
+    const c = t.querySelector('.toast-count');
+    if (c) c.textContent = u.left;
+  }, 1000);
+}
+function flushUndo() {
+  const u = _undo; if (!u) return;
+  _undo = null; clearInterval(u.timer);
+  const t = document.getElementById('toast');
+  if (t.classList.contains('undo')) t.className = 'toast';
+  try { u.commit(); } catch (e) { console.error('undo commit', e); }
+}
+function undoNow() {
+  const u = _undo; if (!u) return;
+  _undo = null; clearInterval(u.timer);
+  try { u.revert(); } catch (e) { console.error('undo revert', e); }
+  toast('Undone');
+}
+window.addEventListener('pagehide', () => { window._fetchKeepalive = true; flushUndo(); });
+document.addEventListener('keydown', e => {
+  if (!_undo || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+  if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+  e.preventDefault(); undoNow();
+});
 
 // ── PARSE CONSTANTS ──────────────────────────────────────────────────────────
 // _EMAIL_RE has NO /g flag — used per-line like Python .search().
@@ -4813,19 +4893,22 @@ async function loadIntelRates() {
         `<div class="rate-sub">${esc([q.company, q.via ? 'via ' + q.via : ''].filter(Boolean).join(' · ') || q.email)}</div></td>` +
       `<td><div class="rate-quote" title="${esc(q.snippet)}">${esc(q.snippet)}</div></td>` +
       `<td class="rate-date" title="${esc(q.quoted_at ? new Date(q.quoted_at).toLocaleString() : '')}">${_rateDate(q.quoted_at)}</td>` +
-      `<td><button class="rate-hide" title="Not a rate — remove from the report" onclick="hideIntelRate('${esc(q.id)}')">✕</button></td>` +
+      `<td><button class="rate-hide" title="Not a rate — remove from the report" onclick="hideIntelRate('${esc(q.id)}', this)">✕</button></td>` +
       `</tr>`).join('');
     return head + rows;
   }).join('');
 }
-async function hideIntelRate(id) {
-  try {
-    const res = await fetch('/api/intelligence/rates/hide', {method:'POST', headers:{'Content-Type':'application/json'},
-                                                          body: JSON.stringify({id})});
-    if (!res.ok) throw new Error('not saved');
-    toast('Removed from the rate report');
-    loadIntelRates();
-  } catch (e) { toast('Error: ' + e.message, true); }
+function hideIntelRate(id, btn) {
+  const row = btn && btn.closest('tr');
+  if (row) row.style.display = 'none';
+  toastUndo('Removed from the rate report', async () => {
+    try {
+      const res = await fetch('/api/intelligence/rates/hide', {method:'POST', headers:{'Content-Type':'application/json'},
+                                                            body: JSON.stringify({id})});
+      if (!res.ok) throw new Error('not saved');
+      loadIntelRates();
+    } catch (e) { if (row) row.style.display = ''; toast('Error: ' + e.message, true); }
+  }, () => { if (row) row.style.display = ''; });
 }
 
 async function loadIntelligence() {
@@ -5067,13 +5150,24 @@ function renderTemplatePreview() {
   const preview = document.getElementById('tmplPreviewBody');
   const editor = document.getElementById('tmpl-active-editor');
   if (!preview || !editor) return;
+  // the signature comes from Settings → Account, exactly what a send would use
+  const cfg = id => (document.getElementById(id)?.value || '').trim();
+  const sig = { name: cfg('cfgName'), company: cfg('cfgCompany'), phone: cfg('cfgPhone') };
   preview.textContent = (editor.value || '')
     .replaceAll('{origin}', 'Chicago, IL')
     .replaceAll('{destination}', 'Dallas, TX')
     .replaceAll('{route}', 'Chicago, IL → Dallas, TX')
-    .replaceAll('{name}', 'Bohdan')
-    .replaceAll('{company}', 'DAT Mailer')
-    .replaceAll('{phone}', '(555) 010-2488');
+    .replaceAll('{date}', '10/14')
+    .replaceAll('{equip}', 'V')
+    .replaceAll('{name}', sig.name || '[your name]')
+    .replaceAll('{company}', sig.company || '[company]')
+    .replaceAll('{phone}', sig.phone || '[phone]');
+  const note = document.getElementById('tmplPreviewNote');
+  if (note) {
+    const missing = Object.entries(sig).filter(([, v]) => !v).map(([k]) => k);
+    note.innerHTML = 'Sample load Chicago, IL → Dallas, TX · signature from Settings' +
+      (missing.length ? ` — <a onclick="navTo('settings');setSettingsTab('account')">add your ${missing.join(', ')}</a>` : '');
+  }
 }
 async function saveTemplates() {
   const editor = document.getElementById('tmpl-active-editor');
@@ -5203,6 +5297,7 @@ async function loadSettings() {
   document.getElementById('cfgName').value     = cfg.your_name || '';
   document.getElementById('cfgCompany').value  = cfg.your_company || '';
   document.getElementById('cfgPhone').value    = cfg.your_phone || '';
+  renderTemplatePreview();          // the preview signs with these fields
   document.getElementById('cfgDelayMin').value = cfg.delay_min || 20;
   document.getElementById('cfgDelayMax').value = cfg.delay_max || 45;
   document.getElementById('cfgDailyTarget').value = cfg.daily_target || 100;
@@ -5393,6 +5488,7 @@ async function loadReplies() {
   repliesPage = data.page || 1;
   repliesPages = data.pages || 0;
   allReplies = replyGroups.flat();
+  allReplies.forEach(r => { const p = _replyPending.get((r.email || '').toLowerCase().trim()); if (p) r.status = p; });
   renderReplies();
   renderCatBar();
   updateBadge();
@@ -5910,7 +6006,7 @@ function tqAnimateOut(emailKey, callback) {
   const card = document.getElementById(id);
   if (card) {
     card.classList.add('exiting');
-    setTimeout(callback, 340);
+    setTimeout(callback, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 200);
   } else {
     callback();
   }
@@ -5919,6 +6015,7 @@ function tqAnimateOut(emailKey, callback) {
 async function markContact(email, status, addToStop) {
   const msgs = allReplies.filter(r => (r.email||'').toLowerCase().trim() === email.toLowerCase().trim());
   if (!msgs.length) return;
+  if (status === 'not_interested') return deferReplyStatus(email, msgs, status, addToStop);
   // Optimistic update
   msgs.forEach(r => r.status = status);
   // Fire API calls immediately (parallel with animation)
@@ -5939,12 +6036,31 @@ async function markContact(email, status, addToStop) {
 }
 
 async function markContactStop(email) {
-  const ok = await showConfirm(
-    email + ' will be added to your stop list — no outreach or follow-ups will ever be sent to them again.',
-    { okText: 'Block contact', title: 'Block ' + email + '?' }
-  );
-  if (!ok) return;
+  // no confirm dialog: Undo stays available for 5 s before anything is saved
   await markContact(email, 'not_interested', true);
+}
+
+// Ignore / Block wait behind an Undo toast; the card moves to Ignored meanwhile.
+const _replyPending = new Map();  // email → status shown until the server has it
+function deferReplyStatus(email, msgs, status, addToStop) {
+  const key = email.toLowerCase().trim();
+  const prev = msgs.map(r => r.status);
+  _replyPending.set(key, status);
+  tqAnimateOut(email, () => { msgs.forEach(r => r.status = status); renderReplies(); });
+  toastUndo(addToStop ? `Blocked ${email} — added to Stop List` : `Ignored ${email}`, async () => {
+    // one request carries the Stop List add, the rest only set the status
+    await Promise.all(msgs.map((r, i) => fetch('/api/replies/status', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({msg_id: r.msg_id, status, add_to_stop: !!addToStop && i === 0})
+    })));
+    _replyPending.delete(key);
+    await loadReplies();
+    if (addToStop) loadFollowups();
+  }, () => {
+    _replyPending.delete(key);
+    msgs.forEach((r, i) => r.status = prev[i]);
+    renderReplies();
+  });
 }
 
 // Legacy compat
@@ -6153,6 +6269,7 @@ async function loadFollowups() {
     const res = await fetch('/api/followups?' + buildFuFilterParams().toString());
     const data = await res.json();
     fuContacts = data.contacts || [];
+    fuContacts.forEach(c => { if (_fuPending.has(c.id)) c.state = _fuPending.get(c.id); });
     fuCounts = data.counts || {};
   } catch(e) { fuContacts = []; fuCounts = {}; }
   updateFuBadge();
@@ -7071,9 +7188,9 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────
-async function fuAction(id, action, reason, extraPayload) {
+async function fuAction(id, action, reason, extraPayload, opts) {
   const inflightKey = id + ':' + action;
-  if (_fuInflight.has(inflightKey)) return;   // block rapid double-clicks
+  if (_fuInflight.has(inflightKey)) return false;   // block rapid double-clicks
   _fuInflight.add(inflightKey);
   const body = {id, action, ...(extraPayload||{})};
   if (reason) body.reason = reason;
@@ -7084,7 +7201,7 @@ async function fuAction(id, action, reason, extraPayload) {
       // 409 duplicate guard: show the friendly message as a warning, not "Error:"
       const isDup = res.status === 409 || data.duplicate;
       toast((isDup ? '' : 'Error: ') + (data.error || 'unknown'), true);
-      return;
+      return false;
     }
     const contextualMsgs = {
       'send-now':'Follow-up sent',
@@ -7106,13 +7223,55 @@ async function fuAction(id, action, reason, extraPayload) {
     } else if (action === 'close') {
       msg = 'Closed — removed from active follow-up';
     }
-    toast(msg);
+    if (!(opts && opts.quiet)) toast(msg);
     await loadFollowups();
+    return true;
   } catch(e) {
     toast('Error: '+e.message, true);
+    return false;
   } finally {
     _fuInflight.delete(inflightKey);
   }
+}
+
+// Pause / Block wait behind an Undo toast; the rows show the new state meanwhile.
+const _fuPending = new Map();     // contact id → state shown until the server has it
+function fuDeferred(ids, action) {
+  const state = action === 'block' ? 'blocked' : 'paused';
+  const before = new Map();
+  ids.forEach(id => {
+    const c = fuContacts.find(x => x.id === id);
+    if (c && !before.has(id)) { before.set(id, c.state); c.state = state; }
+    _fuPending.set(id, state);
+  });
+  renderFuCurrentView();
+  const one = ids.length === 1 ? fuContacts.find(x => x.id === ids[0]) : null;
+  const who = one ? fuName(one) : ids.length + ' contacts';
+  toastUndo((action === 'block' ? `Blocked ${who} — added to Stop List` : `Paused ${who}`), async () => {
+    const ok = ids.length === 1 ? await fuAction(ids[0], action, '', null, {quiet: true})
+                                : await fuBulkCommit(ids, action);
+    ids.forEach(id => _fuPending.delete(id));
+    if (!ok) await loadFollowups();
+  }, () => {
+    ids.forEach(id => {
+      _fuPending.delete(id);
+      const c = fuContacts.find(x => x.id === id);
+      if (c && before.has(id)) c.state = before.get(id);
+    });
+    renderFuCurrentView();
+  });
+}
+async function fuBulkCommit(ids, action) {
+  try {
+    const res = await fetch('/api/followups/bulk-action', {method:'POST', headers:{'Content-Type':'application/json'},
+                                                          body: JSON.stringify({ids, action})});
+    const data = await res.json();
+    if (!res.ok) { toast('Error: ' + (data.error || 'unknown'), true); return false; }
+    const bad = (data.results || []).filter(r => !r.ok).length;
+    if (bad) toast(`${bad} of ${ids.length} could not be ${action === 'block' ? 'blocked' : 'paused'}`, true);
+    await loadFollowups();
+    return true;
+  } catch (e) { toast('Error: ' + e.message, true); return false; }
 }
 
 async function bulkFuAction(action, extraPayload) {
@@ -7120,6 +7279,11 @@ async function bulkFuAction(action, extraPayload) {
   // Batch sends run one-at-a-time so we can show real-time progress and catch
   // per-contact errors (incl. the 24h duplicate guard) individually.
   if (action === 'send-now') return bulkSendNowWithProgress();
+  if (action === 'pause' || action === 'block') {
+    const ids = [...selectedFuIds];
+    clearFuSelection();
+    return fuDeferred(ids, action);
+  }
   const ids = [...selectedFuIds];
   const body = {ids, action, ...(extraPayload||{})};
   try {
@@ -7424,9 +7588,11 @@ function toggleFuDropdown(event, contactId) {
 
   const btn = event.currentTarget;
   const r = btn.getBoundingClientRect();
-  dd.style.top  = (r.bottom + 4) + 'px';  // position:fixed is viewport-relative, no scrollY needed
   dd.style.left = Math.min(r.right - 160, window.innerWidth - 172) + 'px';
   dd.classList.add('open');
+  // position:fixed is viewport-relative; open upwards when the menu would run off the bottom
+  const h = dd.offsetHeight;
+  dd.style.top = (r.bottom + 4 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
 }
 
 async function fuDropdownAction(action) {
@@ -7454,6 +7620,7 @@ async function fuDropdownAction(action) {
   if (action==='stop-recurring')   { await fuAction(id, 'stop-recurring'); return; }
   if (action==='cancel-schedule')  { await fuAction(id, 'cancel-schedule'); return; }
   if (action==='free-send')      { await fuAction(id, 'free-send'); return; }
+  if (action==='pause' || action==='block') { fuDeferred([id], action); return; }
   let reason = '';
   if (action==='block' || action==='close') { reason = prompt(`Reason for ${action} (optional):`)||''; if (reason===null) return; }
   await fuAction(id, action, reason);
@@ -7519,7 +7686,7 @@ function loadCandidates(q) {
 async function loadFuAnalytics() {
   const el = document.getElementById('fuAnalyticsContent');
   if (!el) return;
-  el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0">Loading…</div>';
+  el.innerHTML = '<div class="skel-lines"><span class="skel"></span><span class="skel w80"></span><span class="skel w60"></span></div>';
   try {
     const res = await fetch('/api/followups/analytics');
     const data = await res.json();
@@ -7590,17 +7757,6 @@ function checkScheduledDue() {}
 function renderScheduledBlock() {}
 
 
-function animateCount(el, target, dec, sfx) {
-  if (!el) return;
-  dec=dec||0; sfx=sfx||'';
-  const t0=performance.now(), dur=800;
-  (function step(now){
-    const p=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-p,3), v=target*e;
-    el.textContent = (dec>0 ? v.toFixed(dec) : Math.round(v)) + sfx;
-    if(p<1) requestAnimationFrame(step);
-  })(t0);
-}
-
 function setEl(id, v) { const e=document.getElementById(id); if(e) e.textContent=v; }
 
 // ── ANALYTICS REDESIGN ────────────────────────────────────────────────────────
@@ -7613,11 +7769,15 @@ function setHtml(id, html) { const e = document.getElementById(id); if (e) e.inn
 function countUp(id, target, fmt) {
   const el = document.getElementById(id); if (!el) return;
   fmt = fmt || (v => Math.round(v).toLocaleString());
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { el.textContent = fmt(target); return; }
-  const dur = 600, t0 = performance.now();
+  const from = el.dataset.v === undefined ? null : Number(el.dataset.v);
+  el.dataset.v = target;
+  if (from === null || from === target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = fmt(target); return;
+  }
+  const dur = 200, t0 = performance.now();
   (function tick(t) {
     const pr = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - pr, 3);
-    el.textContent = fmt(target * e);
+    el.textContent = fmt(from + (target - from) * e);
     if (pr < 1) requestAnimationFrame(tick);
   })(t0);
 }
@@ -7629,11 +7789,6 @@ function renderSpark(id, values) {
   const pts = values.map((v, i) => (i * (w / (values.length - 1))).toFixed(1) + ',' + (h - 3 - (v / max) * (h - 6)).toFixed(1)).join(' ');
   el.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
   el.innerHTML = '<polyline points="' + pts + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>';
-}
-
-function staggerCharts() {
-  document.querySelectorAll('#page-insights .an-bar-fill').forEach((b, i) => b.style.animationDelay = (i * 35) + 'ms');
-  document.querySelectorAll('#page-insights .an-hour-bar').forEach((b, i) => b.style.animationDelay = (i * 45) + 'ms');
 }
 
 async function loadAnalytics() {
@@ -7651,7 +7806,6 @@ async function loadAnalytics() {
 function renderAnalytics() {
   if (!_anStats && !_anAiData) return;
   renderAnKpis(); renderAnQuality(); renderAnTiming();
-  staggerCharts();
 }
 
 function setAnPeriod(p) {
@@ -7774,7 +7928,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
   ['cfgName','cfgCompany','cfgPhone'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('input', renderSettingsPreview);
+    if (el) el.addEventListener('input', () => { renderSettingsPreview(); renderTemplatePreview(); });
   });
   loadFollowups();
   loadQuota();

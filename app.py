@@ -2355,11 +2355,13 @@ def _safe_render(tmpl, values):
     return _TMPL_FIELD_RE.sub(lambda m: str(values.get(m.group(1), m.group(0))), tmpl)
 
 def render_template_text(tmpl, load, cfg):
+    origin, dest = load.get("origin", ""), load.get("destination", "")
     return _safe_render(tmpl, {
         'name': cfg.get("your_name",""), 'company': cfg.get("your_company",""),
-        'phone': cfg.get("your_phone",""), 'origin': load.get("origin",""),
-        'destination': load.get("destination",""), 'date': load.get("date",""),
-        'equip': load.get("equip","")})
+        'phone': cfg.get("your_phone",""), 'origin': origin,
+        'destination': dest, 'date': load.get("date",""),
+        'equip': load.get("equip",""),
+        'route': f'{origin} → {dest}' if origin and dest else (origin or dest)})
 
 def load_stop_list(uid=None):
     if uid is None: uid = current_user_id()

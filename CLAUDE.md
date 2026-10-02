@@ -123,6 +123,9 @@ URL: `/admin`
 Overview бере `/api/dashboard` (спільне `_dashboard_data` з дайджестом) + `/api/stats`.
 Дизайн-система: токени тем у першому `<style>` + шар «DESIGN SYSTEM (2026-10)» в кінці; семантика
 кольорів accent=дія, red=проблема, yellow=увага, green=успіх, blue=інфо; одна головна кнопка на екран.
+Undo: Pause / Block (Follow-up, і bulk), Ignore / Block (Replies), прибрати рейт — `toastUndo(msg, commit, revert)`:
+дія чекає 5 с і лише тоді йде на сервер (pagehide → одразу, fetch keepalive); Undo = просто відкат вигляду.
+Рух — 150-200 мс, лише функціональний; reduced-motion шанується і в JS. Сайдбар згортається (`sb-collapsed`).
 
 ## Інваріанти циклу 2026-09 (деталі — docs/PROJECT_OVERVIEW.md)
 - Автовідправка: `pipeline_config.auto_send_enabled` — головний вимикач усіх авто-шляхів;

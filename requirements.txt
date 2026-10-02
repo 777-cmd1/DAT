@@ -4,10 +4,14 @@ gevent>=23.9.0
 bcrypt>=4.1.0
 python-dotenv>=1.0.0
 flask-sqlalchemy>=3.1.0
+# 2.1 changed the default PostgreSQL driver to psycopg 3 (not installed) — stay on 2.0
+SQLAlchemy>=2.0.30,<2.1
 flask-migrate>=4.0.0
 psycopg2-binary>=2.9.9
 flask-limiter>=3.5.0
 cryptography>=42.0.0
+# IANA zones for user time zones (zoneinfo) when the image has no system tzdata
+tzdata>=2024.1
 google-auth>=2.0.0
 google-auth-oauthlib>=1.0.0
 google-auth-httplib2>=0.1.0

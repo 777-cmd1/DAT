@@ -90,6 +90,9 @@ requirements.txt
 - Dev SQLite не перевіряє FK constraints, PostgreSQL перевіряє — тестувати критичні речі на prod-like БД
 - `_send_invite_email()` silently fails якщо Gmail не налаштований — invite все одно зберігається в БД
 - Після деплою браузер може кешувати старий JS — користувачу треба Ctrl+Shift+R якщо бачить старе
+- Railway щоразу ставить залежності заново: SQLAlchemy зафіксований `<2.1` (2.1 бере psycopg 3 для
+  `postgresql://` → застосунок не стартує, healthcheck failure 2026-10-01); `_sqlalchemy_db_url` явно
+  ставить `+psycopg2`. Нові залежності — з верхньою межею версії.
 
 ## Адмін панель
 URL: `/admin`

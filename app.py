@@ -91,7 +91,21 @@ app.secret_key = _secret_key
 # ── Database configuration ─────────────────────────────────────────────────
 # Dev: SQLite  |  Prod (Railway): PostgreSQL via DATABASE_URL env var
 _default_db = 'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dat_mailer_dev.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', _default_db)
+
+
+def _sqlalchemy_db_url(raw):
+    """Pin the PostgreSQL driver to psycopg2 (what requirements.txt ships).
+    SQLAlchemy 2.1 maps a bare postgresql:// URL to psycopg 3, which is not
+    installed — a fresh Railway build then cannot reach the DB and fails its
+    healthcheck (deploy of 2026-10-01)."""
+    if raw.startswith('postgres://'):
+        raw = 'postgresql://' + raw[len('postgres://'):]
+    if raw.startswith('postgresql://'):
+        raw = 'postgresql+psycopg2://' + raw[len('postgresql://'):]
+    return raw
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = _sqlalchemy_db_url(os.environ.get('DATABASE_URL', _default_db))
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,   # test connections before use (handles stale/dropped connections)

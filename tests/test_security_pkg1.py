@@ -199,3 +199,13 @@ def test_deleted_user_session_rejected(app, db):
     Workspace.query.filter_by(owner_id=u.id).delete()
     db.session.delete(db.session.get(User, u.id)); db.session.commit()
     assert _rejected(c.get('/api/followups'))
+
+
+# ── DB URL driver pin (deploy 2026-10-01 healthcheck failure) ──────────────────
+
+def test_postgres_url_is_pinned_to_psycopg2():
+    f = _app._sqlalchemy_db_url
+    assert f('postgresql://u:p@h:5432/db') == 'postgresql+psycopg2://u:p@h:5432/db'
+    assert f('postgres://u:p@h/db') == 'postgresql+psycopg2://u:p@h/db'
+    assert f('postgresql+psycopg2://u@h/db') == 'postgresql+psycopg2://u@h/db'
+    assert f('sqlite:///x.db') == 'sqlite:///x.db'

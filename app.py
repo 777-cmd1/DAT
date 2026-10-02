@@ -2749,6 +2749,7 @@ def save_replies(replies, uid=None):
         if existing:
             existing.status = r.get('status', existing.status)
         else:
+            extra = {'received_at': r['received_dt'], 'date_checked': True} if r.get('received_dt') else {}
             db.session.add(Reply(
                 user_id=uid, msg_id=r['msg_id'],
                 thread_id=r.get('thread_id', '') or None,
@@ -2756,6 +2757,7 @@ def save_replies(replies, uid=None):
                 subject=r.get('subject', ''), body=r.get('body', ''),
                 route=r.get('route', ''), status=r.get('status', 'new'),
                 matched_recipient=r.get('matched_recipient') or None,
+                **extra,
             ))
     db.session.commit()
 
@@ -2848,6 +2850,178 @@ def _bounced_recipient(from_addr, headers, body, known):
         if addr.lower() in known:
             return addr.lower()
     return None
+
+
+def _gmail_internal_date(msg):
+    """Gmail's own receive time of a message (internalDate, ms epoch) → naive UTC."""
+    try:
+        return datetime.fromtimestamp(int(msg.get('internalDate')) / 1000, UTC).replace(tzinfo=None)
+    except (TypeError, ValueError):
+        return None
+
+
+def _backfill_reply_dates(service, uid, max_threads=60):
+    """Replies stored before 2026-10 carry the time they were fetched, not when
+    they arrived. Look their threads up in Gmail (a batch per Check Gmail) and
+    store the real receive time. Returns the number of corrected rows."""
+    from app.models import Reply
+    rows = Reply.query.filter(Reply.user_id == uid, Reply.date_checked == False) \
+        .order_by(Reply.received_at.desc()).limit(1000).all()
+    if not rows:
+        return 0
+    by_thread = {}
+    for r in rows:
+        if r.thread_id:
+            by_thread.setdefault(r.thread_id, []).append(r)
+        else:
+            r.date_checked = True          # legacy row without a Gmail thread — nothing to look up
+    fixed = 0
+    for tid in list(by_thread)[:max_threads]:
+        try:
+            th = service.users().threads().get(userId='me', id=tid, format='metadata',
+                                               metadataHeaders=['Message-ID']).execute()
+        except Exception as e:
+            if getattr(getattr(e, 'resp', None), 'status', None) == 404:
+                th = {'messages': []}      # thread deleted — keep the stored date
+            else:
+                break                      # transient API trouble — retry on the next fetch
+        when = {}
+        for m in th.get('messages', []):
+            dt = _gmail_internal_date(m)
+            if not dt:
+                continue
+            when[m.get('id')] = dt
+            for h in m.get('payload', {}).get('headers', []):
+                if h.get('name', '').lower() == 'message-id':
+                    when[h.get('value')] = dt
+        for r in by_thread[tid]:
+            dt = when.get(r.msg_id)
+            if dt and dt != r.received_at:
+                r.received_at = dt
+                fixed += 1
+            r.date_checked = True
+    db.session.commit()
+    if fixed:
+        _cache_del(f'stats:{uid}:today', f'stats:{uid}:week', f'stats:{uid}:lifetime', f'ai_impact:{uid}')
+    return fixed
+
+
+# ── Lane rate memory ───────────────────────────────────────────────────────────
+_RATE_MONEY_RE = re.compile(r'\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(\s?k\b)?', re.I)
+_RATE_PER_MILE_TAIL = re.compile(
+    r'\s*(?:/\s*(?:loaded\s+)?mi(?:le)?s?\b|per\s+(?:loaded\s+)?mile|a\s+mile|rpm\b|cpm\b)', re.I)
+_RATE_PER_MILE_BARE = re.compile(
+    r'(?<![\d$.,])(\d{1,2}\.\d{1,2})\s?(?:/\s*(?:loaded\s+)?mi(?:le)?s?\b|per\s+(?:loaded\s+)?mile|rpm\b|cpm\b)', re.I)
+# accessorials, not the linehaul — judged within the amount's own clause
+_RATE_NOT_LINEHAUL = re.compile(
+    r'detention|lay\s?over|\btonu\b|truck order not used|lumper|per\s+hour|/\s*h(?:ou)?rs?\b|an\s+hour|'
+    r'hourly|per\s+stop|extra\s+stop|stop\s+off|fuel\s+surcharge|deadhead|per\s+day|/\s*day\b', re.I)
+_RATE_CLAUSE_BREAK = re.compile(r'[;\n!?]|,\s|\.\s')
+RATE_MIN_FLAT, RATE_MAX_FLAT = 300, 50000
+
+
+def _rate_clause(text, start, end):
+    left = max([m.end() for m in _RATE_CLAUSE_BREAK.finditer(text, 0, start)] or [0])
+    nxt = _RATE_CLAUSE_BREAK.search(text, end)
+    return text[left:nxt.start() if nxt else len(text)]
+
+
+def extract_rates(body):
+    """Rates quoted in a reply's own text (quoted original mail ignored).
+    Returns [{'rate': int|None, 'rate_per_mile': float|None, 'snippet': str}] —
+    flat amounts below $300 and accessorials (detention, TONU, lumper, /hr…)
+    are dropped; per-mile rates go to their own field."""
+    own = _strip_quoted(body or '')
+    out, seen = [], set()
+
+    def add(kind, value, start, end):
+        if (kind, value) in seen or len(out) >= 3:
+            return
+        seen.add((kind, value))
+        snip = ' '.join(own[max(0, start - 60):end + 60].split())
+        out.append({'rate': value if kind == 'flat' else None,
+                    'rate_per_mile': value if kind == 'pm' else None, 'snippet': snip[:300]})
+
+    for m in _RATE_MONEY_RE.finditer(own):
+        num = float(m.group(1).replace(',', ''))
+        if m.group(2):
+            num *= 1000
+        if _RATE_PER_MILE_TAIL.match(own, m.end()):
+            if 0.5 <= num <= 20:
+                add('pm', round(num, 2), m.start(), m.end())
+            continue
+        if _RATE_NOT_LINEHAUL.search(_rate_clause(own, m.start(), m.end())):
+            continue
+        if RATE_MIN_FLAT <= num <= RATE_MAX_FLAT:
+            add('flat', int(round(num)), m.start(), m.end())
+    for m in _RATE_PER_MILE_BARE.finditer(own):
+        v = float(m.group(1))
+        if 0.5 <= v <= 20:
+            add('pm', round(v, 2), m.start(), m.end())
+    return out
+
+
+def _rate_quote_load(reply, uid):
+    """The outreach email (Send) this reply answers: same recipient (or the
+    address a colleague answered for), lane from the reply subject first."""
+    from app.models import Send
+    from sqlalchemy import func
+    target = (reply.matched_recipient or reply.from_email or '').lower()
+    if not target:
+        return None
+    q = Send.query.filter(Send.user_id == uid, Send.status == 'sent',
+                          func.lower(Send.recipient_email) == target)
+    if reply.received_at:
+        q = q.filter(Send.sent_at <= reply.received_at + timedelta(minutes=5))
+    sends = q.order_by(Send.sent_at.desc()).limit(50).all()
+    subj = _REPLY_SUBJ_PREFIX.sub('', reply.subject or '').strip().lower()
+    for snd in sends:
+        if snd.origin and snd.destination and subj.startswith(f'{snd.origin} to {snd.destination}'.lower()):
+            return snd
+    if reply.route and '→' in reply.route:
+        o, d = [x.strip() for x in reply.route.split('→', 1)]
+        for snd in sends:
+            if (snd.origin or '').strip() == o and (snd.destination or '').strip() == d:
+                return snd
+    return sends[0] if sends else None
+
+
+def _equip_from_subject(subject):
+    """Equipment code from a reply subject — it quotes our own subject
+    ("Re: Laredo, TX to Doral, FL, 10/02, Van, 53 ft")."""
+    for code, label in _EQUIP_LABELS.items():
+        if re.search(r'(?:^|,\s*)' + re.escape(label) + r'(?:\s*,|\s*$)', subject or '', re.I):
+            return code
+    return ''
+
+
+def _extract_rate_quotes(uid, limit=2000):
+    """Parse not-yet-parsed replies of a user into RateQuote rows. Idempotent."""
+    from app.models import Reply, RateQuote
+    rows = Reply.query.filter(Reply.user_id == uid, Reply.rates_parsed == False).limit(limit).all()
+    added = 0
+    for r in rows:
+        r.rates_parsed = True
+        rates = extract_rates(r.body)
+        if not rates:
+            continue
+        snd = _rate_quote_load(r, uid)
+        origin = (snd.origin if snd else '') or ''
+        dest = (snd.destination if snd else '') or ''
+        if not (origin and dest) and r.route and '→' in r.route:
+            origin, dest = [x.strip() for x in r.route.split('→', 1)]
+        if not (origin and dest):
+            continue                       # a rate with no lane can't go into lane memory
+        equip = ((snd.equipment if snd else '') or '').strip().upper() or _equip_from_subject(r.subject)
+        for q in rates:
+            db.session.add(RateQuote(
+                user_id=uid, reply_id=r.id, origin=origin, destination=dest,
+                equipment=equip[:50],
+                rate=q['rate'], rate_per_mile=q['rate_per_mile'],
+                contact_email=(r.matched_recipient or r.from_email or '').lower(), snippet=q['snippet']))
+            added += 1
+    db.session.commit()
+    return added
 
 
 # Mailboxes shared by unrelated people — a domain match there means nothing.
@@ -3016,6 +3190,7 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
                         continue
 
                 body = _gmail_get_body(msg_data.get('payload', {}))
+                received = _gmail_internal_date(msg_data) or _utcnow()
 
                 _pending_replies.append({
                     'msg_id':      msg_id,
@@ -3028,7 +3203,8 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
                     'body':        body,
                     'route':       '',  # filled in bulk below
                     'status':      'new',
-                    'received_at': _utcnow().strftime('%Y-%m-%d %H:%M'),
+                    'received_at': received.strftime('%Y-%m-%d %H:%M'),
+                    'received_dt': received,
                 })
             except Exception:
                 continue
@@ -3122,6 +3298,16 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
         except Exception:
             db.session.rollback()
             app.logger.exception('triage backfill failed')
+        try:
+            _backfill_reply_dates(service, uid)
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('reply date backfill failed')
+        try:
+            _extract_rate_quotes(uid)
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('rate extraction failed')
 
     return {'new': len(new_replies), 'total': len(all_replies),
             'auto_ignored': triage.get('auto_ignored', 0),
@@ -4390,6 +4576,103 @@ def _is_rate_request(body: str) -> bool:
     # Normalize: lowercase, collapse whitespace, strip extra punctuation
     b = ' '.join(body.lower().split())
     return any(kw in b for kw in _RATE_KEYWORDS)
+
+def _equip_label(code):
+    code = (code or '').strip().upper()
+    return _EQUIP_LABELS.get(code, code) if code else ''
+
+
+@app.route('/api/intelligence/rates')
+@login_required
+def api_intelligence_rates():
+    """Lane rate memory: quotes grouped by lane + equipment, newest first.
+    Query: days (default 90, 0 = all time), equip (code), q (lane search)."""
+    from app.models import RateQuote, Reply, FollowupContact, Workspace
+    from email.utils import parseaddr
+    uid = _current_user_id()
+    try:
+        _extract_rate_quotes(uid)          # pick up replies not parsed yet
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('rate extraction failed for uid=%s', uid)
+    try:
+        days = max(0, int(request.args.get('days', 90)))
+    except ValueError:
+        days = 90
+    equip = (request.args.get('equip') or '').strip().upper()
+    search = (request.args.get('q') or '').strip().lower()
+
+    q = db.session.query(RateQuote, Reply).join(Reply, Reply.id == RateQuote.reply_id).filter(
+        RateQuote.user_id == uid, RateQuote.hidden == False)
+    all_equip = sorted({e for (e,) in q.with_entities(RateQuote.equipment).distinct() if e})
+    if days:
+        q = q.filter(Reply.received_at >= _utcnow() - timedelta(days=days))
+    if equip:
+        q = q.filter(RateQuote.equipment == equip)
+    if search:
+        q = q.filter(db.or_(RateQuote.origin.ilike(f'%{search}%'), RateQuote.destination.ilike(f'%{search}%')))
+    rows = q.order_by(Reply.received_at.desc()).limit(3000).all()
+
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    names = {}
+    if ws and rows:
+        emails = {rq.contact_email for rq, _ in rows if rq.contact_email}
+        for fc in FollowupContact.query.filter(FollowupContact.workspace_id == ws.id,
+                                               db.func.lower(FollowupContact.contact_email).in_(emails)).all():
+            names[fc.contact_email.lower()] = (fc.display_name, fc.company_name or '')
+
+    fmt = lambda dt: dt.strftime('%Y-%m-%dT%H:%M:%SZ') if dt else None
+    groups = {}
+    for rq, rp in rows:
+        key = (rq.origin, rq.destination, rq.equipment or '')
+        g = groups.setdefault(key, {'origin': rq.origin, 'destination': rq.destination,
+                                    'lane': f'{rq.origin} → {rq.destination}',
+                                    'equipment': rq.equipment or '', 'equipment_label': _equip_label(rq.equipment),
+                                    'quotes': []})
+        name, company = names.get(rq.contact_email, ('', ''))
+        if not name:
+            name = parseaddr(rp.from_name or '')[0].strip().strip('"') or rp.from_email
+        colleague = rp.from_email if rp.matched_recipient and rp.from_email else ''
+        g['quotes'].append({'id': rq.id, 'rate': rq.rate, 'rate_per_mile': rq.rate_per_mile,
+                            'from': name, 'company': company, 'email': rq.contact_email,
+                            'via': colleague, 'quoted_at': fmt(rp.received_at),
+                            'snippet': rq.snippet or '', 'subject': rp.subject or ''})
+
+    def stats(vals):
+        vals = [v for v in vals if v is not None]
+        if not vals:
+            return None
+        return {'avg': round(sum(vals) / len(vals), 2), 'min': min(vals), 'max': max(vals), 'count': len(vals)}
+
+    out = []
+    for g in groups.values():
+        g['count'] = len(g['quotes'])
+        g['last_quoted_at'] = g['quotes'][0]['quoted_at']
+        g['flat'] = stats([x['rate'] for x in g['quotes']])
+        g['per_mile'] = stats([x['rate_per_mile'] for x in g['quotes']])
+        if g['flat']:
+            g['flat']['avg'] = int(round(g['flat']['avg']))
+        out.append(g)
+    out.sort(key=lambda g: g['last_quoted_at'] or '', reverse=True)
+    return jsonify(groups=out[:200], total=len(rows),
+                   equipment=[{'code': e, 'label': _equip_label(e)} for e in all_equip])
+
+
+@app.route('/api/intelligence/rates/hide', methods=['POST'])
+@login_required
+@limiter.limit("120 per minute")
+@csrf_protected
+def api_intelligence_rates_hide():
+    """Remove a wrongly detected rate from the report (hidden=false restores it)."""
+    from app.models import RateQuote
+    data = request.get_json() or {}
+    rq = db.session.get(RateQuote, str(data.get('id') or ''))
+    if not rq or rq.user_id != _current_user_id():
+        return jsonify(error='Not found'), 404
+    rq.hidden = data.get('hidden', True) is not False
+    db.session.commit()
+    return jsonify(ok=True, id=rq.id, hidden=rq.hidden)
+
 
 @app.route('/api/intelligence', methods=['GET'])
 @login_required
@@ -7132,6 +7415,8 @@ with app.app_context():
         ('followup_contacts', 'attention_at',        'TIMESTAMP'),
         ('users',             'session_version',     'INTEGER NOT NULL DEFAULT 0'),
         ('replies',           'matched_recipient',   'VARCHAR(255)'),
+        ('replies',           'date_checked',        'BOOLEAN NOT NULL DEFAULT FALSE'),
+        ('replies',           'rates_parsed',        'BOOLEAN NOT NULL DEFAULT FALSE'),
         # Bulk follow-up send jobs (SendJob kind discriminator + per-contact log).
         # Inline delivery is REQUIRED: prod schema changes only apply here — the
         # Alembic releaseCommand does not run against the live DB (a3b4c5d6e7f8

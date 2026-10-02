@@ -366,6 +366,9 @@ class Reply(db.Model):
     # Set when a colleague answered for the address we emailed (we wrote to
     # dispatch@abc.com, john@abc.com replied): the original recipient, lowercased.
     matched_recipient = db.Column(db.String(255), nullable=True)
+    # received_at confirmed from Gmail's own timestamp (older rows hold the fetch time)
+    date_checked = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    rates_parsed = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     auto_advanced    = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     # Semi-automatic triage: category detected at ingest + what (if anything) was auto-applied
     triage_category   = db.Column(db.String(20), nullable=True)   # 'negative'|'gave_info'|'rate_request'|'auto_reply'|NULL
@@ -400,6 +403,31 @@ class Reply(db.Model):
             'auto_action': self.auto_action or '',
             'received_at': self.received_at.strftime('%Y-%m-%d %H:%M') if self.received_at else '',
         }
+
+
+class RateQuote(db.Model):
+    """A rate a carrier quoted in a reply, tied to the lane + equipment of the
+    load we emailed them about. The quote date is the reply's received_at."""
+    __tablename__ = 'rate_quotes'
+
+    id            = db.Column(db.String(36), primary_key=True, default=_uuid)
+    user_id       = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    reply_id      = db.Column(db.String(36), db.ForeignKey('replies.id', ondelete='CASCADE'), nullable=False)
+    origin        = db.Column(db.String(255), default='')
+    destination   = db.Column(db.String(255), default='')
+    equipment     = db.Column(db.String(50), default='')     # load code from DAT/Truckstop (V, F, R, ...)
+    rate          = db.Column(db.Integer, nullable=True)     # flat $ for the load
+    rate_per_mile = db.Column(db.Float, nullable=True)       # $/mile when quoted that way
+    contact_email = db.Column(db.String(255), default='')    # the address we emailed
+    snippet       = db.Column(db.String(300), default='')
+    hidden        = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    created_at    = db.Column(db.DateTime, default=_utcnow)
+
+    reply = db.relationship('Reply', backref=db.backref('rate_quotes', cascade='all, delete-orphan'))
+
+    __table_args__ = (
+        db.Index('ix_rate_quotes_user_lane', 'user_id', 'origin', 'destination'),
+    )
 
 
 # ── FOLLOW-UPS ───────────────────────────────────────────────────────────────

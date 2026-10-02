@@ -2023,6 +2023,26 @@ html:not([data-theme="dark"]) .send-cta-bar {
 .intel-rate-fill { height:100%; border-radius:999px; transition:width .3s; }
 .intel-rate-pct { font-size:11px; font-family:'DM Mono',monospace; font-weight:700; min-width:36px; text-align:right; }
 .intel-empty { color:var(--text3); font-size:13px; padding:48px 0; text-align:center; }
+.intel-rates-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+.intel-rates-filters { display:flex; gap:8px; flex-wrap:wrap; }
+.intel-rates-input { width:auto; min-width:150px; padding:7px 10px; font-size:12px; border-radius:10px; }
+.intel-rates-table th { cursor:default; }
+.intel-rates-table tr.rate-group td {
+  background:var(--surface2); color:var(--text); font-weight:700; border-bottom:1px solid var(--border);
+}
+.intel-rates-table tr.rate-group:hover td { background:var(--surface2); }
+.rate-group-equip { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:10.5px;
+  font-weight:700; background:var(--accent-glow); color:var(--accent); }
+.rate-group-equip.unknown { background:transparent; color:var(--text3); font-weight:500; padding-left:0; }
+.rate-group-stats { float:right; font-weight:500; font-size:11.5px; color:var(--text2); }
+.rate-group-stats b { color:var(--text); font-family:'DM Mono',monospace; }
+.rate-val { font-family:'DM Mono',monospace; font-weight:700; color:var(--text); white-space:nowrap; }
+.rate-from { color:var(--text); font-weight:600; }
+.rate-sub { font-size:11px; color:var(--text3); }
+.rate-quote { max-width:340px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text2); font-size:11.5px; }
+.rate-date { white-space:nowrap; }
+.rate-hide { border:0; background:transparent; color:var(--text3); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px; }
+.rate-hide:hover { color:var(--red); background:var(--red-dim); }
 @media (max-width: 1180px) {
   .intel-kpi-row, .intel-rec-grid, .intel-signal-grid, .intel-evidence-grid { grid-template-columns:1fr 1fr; }
   .intel-rec-grid > *:last-child { grid-column:1 / -1; }
@@ -3310,6 +3330,31 @@ html:not([data-theme="dark"]) .send-cta-bar {
       <div class="intel-signal-list" id="intel-warnings">
         <div class="intel-empty" style="padding:20px 0">Loading…</div>
       </div>
+    </div>
+  </div>
+
+  <div class="intel-section rates" id="intelRatesSection">
+    <div class="intel-rates-head">
+      <div>
+        <div class="intel-section-title">Rate history</div>
+        <div class="intel-section-sub">Rates quoted to you in replies, by lane and equipment. The date is when the reply arrived.</div>
+      </div>
+      <div class="intel-rates-filters">
+        <input id="intelRatesQ" class="intel-rates-input" placeholder="Search city…" oninput="queueIntelRates()">
+        <select id="intelRatesEquip" class="intel-rates-input" onchange="loadIntelRates()"><option value="">All equipment</option></select>
+        <select id="intelRatesDays" class="intel-rates-input" onchange="loadIntelRates()">
+          <option value="30">Last 30 days</option>
+          <option value="90" selected>Last 90 days</option>
+          <option value="365">Last 12 months</option>
+          <option value="0">All time</option>
+        </select>
+      </div>
+    </div>
+    <div class="intel-table-wrap">
+      <table class="intel-table intel-rates-table">
+        <thead><tr><th>Rate</th><th>$/mile</th><th>From</th><th>Quote</th><th>Date</th><th></th></tr></thead>
+        <tbody id="intelRatesBody"><tr><td colspan="6" class="intel-empty">Loading…</td></tr></tbody>
+      </table>
     </div>
   </div>
 
@@ -5052,6 +5097,75 @@ function sortIntelTable(table, key, th) {
   if (table === 'brokers') _renderIntelBrokers(arr);
 }
 
+// ── Rate history (lane rate memory) ─────────────────────────────────────────
+let _intelRatesTimer = null;
+function queueIntelRates() {
+  clearTimeout(_intelRatesTimer);
+  _intelRatesTimer = setTimeout(loadIntelRates, 250);
+}
+function _rateMoney(v) { return v == null ? '—' : '$' + Math.round(v).toLocaleString('en-US'); }
+function _ratePerMile(v) { return v == null ? '—' : '$' + Number(v).toFixed(2); }
+function _rateDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('en-US', sameYear ? {month:'short', day:'numeric'} : {month:'short', day:'numeric', year:'numeric'});
+}
+async function loadIntelRates() {
+  const body = document.getElementById('intelRatesBody');
+  if (!body) return;
+  const sel = document.getElementById('intelRatesEquip');
+  const params = new URLSearchParams({
+    days: document.getElementById('intelRatesDays').value,
+    equip: sel.value,
+    q: document.getElementById('intelRatesQ').value.trim(),
+  });
+  let d;
+  try {
+    const res = await fetch('/api/intelligence/rates?' + params);
+    if (!res.ok) throw new Error('API error');
+    d = await res.json();
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="6" class="intel-empty">Could not load rates.</td></tr>';
+    return;
+  }
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All equipment</option>' + (d.equipment || []).map(e =>
+    `<option value="${esc(e.code)}" ${e.code === cur ? 'selected' : ''}>${esc(e.label)}${e.label !== e.code ? ' (' + esc(e.code) + ')' : ''}</option>`).join('');
+  if (!d.groups.length) {
+    body.innerHTML = `<tr><td colspan="6" class="intel-empty">No rates in replies for this filter yet. Rates are picked up from replies like "we can do $1,500" or "$2.10/mi".</td></tr>`;
+    return;
+  }
+  body.innerHTML = d.groups.map(g => {
+    const st = [];
+    if (g.flat && g.flat.count > 1) st.push(`avg <b>${_rateMoney(g.flat.avg)}</b> · ${_rateMoney(g.flat.min)}–${_rateMoney(g.flat.max)}`);
+    if (g.per_mile && g.per_mile.count > 1) st.push(`avg <b>${_ratePerMile(g.per_mile.avg)}</b>/mi · ${_ratePerMile(g.per_mile.min)}–${_ratePerMile(g.per_mile.max)}`);
+    st.push(`${g.count} rate${g.count === 1 ? '' : 's'}`);
+    const head = `<tr class="rate-group"><td colspan="6">${esc(g.lane)}` +
+      (g.equipment_label ? `<span class="rate-group-equip">${esc(g.equipment_label)}</span>` : '<span class="rate-group-equip unknown">equipment unknown</span>') +
+      `<span class="rate-group-stats">${st.join(' · ')}</span></td></tr>`;
+    const rows = g.quotes.map(q => `<tr id="rate-${esc(q.id)}">` +
+      `<td class="rate-val">${_rateMoney(q.rate)}</td>` +
+      `<td class="rate-val">${_ratePerMile(q.rate_per_mile)}</td>` +
+      `<td><div class="rate-from">${esc(q.from || q.email)}</div>` +
+        `<div class="rate-sub">${esc([q.company, q.via ? 'via ' + q.via : ''].filter(Boolean).join(' · ') || q.email)}</div></td>` +
+      `<td><div class="rate-quote" title="${esc(q.snippet)}">${esc(q.snippet)}</div></td>` +
+      `<td class="rate-date" title="${esc(q.quoted_at ? new Date(q.quoted_at).toLocaleString() : '')}">${_rateDate(q.quoted_at)}</td>` +
+      `<td><button class="rate-hide" title="Not a rate — remove from the report" onclick="hideIntelRate('${esc(q.id)}')">✕</button></td>` +
+      `</tr>`).join('');
+    return head + rows;
+  }).join('');
+}
+async function hideIntelRate(id) {
+  try {
+    const res = await fetch('/api/intelligence/rates/hide', {method:'POST', headers:{'Content-Type':'application/json'},
+                                                          body: JSON.stringify({id})});
+    if (!res.ok) throw new Error('not saved');
+    toast('Removed from the rate report');
+    loadIntelRates();
+  } catch (e) { toast('Error: ' + e.message, true); }
+}
+
 async function loadIntelligence() {
   try {
     const res = await fetch('/api/intelligence');
@@ -5074,6 +5188,7 @@ async function loadIntelligence() {
     _renderIntelSignals(d);
     _renderIntelLanes(d.lanes);
     _renderIntelBrokers(d.brokers);
+    loadIntelRates();
   } catch(e) {
     const rec = document.getElementById('intel-rec-grid');
     const opp = document.getElementById('intel-opportunities');

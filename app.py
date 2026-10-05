@@ -766,21 +766,40 @@ TRIAGE_AUTO_MIN_CONF = {'negative': 0.85, 'auto_reply': 0.85, 'gave_info': 0.7, 
 _QUOTE_MARKERS = [
     re.compile(r'(?im)^\s*-{2,}\s*original message\s*-{2,}'),
     re.compile(r'(?im)^\s*-{2,}\s*forwarded message\s*-{2,}'),
-    re.compile(r'(?im)^on .{0,120}wrote:'),
+    # "On Fri, Oct 2, 2026 at 9:29 AM Dispatch <d@x.com> wrote:" — Gmail wraps long
+    # ones so "wrote:" can sit on the next line; the date / address keeps prose out
+    re.compile(r'(?im)^on (?=[^\n]*[\d@])[^\n]{0,200}(?:\n[^\n]{0,120})?\bwrote:'),
     re.compile(r'(?im)^from:\s.+@'),
-    re.compile(r'(?im)^sent from my '),
+    re.compile(r'(?m)^_{8,}[ \t]*$'),        # Outlook rule above "From:"
+    re.compile(r'(?m)^>'),                    # plain-text quoted lines
 ]
+# a phone signature ends the reply's own text but is not quoted mail
+_SIGNATURE_MARKERS = [re.compile(r'(?im)^sent from my ')]
+_ADDR_RE = re.compile(r'[\w.+-]+@[\w-]+(?:\.[\w-]+)+')
 
 
 def _strip_quoted(body):
     """Return only the reply's own text — cut at the first quoted-mail marker."""
     t = body or ''
     cut = len(t)
-    for rx in _QUOTE_MARKERS:
+    for rx in _QUOTE_MARKERS + _SIGNATURE_MARKERS:
         mm = rx.search(t)
         if mm:
             cut = min(cut, mm.start())
     return t[:cut]
+
+
+def _quote_split(body):
+    """Where the quoted mail starts in a reply (char offset, or None) and the
+    address in its attribution line — the Replies card shows the two apart."""
+    t = body or ''
+    hits = [mm.start() for mm in (rx.search(t) for rx in _QUOTE_MARKERS) if mm]
+    if not hits:
+        return None, ''
+    cut = min(hits)
+    head = '\n'.join(t[cut:].lstrip('\n').split('\n')[:2])
+    mm = _ADDR_RE.search(head)
+    return cut, (mm.group(0).lower() if mm else '')
 
 
 def classify_reply_text(subject, body, filters, keywords):
@@ -2717,9 +2736,11 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
         func.lower(Reply.from_email).in_(email_keys)
     ).order_by(func.lower(Reply.from_email), Reply.received_at.desc()).all()
 
+    own_addr = _own_gmail_address(uid).lower()
     grouped = {}
     for row in msg_rows:
         key = (row.from_email or '').lower()
+        quote_at, quote_from = _quote_split(row.body)
         grouped.setdefault(key, []).append({
             'id': row.id,
             'msg_id': row.msg_id,
@@ -2736,6 +2757,9 @@ def get_reply_groups_page(page=1, per_page=25, search='', view='all', cat=''):
             'auto_action': row.auto_action or '',
             'matched_recipient': row.matched_recipient or '',
             'received_at': row.received_at.strftime('%Y-%m-%d %H:%M') if row.received_at else '',
+            'quote_at': quote_at,
+            'quote_from': quote_from,
+            'quote_mine': bool(quote_from and quote_from == own_addr),
         })
 
     items = [grouped[email] for email in email_keys if email in grouped]

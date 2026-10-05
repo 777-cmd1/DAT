@@ -110,6 +110,31 @@ def test_negative_wins_over_quoted_signals():
     assert res and res['category'] == 'negative'
     assert res['filter_key'] == 'no_landstar'
 
+def test_wrapped_gmail_attribution_is_quote():
+    """Gmail wraps a long attribution so "wrote:" lands on its own line — the
+    quoted outreach below it must still be cut off (it used to leak through)."""
+    body = ("PU--10/5 08:00-16:00\nWE 9500lbs\n$700\n\n"
+            "On Fri, Oct 2, 2026 at 9:29AM Dispatch Team <dispatch@ecfsolutionsllc.com>\n"
+            "wrote:\n> Old Bridge, NJ to Piermont, NH, 10/5, Van\n")
+    assert _app._strip_quoted(body).strip() == "PU--10/5 08:00-16:00\nWE 9500lbs\n$700"
+    at, who = _app._quote_split(body)
+    assert body[at:].startswith('On Fri, Oct 2') and who == 'dispatch@ecfsolutionsllc.com'
+
+def test_outlook_rule_and_plain_quotes_are_quote():
+    outlook = ("Hi, could you do 4800 and please send me your MC\n"
+               "________________________________\nFrom: Bogdan Simons <bogdan@ofcagent.com>\nSent: Thu\n")
+    at, who = _app._quote_split(outlook)
+    assert outlook[:at].strip() == 'Hi, could you do 4800 and please send me your MC'
+    assert who == 'bogdan@ofcagent.com'
+    plain = "Yes, still open\n> Laredo, TX to Doral, FL\n> 10/3\n"
+    assert _app._strip_quoted(plain).strip() == 'Yes, still open'
+    # prose that merely starts with "On" is not an attribution
+    prose = "On Monday we load early. My dispatcher wrote: call first\n"
+    assert _app._quote_split(prose) == (None, '')
+    # a phone signature ends the reply for triage but is not quoted mail
+    assert _app._quote_split("Ok\nSent from my iPhone") == (None, '')
+    assert _app._strip_quoted("Ok\nSent from my iPhone").strip() == 'Ok'
+
 def test_cant_use_you_family_is_negative():
     for phrase in ("we can't use you", "We cannot use you at this time",
                    "sorry, won't use you guys", "we don't use you"):
@@ -452,3 +477,19 @@ def test_new_builtin_filters_appended_to_old_configs(app, db):
     # category backfilled from defaults on stored built-ins
     dnu = next(f for f in ws.get_reply_filters() if f['key'] == 'dnu')
     assert dnu['category'] == 'negative'
+
+
+def test_replies_api_marks_where_the_quote_starts(app, db, client):
+    from app.models import EmailAccount
+    user, ws = _make_user_ws(db)
+    db.session.add(EmailAccount(user_id=user.id, workspace_id=ws.id, gmail_address='Bogdan@ofcagent.com'))
+    db.session.commit()
+    _login(client, user)
+    body = "We can do it\n\nOn Thu, Oct 1, 2026 at 8:00 AM Bogdan <bogdan@ofcagent.com> wrote:\n> Laredo"
+    _add_reply(db, user, body, email='a@carrier.com')
+    _add_reply(db, user, 'No quote here', email='b@carrier.com')
+    items = {g[0]['email']: g[0] for g in client.get('/api/replies?view=all').get_json()['items']}
+    a, b = items['a@carrier.com'], items['b@carrier.com']
+    assert body[:a['quote_at']].strip() == 'We can do it'
+    assert a['quote_from'] == 'bogdan@ofcagent.com' and a['quote_mine'] is True
+    assert b['quote_at'] is None and b['quote_mine'] is False

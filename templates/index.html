@@ -1168,12 +1168,21 @@ tr:last-child td { border-bottom: none; }
 
 /* Expanded full body (click to expand) */
 .tq-expanded-body {
-  display:none; margin-top:8px; padding:9px 11px;
+  display:none; margin-top:8px; padding:10px 12px;
   background:var(--surface2); border-radius:var(--radius-sm);
-  font-size:12px; color:var(--text2); line-height:1.65;
-  white-space:pre-wrap; max-height:180px; overflow-y:auto;
-  font-family:inherit; border:1px solid var(--border);
+  max-height:320px; overflow-y:auto; border:1px solid var(--border);
 }
+/* their reply reads first; the mail it quotes stays folded and muted */
+.tq-own { white-space:pre-wrap; font-size:13px; line-height:1.6; color:var(--text); }
+.tq-quote { margin-top:10px; }
+.tq-quote summary { display:inline-flex; align-items:center; gap:6px; cursor:pointer; list-style:none;
+  font-size:12px; font-weight:600; color:var(--text3); padding:3px 9px; border-radius:6px;
+  border:1px solid var(--border); background:var(--surface); }
+.tq-quote summary::-webkit-details-marker { display:none; }
+.tq-quote summary:hover { color:var(--text); border-color:var(--border2); }
+.tq-quote[open] summary { margin-bottom:8px; }
+.tq-quote-body { white-space:pre-wrap; font-size:12px; line-height:1.55; color:var(--text3);
+  border-left:2px solid var(--border2); padding-left:10px; }
 .tq-expanded-body.open { display:block; }
 
 /* Right — action column */
@@ -5813,6 +5822,15 @@ function tqStatePill(state) {
 }
 
 // Full triage card — 2-column layout
+// The reply's own text and the mail it quotes, split where the server found the
+// quote (_quote_split). A reply that is only a quote stays whole.
+function tqSplitBody(r) {
+  const body = r.body || '', at = r.quote_at;
+  if (at == null || at <= 0 || at >= body.length) return { own: body, quoted: '' };
+  const own = body.slice(0, at).replace(/\s+$/, '');
+  return own.trim() ? { own, quoted: body.slice(at).replace(/^\s+/, '') } : { own: body, quoted: '' };
+}
+
 function tqCard(msgs) {
   const latest = msgs[0];
   const state = normalizeState(contactState(msgs));
@@ -5821,7 +5839,9 @@ function tqCard(msgs) {
   const company  = parseCompany(latest);
   const avatarBg = avatarColor(emailRaw);
   const ini      = initials(company, emailRaw);
-  const preview  = (latest.body || latest.subject || '(no message)').replace(/\s+/g,' ').trim().slice(0, 110);
+  const parts    = tqSplitBody(latest);
+  const preview  = (parts.own || latest.subject || '(no message)').replace(/\s+/g,' ').trim().slice(0, 110);
+  const quoteLbl = latest.quote_mine ? 'Your email' : 'Quoted email' + (latest.quote_from ? ' · ' + latest.quote_from : '');
   const route    = latest.route || '';
   const replyCount = msgs.length;
   const time     = relTime(latest);
@@ -5882,7 +5902,11 @@ function tqCard(msgs) {
           '</div>' +
           '<div class="tq-preview">' + esc(preview) + (preview.length >= 110 ? '…' : '') + '</div>' +
           (route ? '<div class="tq-route"><i class="ph-bold ph-map-pin" style="font-size:12px"></i> ' + esc(route) + '</div>' : '') +
-          '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' + esc(latest.body || '(empty)') + '</div>' +
+          '<div id="' + expandId + '" class="tq-expanded-body" onclick="event.stopPropagation()">' +
+            '<div class="tq-own">' + esc(parts.own || '(empty)') + '</div>' +
+            (parts.quoted ? '<details class="tq-quote"><summary><i class="ph-bold ph-arrow-bend-up-left"></i> ' + esc(quoteLbl) +
+              '</summary><div class="tq-quote-body">' + esc(parts.quoted) + '</div></details>' : '') +
+          '</div>' +
         '</div>' +
       '</div>' +
       rightHtml +

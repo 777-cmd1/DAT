@@ -105,6 +105,9 @@ URL: `/admin`
   workspace-конфіг, stored НАБОРИ обʼєднуються з дефолтами (`get_filter_keywords`).
 - Режими off/suggest/auto на категорію (`get_triage_modes`, дефолт suggest, OOO=auto).
 - Block — тільки вручну. Check Gmail пересканує всю живу чергу (самолікування словника).
+- Цитати: `_QUOTE_MARKERS` (зокрема перенесене «On …⏎wrote:», Outlook-риска `____`, рядки `>`);
+  `_strip_quoted` = свій текст для тріажу/рейтів; `_quote_split` → `quote_at/quote_from/quote_mine` у /api/replies —
+  картка показує текст відповіді, процитований лист згорнутий («Your email» / «Quoted email · адреса»).
 
 ## Follow-up каденс — додано 2026-07
 - Залізне правило: активний контакт завжди має next_followup_at (`_schedule_touch`,
@@ -153,5 +156,6 @@ Undo: Pause / Block (Follow-up, і bulk), Ignore / Block (Replies), прибра
 ```bash
 python -m pytest tests/test_parser.py tests/test_triage.py tests/test_touch.py tests/test_pipeline_kanban.py -q
 ```
-Пофайлово зелені (~250, 22 файли; test_followup_stoplist ~7 хв). Повний прогін `tests/` має передіснуючі флейки ізоляції —
+Пофайлово зелені (~280, 23 файли, весь прогін ~1.5 хв). Повний прогін `tests/` має передіснуючі флейки ізоляції —
 ганяти пофайлово. JS: `node --check` на витягнутих <script> з index.html.
+conftest блокує реальний SMTP (`_no_real_smtp`): у понеділок шедулер шле дайджест, і без заглушки тест висить.

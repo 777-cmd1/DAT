@@ -156,6 +156,6 @@ Undo: Pause / Block (Follow-up, і bulk), Ignore / Block (Replies), прибра
 ```bash
 python -m pytest tests/test_parser.py tests/test_triage.py tests/test_touch.py tests/test_pipeline_kanban.py -q
 ```
-Пофайлово зелені (~250, 22 файли; test_followup_stoplist ~7 хв). Повний прогін `tests/` має передіснуючі флейки ізоляції —
+Пофайлово зелені (~280, 23 файли, весь прогін ~1.5 хв). Повний прогін `tests/` має передіснуючі флейки ізоляції —
 ганяти пофайлово. JS: `node --check` на витягнутих <script> з index.html.
 conftest блокує реальний SMTP (`_no_real_smtp`): у понеділок шедулер шле дайджест, і без заглушки тест висить.

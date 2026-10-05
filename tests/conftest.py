@@ -43,6 +43,15 @@ _db       = _module.db
 _module.limiter.enabled = False
 
 
+@pytest.fixture(autouse=True)
+def _no_real_smtp(monkeypatch):
+    """No test may reach a real mail server: the sandbox network drops SMTP, so a
+    stray send (e.g. the Monday digest inside the scheduler) hangs the run."""
+    def _blocked(*a, **k):
+        raise ConnectionRefusedError('SMTP disabled in tests')
+    monkeypatch.setattr(_module, '_smtp_send_with_retry', _blocked)
+
+
 @pytest.fixture(scope='session')
 def app():
     """Session-scoped Flask app configured for testing."""

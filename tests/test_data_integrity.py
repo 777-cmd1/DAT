@@ -147,3 +147,18 @@ def test_auto_fu3_schedules_next_touch(app, db, monkeypatch):
     assert fc.stage == 'completed_fu3' and not fc.is_followup_enabled
     assert fc.touch_enabled and fc.next_followup_at is not None        # used to be None until a sweep
     assert fc.next_followup_at > _app._utcnow() + timedelta(days=2)
+
+
+def test_insights_month_period_and_matching_funnel(app, db, client):
+    """One period switch drives Insights: /api/stats has a 30-day window and the
+    dashboard funnel has the same four windows."""
+    from datetime import timedelta
+    u = _user(db, client)
+    now = _app._utcnow()
+    _send(db, u, 'a@acme.com', now - timedelta(days=12))           # inside 30 days, outside 7
+    _send(db, u, 'b@acme.com', now - timedelta(days=60))           # only all-time
+    _send(db, u, 'c@acme.com', now - timedelta(minutes=5))         # today
+    sent = {p: client.get(f'/api/stats?period={p}').get_json()['sent'] for p in ('today', 'week', 'month', 'lifetime')}
+    assert sent == {'today': 1, 'week': 1, 'month': 2, 'lifetime': 3}
+    f = client.get('/api/dashboard').get_json()['funnel']
+    assert (f['today']['sent'], f['7']['sent'], f['30']['sent'], f['all']['sent']) == (1, 1, 2, 3)

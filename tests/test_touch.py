@@ -226,7 +226,8 @@ def test_dashboard_endpoint_shape(app, db, client):
     data = client.get('/api/dashboard').get_json()
     assert data['touches']['due_today'] >= 1
     assert data['attention'] == 1
-    assert set(data['funnel'].keys()) == {'7', '30'}
+    assert set(data['funnel'].keys()) == {'today', '7', '30', 'all'}   # = the Insights period switch
+    assert data['funnel']['all']['sent'] >= data['funnel']['30']['sent'] >= data['funnel']['7']['sent'] >= data['funnel']['today']['sent']
     assert {'sent', 'replied', 'got_info', 'repeat', 'booked'} <= set(data['funnel']['30'].keys())
     assert len(data['activity']) == 14
     assert 'no_next_step' in data['health'] and 'rotting' in data['health']

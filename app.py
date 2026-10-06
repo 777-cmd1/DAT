@@ -3358,13 +3358,13 @@ def _gmail_get_body(payload):
 
 def get_stats(period='lifetime'):
     """Compute dashboard stats using SQL aggregation.
-    period: 'today' | 'week' (last 7 days) | 'lifetime' (all time, default)
+    period: 'today' | 'week' (last 7 days) | 'month' (last 30 days) | 'lifetime' (all time, default)
     """
     empty={"total":0,"sent":0,"errors":0,"today":0,"by_day":[],"by_variant":[],"by_hour":[],
            "top_recipients":[],"top_routes":[],"replied_emails":[],"replied_domains":[],"response_rate":{}}
     uid = current_user_id()
     if not uid: return empty
-    period = period if period in ('today', 'week', 'lifetime') else 'lifetime'
+    period = period if period in ('today', 'week', 'month', 'lifetime') else 'lifetime'
     cache_key = f'stats:{uid}:{period}'
     cached, hit = _cache_get(cache_key, _STATS_TTL)
     if hit: return cached
@@ -3379,6 +3379,8 @@ def get_stats(period='lifetime'):
         period_cutoff = today_start       # only today
     elif period == 'week':
         period_cutoff = _local_day_start(tz, 6)   # last 7 days inclusive
+    elif period == 'month':
+        period_cutoff = _local_day_start(tz, 29)  # last 30 days inclusive
     else:
         period_cutoff = None              # no filter = lifetime
 
@@ -4026,7 +4028,8 @@ def _build_subject(load):
 def run_send_job(job_id, loads, cfg, templates, uid=None):
     """Run a send job in a background thread with DB-backed job state."""
     state = _user_send_state(uid)
-    state.update({"running":True,"done":False,"total":len(loads),"current":0,"sent":0,"errors":0,"skipped":0,"log":[],"job_id":job_id})
+    state.update({"running":True,"done":False,"total":len(loads),"current":0,"sent":0,"errors":0,"skipped":0,"log":[],"job_id":job_id,
+                  "next_at":None,"next_total":0,"next_email":""})
     with app.app_context():
         from app.models import SendJob
         try:
@@ -4048,18 +4051,18 @@ def run_send_job(job_id, loads, cfg, templates, uid=None):
                 em = load['email'].lower().strip()
                 if is_blocked(load['email'], be, bd):
                     state["skipped"] += 1
-                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"stop list"})
+                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"at":_utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),"status":"skipped","variant":0,"email":load["email"],"error":"stop list"})
                     continue
                 if em in sent_today_set or em in session_sent:
                     state["skipped"] += 1
-                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
+                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"at":_utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),"status":"skipped","variant":0,"email":load["email"],"error":"already sent today"})
                     continue
                 # Re-check quota at send time — the pre-flight check in /api/send can
                 # race with parallel jobs or follow-up sends consuming the same quota
                 quota_now = get_daily_quota(uid)
                 if not quota_now['unlimited'] and (quota_now['remaining'] or 0) <= 0:
                     state["skipped"] += 1
-                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"status":"skipped","variant":0,"email":load["email"],"error":"daily quota exhausted"})
+                    state["log"].append({"time":_utcnow().strftime('%H:%M:%S'),"at":_utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),"status":"skipped","variant":0,"email":load["email"],"error":"daily quota exhausted"})
                     continue
                 tmpl = random.choice(templates); vi = templates.index(tmpl) + 1
                 body = render_template_text(tmpl, load, cfg)
@@ -4073,7 +4076,7 @@ def run_send_job(job_id, loads, cfg, templates, uid=None):
                     _track_usage(uid, 'email_sent')   # ← quota tracking
                 else:
                     state["errors"] += 1
-                state["log"].append({"time":ts,"status":st,"variant":vi,"email":load["email"],"error":err or ""})
+                state["log"].append({"time":ts,"at":_utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),"status":st,"variant":vi,"email":load["email"],"error":err or ""})
                 # Persist progress to DB every 10 emails
                 if (i + 1) % 10 == 0:
                     try:
@@ -4085,7 +4088,11 @@ def run_send_job(job_id, loads, cfg, templates, uid=None):
                         app.logger.warning(f'run_send_job: DB progress update failed: {_pe}')
                         db.session.rollback()
                 if i < len(loads) - 1:
-                    time.sleep(random.randint(cfg.get("delay_min", 20), cfg.get("delay_max", 45)))
+                    pause = random.randint(cfg.get("delay_min", 20), cfg.get("delay_max", 45))
+                    # the Send page counts down to the next email
+                    state.update(next_at=time.time() + pause, next_total=pause, next_email=loads[i + 1]['email'])
+                    time.sleep(pause)
+                    state.update(next_at=None, next_email='')
             state.update({"running": False, "done": True})
             # Mark job as done in DB
             try:
@@ -4514,6 +4521,8 @@ def api_send_status():
     if state.get('running') and state.get('job_id') == job.id:
         payload = dict(state)
         payload['status'] = job.status
+        nxt = payload.pop('next_at', None)
+        payload['next_in'] = max(0, round(nxt - time.time())) if nxt else None
         return jsonify(payload)
 
     return jsonify({
@@ -6233,19 +6242,20 @@ def _dashboard_data(uid):
                        'by_category': {(c or 'other'): n for c, n in pending_rows}}
 
     # Funnel per window: sends + distinct repliers from data; stage advances from the event log
-    def _funnel(days):
-        cutoff = now - timedelta(days=days)
+    def _funnel(cutoff):
+        """Funnel since `cutoff` (None = all time) — same local-day windows as /api/stats."""
+        since = lambda col: [col >= cutoff] if cutoff is not None else []
         sent = Send.query.filter(Send.user_id == uid, Send.status == 'sent',
-                                 Send.sent_at >= cutoff).count()
+                                 *since(Send.sent_at)).count()
         replied = db.session.query(func.count(distinct(func.lower(Reply.from_email)))).filter(
-            Reply.user_id == uid, Reply.received_at >= cutoff).scalar() or 0
+            Reply.user_id == uid, *since(Reply.received_at)).scalar() or 0
         def moved(stage_id):
             return db.session.query(func.count(distinct(FollowupEvent.followup_contact_id))).join(
                 FollowupContact, FollowupEvent.followup_contact_id == FollowupContact.id
             ).filter(FollowupContact.user_id == uid,
                      FollowupEvent.event_type == 'pipeline_move',
                      FollowupEvent.to_stage == str(stage_id),
-                     FollowupEvent.event_at >= cutoff).scalar() or 0
+                     *since(FollowupEvent.event_at)).scalar() or 0
         return {'sent': sent, 'replied': replied, 'got_info': moved(2),
                 'repeat': moved(3), 'booked': moved(5)}
 
@@ -6256,7 +6266,7 @@ def _dashboard_data(uid):
     rotting = fc_active.filter(FollowupContact.pipeline_stage >= 2,
                                db.or_(FollowupContact.last_activity_at < rot_cut,
                                       FollowupContact.last_activity_at.is_(None))).count()
-    f30 = _funnel(30)
+    f30 = _funnel(_local_day_start(tz, 29, now))
     contacted30, replied30 = _reply_cohort(uid, now - timedelta(days=30))
     reply_rate = _reply_rate(contacted30, replied30)
 
@@ -6300,7 +6310,8 @@ def _dashboard_data(uid):
                            'route': nxt.current_route or ''} if nxt else None)},
         attention=attention,
         replies_pending=replies_pending,
-        funnel={'7': _funnel(7), '30': f30},
+        # keyed like the Insights period switch: today / 7 / 30 days / all time
+        funnel={'today': _funnel(sod), '7': _funnel(_local_day_start(tz, 6, now)), '30': f30, 'all': _funnel(None)},
         health={'no_next_step': no_next, 'rotting': rotting,
                 'reply_rate': reply_rate, 'contacted_30d': contacted30, 'replied_30d': replied30,
                 'sends_30d': f30['sent'],

@@ -276,3 +276,12 @@ def test_send_status_counts_down_to_the_next_email(app, db):
             assert client.get('/api/send-status').get_json()['next_in'] is None
         finally:
             state.update(running=False, done=True)
+
+
+def test_send_state_carries_the_average_pause_for_the_eta(app, db):
+    """Before two emails have gone out there is no measured pace — the Send page
+    estimates the arrival time from the configured pause (delay_avg)."""
+    with flask_app.test_client() as client:
+        user = _make_user_and_login(db, client)
+        _m.run_send_job('no-such-job', [], {'delay_min': 10, 'delay_max': 30}, [], uid=user.id)
+        assert _m._user_send_state(user.id)['delay_avg'] == 20

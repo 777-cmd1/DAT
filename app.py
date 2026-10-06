@@ -4029,7 +4029,8 @@ def run_send_job(job_id, loads, cfg, templates, uid=None):
     """Run a send job in a background thread with DB-backed job state."""
     state = _user_send_state(uid)
     state.update({"running":True,"done":False,"total":len(loads),"current":0,"sent":0,"errors":0,"skipped":0,"log":[],"job_id":job_id,
-                  "next_at":None,"next_total":0,"next_email":""})
+                  "next_at":None,"next_total":0,"next_email":"",
+                  "delay_avg":(cfg.get("delay_min", 20) + cfg.get("delay_max", 45)) / 2})
     with app.app_context():
         from app.models import SendJob
         try:

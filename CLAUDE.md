@@ -130,6 +130,9 @@ Send: після вставки поле DAT згортається в рядо�
 тема листа — в підказці рядка (`buildSubject` = дзеркало `_build_subject`). Картка відправки: літачок на смузі,
 відлік до наступного листа (`/api/send-status` → `next_in/next_total/next_email`), рядки черги живо міняють
 статус (Queued → Sending… → Sent), лог з локальним часом (`at`), стан «Done» з тривалістю; переживає перезавантаження.
+Сцена з траком (`truckSceneHtml` / `truckScene(road, frac, mode, sign, opts)`, CSS `.tk-*`): виїзд зі стартового доку,
+стовпчик на кожен лист (≤20; помилка — конус), причіп за еквіпментом (`_truckEquip`: van/reefer/flat), фари вночі,
+заїзд у фінальний док; той самий компонент у масовій відправці Follow-up (`#fuRoad`).
 Дизайн-система: токени тем у першому `<style>` + шар «DESIGN SYSTEM (2026-10)» в кінці; семантика
 кольорів accent=дія, red=проблема, yellow=увага, green=успіх, blue=інфо; одна головна кнопка на екран.
 Undo: Pause / Block (Follow-up, і bulk), Ignore / Block (Replies), прибрати рейт — `toastUndo(msg, commit, revert)`:

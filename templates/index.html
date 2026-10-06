@@ -806,8 +806,8 @@ tr:last-child td { border-bottom: none; }
 #loadsTable tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
 #loadsTable tbody tr:last-child { border-bottom:none; }
 #loadsTable tbody tr:hover td { background:var(--surface2); }
-#loadsTable tbody tr.row-skip td { opacity:.45; }
-#loadsTable tbody tr.row-stop td { opacity:.3; }
+#loadsTable tbody tr.row-skip td:not(.q-status) { opacity:.45; }
+#loadsTable tbody tr.row-stop td:not(.q-status) { opacity:.35; }
 #loadsTable tbody tr.row-issue td { background:color-mix(in srgb, var(--red) 3%, transparent); }
 #loadsTable td { padding:10px 12px; vertical-align:middle; }
 
@@ -863,47 +863,72 @@ tr:last-child td { border-bottom: none; }
 }
 .sb-card-body { padding:14px 16px 16px; }
 
-/* ── Sending Progress — enhanced ─────────────────── */
-.sp-bar-wrap {
-  position:relative; height:24px; border-radius:10px;
-  background:var(--surface2); border:1px solid var(--border);
-  overflow:hidden; margin-bottom:12px;
-}
-.sp-bar-fill {
-  height:100%; border-radius:10px;
-  background:var(--accent);
-  transition:width .2s var(--ease);
-  box-shadow: none;
-  position:relative;
-}
-.sp-bar-label {
-  position:absolute; inset:0; display:flex; align-items:center;
-  justify-content:center; gap:6px;
-  font-size:13px; font-weight:800; color:#fff;
-  text-shadow:0 1px 4px rgba(0,0,0,.3);
-  pointer-events:none; z-index:1;
-}
-.sp-bar-label .sp-pct { font-family:inherit; }
+/* ── Sending card (Stage 2) ── */
+.sp-card { margin-bottom: 0; }
+.sp-head { display:flex; align-items:center; gap:10px; padding:12px 16px 6px; }
+.sp-title { display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:700; color:var(--text); min-width:0; }
+.sp-title i { color:var(--accent); font-size:16px; flex-shrink:0; }
+.sp-meta { margin-left:auto; font-size:13px; color:var(--text2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.sp-close { border:0; background:none; color:var(--text3); width:26px; height:26px; border-radius:6px; cursor:pointer; }
+.sp-close:hover { background:var(--surface2); color:var(--text); }
+.sp-close[hidden] { display:none; }
+.sp-track { position:relative; height:8px; margin:12px 16px 8px; border-radius:99px; background:var(--border); }
+.sp-bar-fill { height:100%; width:0; border-radius:99px; background:var(--accent); transition:width .6s var(--ease), background .3s; }
+.sp-plane { position:absolute; top:50%; left:0; font-size:18px; color:var(--accent); pointer-events:none;
+  transform:translate(-50%, -50%) rotate(45deg); transition:left .6s var(--ease), color .3s; }
+.sp-card.waiting .sp-plane { animation: spBob 1.6s ease-in-out infinite; }
+@keyframes spBob { 50% { transform:translate(-50%, -80%) rotate(45deg); } }
+.sp-card.done .sp-bar-fill { background:var(--green); }
+.sp-card.done .sp-plane { color:var(--green); animation: spFlyOff .8s var(--ease) forwards; }
+@keyframes spFlyOff { to { transform:translate(60px, -40px) rotate(30deg); opacity:0; } }
+.sp-card.done .sp-title i { color:var(--green); animation: spPop .35s var(--ease); }
+@keyframes spPop { 0% { transform:scale(.6); } 70% { transform:scale(1.15); } 100% { transform:scale(1); } }
+.sp-next { display:flex; align-items:center; gap:8px; padding:2px 16px 0; font-size:13px; color:var(--text2); }
+.sp-next[hidden] { display:none; }
+.sp-next b { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
+.sp-ring { width:16px; height:16px; transform:rotate(-90deg); flex-shrink:0; }
+.sp-ring circle { fill:none; stroke:var(--border); stroke-width:2.5; }
+.sp-ring .sp-ring-fill { stroke:var(--accent); stroke-dasharray:50.27; stroke-dashoffset:0; transition:stroke-dashoffset 1s linear; }
+.sp-card.sending-now .sp-ring { animation: spin 1s linear infinite; }
+.sp-card.sending-now .sp-ring .sp-ring-fill { stroke-dashoffset:37.7; transition:none; }
+@keyframes spin { to { transform:rotate(270deg); } }
+.sp-counters { display:flex; gap:8px; flex-wrap:wrap; padding:12px 16px; }
+.sp-counter { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--text2); padding:4px 10px;
+  border-radius:99px; background:var(--surface2); border:1px solid var(--border); }
+.sp-counter b { color:var(--text); font-variant-numeric:tabular-nums; display:inline-block; }
+.sp-counter.sent i { color:var(--green); }
+.sp-counter.err i, .sp-counter.skip i { color:var(--text3); }
+.sp-counter.err.has, .sp-counter.err.has b, .sp-counter.err.has i { color:var(--red); }
+.sp-counter.bump b { animation: spPop .35s var(--ease); }
+.sp-card .live-log { margin:0 16px 14px; max-height:180px; }
+.sp-card .live-log:empty { display:none; }
+.log-row { display:flex; align-items:center; gap:8px; padding:3px 0; }
+.log-row.new { animation: logIn .25s var(--ease); }
+@keyframes logIn { from { opacity:0; transform:translateY(-4px); } }
+/* queue rows follow the send live */
+.q-why { font-size:12px; color:var(--text3); margin-top:3px; white-space:normal; line-height:1.35; }
+.q-status { position:relative; }
+.chip-queued  { background:var(--surface2); color:var(--text3); border:1px solid var(--border); }
+.chip-sending { background:color-mix(in srgb, var(--accent) 10%, transparent); color:var(--accent); border:1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+.chip-sending i { animation: spin360 1s linear infinite; }
+@keyframes spin360 { to { transform:rotate(360deg); } }
+.chip-failed  { background:color-mix(in srgb, var(--red) 10%, transparent); color:var(--red); border:1px solid color-mix(in srgb, var(--red) 25%, transparent); }
+.chip-pop { animation: spPop .35s var(--ease); }
+tr.q-row-sending td { background:color-mix(in srgb, var(--accent) 5%, transparent); }
+.q-fly { position:absolute; left:14px; top:50%; color:var(--accent); font-size:16px; pointer-events:none; z-index:2;
+  animation: qFly .9s var(--ease) forwards; }
+@keyframes qFly { 0% { transform:translate(0, -50%) rotate(45deg); opacity:1; }
+  100% { transform:translate(90px, -60px) rotate(25deg); opacity:0; } }
+/* folded DAT input */
+.dat-collapsed-meta { font-weight:500; color:var(--text3); }
+.dat-edit { font:inherit; font-size:12px; font-weight:600; color:var(--accent); background:none; border:1px solid var(--border);
+  border-radius:6px; padding:3px 9px; cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+.dat-edit:hover { border-color:var(--accent); }
+.dat-edit[hidden] { display:none; }
+.dat-input-card.collapsed #datText, .dat-input-card.collapsed .dat-input-footer { display:none; }
+.dat-input-card.collapsed .dat-input-header { cursor:pointer; border-bottom:0; }
+#datCollapseBtn[hidden] { display:none; }
 
-/* Sent/Error counters */
-.sp-counters { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
-.sp-counter {
-  display:flex; align-items:center; gap:10px;
-  padding:10px 12px; border-radius:10px;
-  border:1px solid;
-}
-.sp-counter-icon {
-  width:32px; height:32px; border-radius:10px;
-  display:flex; align-items:center; justify-content:center; flex-shrink:0;
-}
-.sp-counter-val { font-size:22px; font-weight:900; line-height:1; font-family:inherit; }
-.sp-counter-lbl { font-size:12px; font-weight:700; color:var(--text3); margin-top:2px; }
-.sp-counter.sent { background:color-mix(in srgb, var(--green) 6%, transparent); border-color:color-mix(in srgb, var(--green) 18%, transparent); }
-.sp-counter.sent .sp-counter-icon { background:color-mix(in srgb, var(--green) 12%, transparent); }
-.sp-counter.sent .sp-counter-val { color:var(--accent); }
-.sp-counter.err { background:color-mix(in srgb, var(--red) 6%, transparent); border-color:color-mix(in srgb, var(--red) 18%, transparent); }
-.sp-counter.err .sp-counter-icon { background:color-mix(in srgb, var(--red) 12%, transparent); }
-.sp-counter.err .sp-counter-val { color:var(--red); }
 .bp-pulse-dot {
   width:6px; height:6px; border-radius:50%; background:var(--accent);
   box-shadow: none;
@@ -1073,9 +1098,9 @@ tr:last-child td { border-bottom: none; }
 
 /* Filter tabs */
 .tq-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
-.tq-search { width:220px; font-size:13px; }
-.tq-filters { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-.tq-tab { padding:6px 14px; border-radius:99px; font-size:13px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:transparent; color:var(--text2); transition:all .15s; display:inline-flex; align-items:center; gap:5px; font-family:'Plus Jakarta Sans',sans-serif; }
+.tq-search { width:180px; font-size:13px; }
+.tq-filters { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+.tq-tab { padding:5px 11px; border-radius:99px; font-size:13px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:transparent; color:var(--text2); transition:all .15s; display:inline-flex; align-items:center; gap:5px; font-family:'Plus Jakarta Sans',sans-serif; }
 .tq-tab:hover { border-color:var(--border2); color:var(--text); background:var(--surface2); }
 .tq-tab.active { background:var(--text); color:var(--bg); border-color:var(--text); }
 .tq-tab .tq-tab-count { font-size:12px; background:rgba(255,255,255,.18); color:inherit; padding:1px 6px; border-radius:99px; }
@@ -1098,17 +1123,12 @@ tr:last-child td { border-bottom: none; }
   border:1px solid var(--border);
   border-radius:var(--radius);
   margin-bottom:6px;
-  border-left:4px solid transparent;
   transition:box-shadow .18s, border-color .18s, opacity .2s, transform .2s;
   overflow:hidden;
   position:relative;
 }
 .tq-card:hover { box-shadow: var(--shadow); border-color:var(--border-h); }
-.tq-card.state-new       { border-left-color:var(--blue); }   /* no category yet — Negative owns red */
-.tq-card.state-viewed    { border-left-color:var(--blue); }
-.tq-card.state-follow_up { border-left-color:var(--green); }
-.tq-card.state-interested{ border-left-color:var(--accent); }
-.tq-card.state-ignored   { border-left-color:var(--border); opacity:.5; }
+.tq-card.state-ignored   { opacity:.5; }
 
 /* 2-column inner */
 .tq-card-inner { display:flex; min-height:76px; }
@@ -1187,22 +1207,20 @@ tr:last-child td { border-bottom: none; }
 
 /* Right — action column */
 .tq-card-right {
-  width:128px; flex-shrink:0;
+  width:146px; flex-shrink:0; padding:8px;
   border-left:1px solid var(--border);
-  display:flex; flex-direction:column;
-  background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+  display:flex; flex-direction:column; justify-content:flex-start; gap:4px;
 }
 .tq-action {
-  flex:1; display:flex; align-items:center; gap:8px;
-  padding:0 12px;
-  background:transparent; border:none; border-bottom:1px solid var(--border);
+  height:30px; display:flex; align-items:center; gap:8px;
+  padding:0 10px; border-radius:8px;
+  background:transparent; border:1px solid transparent;
   font-size:12px; font-weight:700; font-family:'Plus Jakarta Sans',sans-serif;
   cursor:pointer; color:var(--text3);
-  transition:background .13s, color .13s;
+  transition:background .13s, color .13s, border-color .13s;
   white-space:nowrap;
   position:relative;
 }
-.tq-action:last-child { border-bottom:none; }
 .tq-action i { font-size:13px; flex-shrink:0; }
 .tq-action-key {
   margin-left:auto; font-size:12px; font-weight:700; letter-spacing:.5px;
@@ -1233,10 +1251,8 @@ tr:last-child td { border-bottom: none; }
   display:flex; align-items:center; gap:10px;
   padding:7px 12px; background: var(--surface2);
   border:1px solid var(--border); border-radius:var(--radius-sm);
-  margin-bottom:4px; border-left:3px solid transparent; opacity:.72;
+  margin-bottom:4px; opacity:.72;
 }
-.tq-compact.state-interested { border-left-color:var(--accent); }
-.tq-compact.state-follow_up  { border-left-color:var(--green); }
 .tq-compact.state-ignored    { opacity:.42; }
 .tq-compact-avatar { width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#fff; flex-shrink:0; }
 .tq-compact-name { font-size:13px; font-weight:600; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1632,11 +1648,11 @@ tr:last-child td { border-bottom: none; }
 .pl-row-del-spacer { flex:0 0 auto; width:28px; text-align:center; opacity:.5; font-size:13px; cursor:help; }
 .pl-row-del { border:none; background:var(--surface2); color:var(--text3); width:30px; height:30px; border-radius:7px; cursor:pointer; font-size:13px; flex-shrink:0; }
 .pl-row-del:hover { background:var(--red-dim); color:var(--red); }
-.tq-suggest-lbl { font-size:12px; font-weight:700; color:var(--text3); }
 
 /* ── Semi-automatic triage: category chips, badges, auto strip, automation panel ── */
-.tq-cat-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
-.tq-cat-chip { font-size:12px; font-weight:600; padding:5px 11px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:5px; line-height:1.4; }
+.tq-cat-bar { display:flex; align-items:center; gap:4px; flex-wrap:wrap; flex:1 1 auto; }
+.tq-cat-sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
+.tq-cat-chip { font-size:12px; font-weight:600; padding:6px 10px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:5px; line-height:1.4; }
 .tq-cat-chip:hover { filter:brightness(1.08); }
 .tq-cat-chip .n { font-weight:800; opacity:.8; }
 .tq-bulk-btn { font-size:12px; font-weight:700; padding:5px 12px; border-radius:14px; border:1.5px solid var(--red); background:color-mix(in srgb, var(--red) 10%, transparent); color:var(--red); cursor:pointer; font-family:inherit; }
@@ -1646,15 +1662,15 @@ tr:last-child td { border-bottom: none; }
 .tq-auto-toggle { font-size:12px; font-weight:600; padding:5px 11px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-family:inherit; margin-left:auto; }
 .tq-auto-toggle:hover { border-color:var(--accent); color:var(--accent); }
 .tq-cat-badge { font-size:12px; font-weight:700; padding:2px 7px; border-radius:9px; border:1px solid; white-space:nowrap; }
-.tq-card.tq-cat-negative     { border-left:3px solid var(--red); }
-.tq-card.tq-cat-rate_request { border-left:3px solid var(--yellow); }
-.tq-card.tq-cat-gave_info    { border-left:3px solid var(--green); }
-.tq-card.tq-cat-auto_reply   { border-left:3px solid var(--text3); }
-.tq-action.tq-emph { background:color-mix(in srgb, currentColor 11%, transparent); }
+/* the badge names every category; the bar only flags the ones worth acting on */
+.tq-card.tq-cat-rate_request { box-shadow: inset 3px 0 0 var(--yellow); }
+.tq-card.tq-cat-gave_info    { box-shadow: inset 3px 0 0 var(--green); }
+/* the recommended action: tinted, outlined, with a small dot */
+.tq-action.tq-emph { background:color-mix(in srgb, currentColor 10%, transparent); border-color:color-mix(in srgb, currentColor 30%, transparent); }
+.tq-action.tq-emph::after { content:''; order:1; margin-left:auto; width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; }
+.tq-action.tq-emph .tq-action-key { order:2; margin-left:6px; }
 .tq-action-no.tq-emph { color:var(--text); }
 .tq-for { font-family:inherit; font-size:12px; color:var(--text2); margin-left:6px; }
-.tq-action-label { display:flex; flex-direction:column; align-items:flex-start; text-align:left; line-height:1.15; }
-.tq-rec-tag { font-size:12px; font-weight:700; opacity:.75; margin-top:2px; }
 .tq-auto-strip { margin:10px 0 4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:8px 12px; font-size:13px; }
 .tq-auto-strip-head { display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text2); font-weight:600; }
 .tq-auto-strip-head .grow { flex:1; }
@@ -2356,7 +2372,8 @@ table, .num, .rate-val, .tq-tab-count, .nav-badge, .an-hour-count, .an-quality-s
 .ins-health { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
 .ins-kpi-row { grid-template-columns: repeat(2, minmax(0, 260px)); }
 .intel-table td.lane-cell { white-space: nowrap; }
-.ins-timing-period { margin-bottom: 14px; }
+.ins-tabs + .ins-period { margin: 12px 0 16px; }
+.ins-period[hidden] { display: none; }
 /* charts (dataviz: thin marks, 4px rounded data-ends, text in text tokens) */
 .viz-key { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .viz-funnel { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }
@@ -2525,68 +2542,57 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 
           <!-- DAT INPUT CARD -->
           <div class="dat-input-card">
-            <div class="dat-input-header">
+            <div class="dat-input-header" onclick="if (this.parentElement.classList.contains('collapsed')) setDatCollapsed(false)">
               <div class="dat-input-title">
                 <i class="ph-bold ph-terminal" style="font-size:14px;color:var(--blue)"></i>
                 DAT Text Input
+                <span class="dat-collapsed-meta" id="datCollapsedMeta"></span>
               </div>
               <div class="dat-input-status">
                 <div class="dat-parse-dot" id="datParseDot"></div>
                 <span class="dat-input-hint" id="datParseHint">paste to auto-parse</span>
+                <button type="button" class="dat-edit" id="datEditBtn" onclick="event.stopPropagation();setDatCollapsed(false)" hidden>
+                  <i class="ph-bold ph-pencil-simple"></i> Edit</button>
               </div>
             </div>
             <textarea id="datText"
               placeholder="Paste copied loads from DAT One here…&#10;&#10;The app will automatically detect routes, dates, equipment and broker emails."
-              oninput="debounceParse(); updateDatMeta()"></textarea>
+              onpaste="_datPasted = true" oninput="debounceParse(); updateDatMeta()"></textarea>
             <div class="dat-input-footer">
               <span class="dat-line-count" id="datLineMeta">0 lines</span>
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <button class="btn btn-outline" style="font-size:12px;padding:5px 12px" onclick="document.getElementById('datText').value='';updateDatMeta();document.getElementById('parseResults').style.display='none';document.getElementById('parseResults').removeAttribute('data-has-results');activeParseFilter='all';document.getElementById('datParseDot').className='dat-parse-dot';document.getElementById('datParseHint').textContent='paste to auto-parse'">
+                <button class="btn btn-outline" id="datCollapseBtn" style="font-size:12px;padding:5px 12px" onclick="setDatCollapsed(true)" hidden>
+                  <i class="ph-bold ph-caret-up" style="font-size:13px;margin-right:3px;vertical-align:middle"></i>Collapse
+                </button>
+                <button class="btn btn-outline" style="font-size:12px;padding:5px 12px" onclick="document.getElementById('datText').value='';updateDatMeta();document.getElementById('parseResults').style.display='none';document.getElementById('parseResults').removeAttribute('data-has-results');activeParseFilter='all';parsedLoads=[];setDatCollapsed(false);document.getElementById('datParseDot').className='dat-parse-dot';document.getElementById('datParseHint').textContent='paste to auto-parse'">
                   <i class="ph-bold ph-x" style="font-size:13px;margin-right:3px;vertical-align:middle"></i>Clear
                 </button>
               </div>
             </div>
           </div>
 
+          <!-- SENDING: lives outside the parse results so a reload mid-send still shows it -->
+          <div class="sb-card sp-card" id="sendProgressCard" style="display:none" aria-live="polite">
+            <div class="sp-head">
+              <span class="sp-title"><i class="ph-bold ph-paper-plane-tilt" id="spIcon"></i><span id="spTitle">Sending</span></span>
+              <span class="sp-meta"><span id="progressText">0 of 0</span> · <span id="progressPct">0%</span><span id="spElapsed"></span></span>
+              <button type="button" class="sp-close" id="spClose" onclick="resetSendProgressUI(true)" title="Close" aria-label="Close" hidden><i class="ph-bold ph-x"></i></button>
+            </div>
+            <div class="sp-track"><div class="sp-bar-fill" id="progressFill"></div><i class="ph-bold ph-paper-plane-tilt sp-plane" id="spPlane"></i></div>
+            <div class="sp-next" id="spNext" hidden>
+              <svg class="sp-ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="8" class="sp-ring-fill" id="spRing"/></svg>
+              <span id="spNextText"></span>
+            </div>
+            <div class="sp-counters">
+              <span class="sp-counter sent"><i class="ph-bold ph-check-circle"></i><b id="pSent">0</b> sent</span>
+              <span class="sp-counter err"><i class="ph-bold ph-x-circle"></i><b id="pErr">0</b> errors</span>
+              <span class="sp-counter skip"><i class="ph-bold ph-arrow-bend-up-right"></i><b id="pSkip">0</b> skipped</span>
+            </div>
+            <div class="live-log" id="liveLog"></div>
+          </div>
+
           <!-- PARSED LOADS CARD -->
           <div id="parseResults" style="display:none">
-            <div class="sb-card" id="sendProgressCard" style="display:none">
-              <div class="sb-card-head">
-                <span class="sb-card-label">
-                  <i class="ph-bold ph-paper-plane-tilt" style="font-size:13px;color:var(--accent)"></i>
-                  Sending
-                  <span class="bp-pulse-dot sending" style="margin-left:2px"></span>
-                </span>
-                <span id="progressText" style="font-size:12px;font-weight:700;color:var(--text2);font-family:inherit">0 / 0</span>
-              </div>
-              <div class="sb-card-body">
-                <div class="sp-bar-wrap">
-                  <div class="sp-bar-fill" id="progressFill" style="width:0%"></div>
-                  <div class="sp-bar-label">
-                    <i class="ph-bold ph-paper-plane-tilt" style="font-size:14px"></i>
-                    <span class="sp-pct" id="progressPct">0%</span>
-                  </div>
-                </div>
-                <div class="sp-counters">
-                  <div class="sp-counter sent">
-                    <div class="sp-counter-icon"><i class="ph-bold ph-check-circle" style="font-size:16px;color:var(--accent)"></i></div>
-                    <div>
-                      <div class="sp-counter-val" id="pSent">0</div>
-                      <div class="sp-counter-lbl">Sent</div>
-                    </div>
-                  </div>
-                  <div class="sp-counter err">
-                    <div class="sp-counter-icon"><i class="ph-bold ph-x-circle" style="font-size:16px;color:var(--red)"></i></div>
-                    <div>
-                      <div class="sp-counter-val" id="pErr">0</div>
-                      <div class="sp-counter-lbl">Errors</div>
-                    </div>
-                  </div>
-                </div>
-                <div class="live-log" id="liveLog" style="max-height:200px;overflow-y:auto;font-size:12px"></div>
-              </div>
-            </div>
-
             <div class="loads-card">
               <div class="loads-card-header">
                 <div class="loads-card-title">
@@ -2679,13 +2685,15 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
         <button class="settings-tab" role="tab" data-ins-tab="domains" onclick="setInsightsTab('domains')">Domains</button>
         <button class="settings-tab" role="tab" data-ins-tab="timing" onclick="setInsightsTab('timing')">Timing</button>
       </div>
+      <!-- one period for the whole page (Overview + Timing); Lanes & Domains have their own filters -->
+      <div class="analytics-period-tabs ins-period" id="insPeriod" role="group" aria-label="Period">
+        <button class="an-tab" data-period="today" onclick="setAnPeriod('today')">Today</button>
+        <button class="an-tab" data-period="week" onclick="setAnPeriod('week')">7 days</button>
+        <button class="an-tab" data-period="month" onclick="setAnPeriod('month')">30 days</button>
+        <button class="an-tab active" data-period="lifetime" onclick="setAnPeriod('lifetime')">All time</button>
+      </div>
 
       <div class="ins-panel" data-ins="overview">
-  <div class="analytics-period-tabs">
-    <button class="an-tab" onclick="setAnPeriod('today')">Today</button>
-    <button class="an-tab" onclick="setAnPeriod('week')">7 Days</button>
-    <button class="an-tab active" onclick="setAnPeriod('lifetime')">All Time</button>
-  </div>
 
   <div class="an-section an-summary-section">
     <div class="an-section-title">Performance Summary</div>
@@ -2720,8 +2728,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
   <div class="an-section">
     <div class="ins-card-head">
       <div><div class="an-section-title">Funnel</div>
-        <div class="an-section-sub">Where contacts drop off between steps</div></div>
-      <div class="an-period-tabs-sm" id="insFunnelPeriod"></div>
+        <div class="an-section-sub">Where contacts drop off between steps · <span id="insFunnelPeriod"></span></div></div>
     </div>
     <div id="insFunnel"><div class="skel skel-block"></div></div>
   </div>
@@ -2872,11 +2879,6 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
       </div>
 
       <div class="ins-panel" data-ins="timing" hidden>
-  <div class="analytics-period-tabs ins-timing-period">
-    <button class="an-tab" onclick="setAnPeriod('today')">Today</button>
-    <button class="an-tab" onclick="setAnPeriod('week')">7 Days</button>
-    <button class="an-tab active" onclick="setAnPeriod('lifetime')">All Time</button>
-  </div>
 
 
   <div class="an-section">
@@ -2908,17 +2910,17 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 
       <!-- Filters + search -->
       <div class="tq-toolbar">
-        <input id="repliesSearch" class="tq-search" placeholder="Search company or email..." oninput="queueRepliesRefresh()">
+        <input id="repliesSearch" class="tq-search" placeholder="Search contacts" oninput="queueRepliesRefresh()">
         <div class="tq-filters">
           <button class="tq-tab active" id="tqf-all"      onclick="setFilter('all')">All <span class="tq-tab-count" id="tqc-all">0</span></button>
           <button class="tq-tab" id="tqf-needs_action"   onclick="setFilter('needs_action')" title="Replies still waiting for your decision">Needs Action <span class="tq-tab-count" id="tqc-needs_action">0</span></button>
-          <button class="tq-tab" id="tqf-follow_up"       onclick="setFilter('follow_up')"><i class="ph-bold ph-clock-countdown"></i> Follow-up <span class="tq-tab-count" id="tqc-follow_up">0</span></button>
-          <button class="tq-tab" id="tqf-ignored"         onclick="setFilter('ignored')"><i class="ph-bold ph-prohibit"></i> Ignored <span class="tq-tab-count" id="tqc-ignored">0</span></button>
+          <button class="tq-tab" id="tqf-follow_up"       onclick="setFilter('follow_up')">Follow-up <span class="tq-tab-count" id="tqc-follow_up">0</span></button>
+          <button class="tq-tab" id="tqf-ignored"         onclick="setFilter('ignored')">Ignored <span class="tq-tab-count" id="tqc-ignored">0</span></button>
         </div>
+        <!-- auto-detected triage categories + automation settings, same row -->
+        <div class="tq-cat-bar" id="tqCatBar" style="display:none"></div>
       </div>
 
-      <!-- Auto-detected triage categories + automation settings -->
-      <div class="tq-cat-bar" id="tqCatBar" style="display:none"></div>
       <div class="tq-auto-panel" id="tqAutoPanel" style="display:none"></div>
       <div class="tq-auto-strip" id="tqAutoStrip" style="display:none"></div>
 
@@ -3764,7 +3766,10 @@ function nav(page, el) {
     const savedLoads = sessionStorage.getItem('dat_loads');
     if (savedLoads && !parsedLoads.length) {
       parsedLoads = JSON.parse(savedLoads);
-      renderLoads(parsedLoads);
+      setParseFilter('all');                       // recount + render the queue
+      const pr = document.getElementById('parseResults');
+      if (pr) { pr.style.display = 'block'; pr.setAttribute('data-has-results', 'true'); }
+      setDatCollapsed(parsedLoads.length > 0);
       // Restore checked state
       const savedChecked = sessionStorage.getItem('dat_checked');
       if (savedChecked) {
@@ -4373,8 +4378,10 @@ function classifyLoads(loads) {
     const em  = l.email.toLowerCase().trim();
     const dom = em.includes('@') ? em.split('@').slice(-1)[0] : '';
     const key = `${em}|${l.origin}|${l.destination}`;
+    l.skip_why = '';
     if (_parseCtx.stop_emails.has(em) || (dom && _parseCtx.stop_domains.has(dom))) {
       l.skip = 'stop_list'; stats.skip_stop++;
+      l.skip_why = _parseCtx.stop_emails.has(em) ? 'This address is on your Stop List' : '@' + dom + ' is on your Stop List';
     } else if (_parseCtx.sent_today.has(em)) {
       l.skip = 'today'; stats.skip_today++;
     } else if (seenInBatch.has(em)) {
@@ -4392,21 +4399,21 @@ function classifyLoads(loads) {
 let parsedLoads = [];
 let _parseTimer = null;
 let activeParseFilter = 'all';
-function resetSendProgressUI() {
+// A running job keeps its card; a new parse only clears a finished one.
+function resetSendProgressUI(force) {
+  if (pollInterval && !force) return;
   const card = document.getElementById('sendProgressCard');
-  if (card) card.style.display = 'none';
-  const fill = document.getElementById('progressFill');
-  const text = document.getElementById('progressText');
-  const pct = document.getElementById('progressPct');
-  const sent = document.getElementById('pSent');
-  const err = document.getElementById('pErr');
-  const log = document.getElementById('liveLog');
-  if (fill) fill.style.width = '0%';
-  if (text) text.textContent = '0 / 0';
-  if (pct) pct.textContent = '0%';
-  if (sent) sent.textContent = '0';
-  if (err) err.textContent = '0';
-  if (log) log.innerHTML = '';
+  if (card) { card.style.display = 'none'; card.classList.remove('waiting', 'done', 'sending-now'); }
+  clearInterval(_spTick); _spTick = null;
+  _spLast = { sent: 0, errors: 0, skipped: 0, logShown: 0 };
+  if (force) _sendJob = null;
+  ['progressFill'].forEach(id => { const e = document.getElementById(id); if (e) e.style.width = '0%'; });
+  const plane = document.getElementById('spPlane'); if (plane) plane.style.left = '0%';
+  setEl('progressText', '0 of 0'); setEl('progressPct', '0%'); setEl('spElapsed', '');
+  setEl('pSent', '0'); setEl('pErr', '0'); setEl('pSkip', '0'); setEl('spTitle', 'Sending');
+  document.getElementById('spClose')?.setAttribute('hidden', '');
+  document.getElementById('spNext')?.setAttribute('hidden', '');
+  const log = document.getElementById('liveLog'); if (log) log.innerHTML = '';
 }
 function loadSendDemoDat() {
   const demo = [
@@ -4445,6 +4452,21 @@ function loadSendDemoDat() {
   updateDatMeta();
   loadParseContext().finally(() => parseDat());
 }
+// The input folds to one line after a paste is parsed, so the queue sits right
+// under it; Edit (or a click on the header) opens it again.
+let _datPasted = false;
+function setDatCollapsed(on) {
+  const card = document.querySelector('.dat-input-card');
+  if (!card) return;
+  card.classList.toggle('collapsed', on);
+  const edit = document.getElementById('datEditBtn');
+  if (edit) edit.hidden = !on;
+  const fold = document.getElementById('datCollapseBtn');
+  if (fold) fold.hidden = on || !parsedLoads.length;
+  const meta = document.getElementById('datCollapsedMeta');
+  if (meta) meta.textContent = on ? '· ' + (document.getElementById('datLineMeta')?.textContent || '') : '';
+  if (!on) document.getElementById('datText')?.focus();
+}
 function debounceParse() {
   const text = document.getElementById('datText').value.trim();
   if (!text || text.length < 20) return; // ignore tiny input
@@ -4466,6 +4488,30 @@ function parseDat() {
   const results = document.getElementById('parseResults');
   results.style.display = 'block';
   results.setAttribute('data-has-results', 'true');
+  setDatCollapsed(_datPasted && parsedLoads.length > 0);
+  _datPasted = false;
+}
+
+// Mirrors _build_subject() on the server: "Origin to Destination, date, Van, 53 ft"
+const _EQUIP_LABELS_JS = { V:'Van', F:'Flatbed', R:'Reefer', SD:'Step Deck', DD:'Double Drop', RGN:'RGN', LB:'Lowboy',
+  MX:'Maxi', HS:'Hot Shot', AC:'Auto Carrier', TN:'Tanker', PO:'Power Only', FD:'Flat/Drop', FSD:'Flat/Step', C:'Conestoga', B:'Bulk' };
+function buildSubject(l) {
+  const o = (l.origin || '').trim(), d = (l.destination || '').trim(), eq = (l.equip || '').trim();
+  const route = o && d ? `${o} to ${d}` : (o || d);
+  return [route, (l.date || '').trim(), _EQUIP_LABELS_JS[eq.toUpperCase()] || eq, (l.length || '').trim()].filter(Boolean).join(', ');
+}
+// The plain-language reason under a skipped row's status.
+function skipReason(l, i) {
+  if (!l.email || !l.email.includes('@')) return 'No email found in this load';
+  if (l.skip === 'stop_list') return l.skip_why || 'On your Stop List';
+  if (l.skip === 'today') return 'Already emailed today';
+  if (l.skip === 'sent') return 'Already emailed about this lane';
+  if (l.skip === 'in_batch') {
+    const em = l.email.toLowerCase();
+    const k = parsedLoads.findIndex((x, j) => j !== i && !x.skip && (x.email || '').toLowerCase() === em);
+    return k >= 0 ? `Same address as row ${k + 1} — "Use this" swaps them` : 'Same address appears earlier';
+  }
+  return '';
 }
 
 function renderParseResults(data) {
@@ -4521,20 +4567,23 @@ function renderParseResults(data) {
       : l.skip === 'sent'     ? 'Sent before'
       : hasError              ? 'Missing email'
       : 'New';
-    return `<tr class="${rowCls}">
+    const why = skipReason(l, i);
+    return `<tr class="${rowCls}" id="qrow-${i}" title="Subject: ${esc(buildSubject(l))}">
       <td style="padding-left:14px"><input type="checkbox" class="row-check" data-idx="${i}" ${l.skip || hasError ? '' : 'checked'} ${l.skip || hasError ? 'disabled' : ''} style="accent-color:var(--accent);cursor:pointer;width:13px;height:13px"></td>
-      <td class="email-cell">${l.company ? `<div style="font-weight:600;font-size:13px;color:var(--text);line-height:1.3">${l.company}</div>` : ''}${l.contact ? `<div style="font-size:12px;color:var(--text2);line-height:1.3">${l.contact}</div>` : ''}<div style="font-size:12px;color:var(--text3);font-family:inherit">${l.email}</div></td>
-      <td class="route-cell" style="font-size:13px;white-space:nowrap">${l.origin} <span style="color:var(--text3)">→</span> ${l.destination}</td>
-      <td style="color:var(--text2);font-size:12px;white-space:nowrap">${l.date}</td>
-      <td style="color:var(--text2);font-size:12px"><span style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-size:12px;font-weight:700">${l.equip}</span></td>
-      <td>
+      <td class="email-cell">${l.company ? `<div style="font-weight:600;font-size:13px;color:var(--text);line-height:1.3">${esc(l.company)}</div>` : ''}${l.contact ? `<div style="font-size:12px;color:var(--text2);line-height:1.3">${esc(l.contact)}</div>` : ''}<div style="font-size:12px;color:var(--text3);font-family:inherit">${esc(l.email)}</div></td>
+      <td class="route-cell" style="font-size:13px;white-space:nowrap">${esc(l.origin)} <span style="color:var(--text3)">→</span> ${esc(l.destination)}</td>
+      <td style="color:var(--text2);font-size:12px;white-space:nowrap">${esc(l.date)}</td>
+      <td style="color:var(--text2);font-size:12px">${l.equip ? `<span style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-size:12px;font-weight:700">${esc(l.equip)}</span>` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="q-status">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap">
           <span class="chip ${chipCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ph-bold ${chipIcon}" style="font-size:12px"></i>${chipLabel}</span>
           ${l.skip === 'in_batch' ? '<button onclick="swapDuplicate(' + i + ')" style="font-size:12px;padding:2px 8px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer;white-space:nowrap;font-weight:600" title="Use this load instead">Use this</button>' : ''}
         </div>
+        ${why ? `<div class="q-why">${esc(why)}</div>` : ''}
       </td>
     </tr>`;
   }).join('');
+  if (_sendJob) _sendJob.rows.forEach((idx, k) => { if (_sendJob.state[k]) setQueueRowState(idx, _sendJob.state[k], _sendJob.err[k], false); });
   updateSelectedCount();
   document.querySelectorAll('.row-check').forEach(cb => cb.addEventListener('change', updateSelectedCount));
 }
@@ -4627,19 +4676,71 @@ document.addEventListener('keydown', function(e) {
 
 // ── SEND ─────────────────────────────────────────────────────────────────────
 let pollInterval = null;
+let _sendJob = null;              // {rows: parsedLoads indexes in send order, state[], err[], started}
+let _spTick = null, _spNext = null;
+let _spLast = { sent: 0, errors: 0, skipped: 0, logShown: 0 };
+const _Q_CHIPS = {
+  queued:  ['chip-queued',  'ph-hourglass-medium', 'Queued'],
+  next:    ['chip-queued',  'ph-hourglass-medium', 'Up next'],
+  sending: ['chip-sending', 'ph-circle-notch',     'Sending…'],
+  sent:    ['chip-sent',    'ph-check',            'Sent'],
+  error:   ['chip-failed',  'ph-x',                'Failed'],
+  skipped: ['chip-history', 'ph-arrow-bend-up-right', 'Skipped'],
+};
+// One queue row follows the job: chip, highlight, and a plane that flies off when it goes.
+function setQueueRowState(idx, st, err, animate) {
+  const row = document.getElementById('qrow-' + idx);
+  if (!row) return;
+  const cell = row.querySelector('.q-status'), chip = cell && cell.querySelector('.chip');
+  const [cls, icon, label] = _Q_CHIPS[st] || _Q_CHIPS.queued;
+  if (chip) {
+    chip.className = 'chip ' + cls + (animate && (st === 'sent' || st === 'error') ? ' chip-pop' : '');
+    chip.innerHTML = `<i class="ph-bold ${icon}" style="font-size:12px"></i>${label}`;
+  }
+  row.classList.toggle('q-row-sending', st === 'sending');
+  let why = cell && cell.querySelector('.q-why');
+  const msg = st === 'error' ? (err || 'Not sent') : st === 'skipped' ? (err || '') : '';
+  if (cell && msg) { if (!why) { why = document.createElement('div'); why.className = 'q-why'; cell.appendChild(why); } why.textContent = msg; }
+  else if (why && (st === 'sent' || st === 'sending')) why.remove();
+  if (st === 'sent' || st === 'error' || st === 'skipped') {
+    const cb = row.querySelector('.row-check');
+    if (cb) { cb.checked = false; cb.disabled = true; }
+  }
+  if (animate && st === 'sent' && cell && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const fly = document.createElement('i');
+    fly.className = 'ph-bold ph-paper-plane-tilt q-fly';
+    fly.addEventListener('animationend', () => fly.remove());
+    cell.appendChild(fly);
+  }
+}
+function _spFmt(sec) { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
+function _spBump(id, val, key) {
+  const el = document.getElementById(id); if (!el) return;
+  el.textContent = val;
+  if (val !== _spLast[key]) { const c = el.parentElement; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
+  _spLast[key] = val;
+}
 async function startSend() {
   const checked = [...document.querySelectorAll('.row-check:checked')].map(cb => parseInt(cb.dataset.idx));
   if (!checked.length) { toast('Select at least one load', true); return; }
   const loads = checked.map(i => parsedLoads[i]).filter(l => !l.skip);
   if (!loads.length) { toast('No valid loads selected', true); return; }
   document.getElementById('sendBtn').disabled = true;
+  resetSendProgressUI(true);
+  const spIcon = document.getElementById('spIcon'); if (spIcon) spIcon.className = 'ph-bold ph-paper-plane-tilt';
+  const rows = checked.filter(i => !parsedLoads[i].skip);
+  _sendJob = { rows, state: rows.map(() => 'queued'), err: rows.map(() => ''), started: Date.now() };
+  rows.forEach((idx, k) => setQueueRowState(idx, k === 0 ? 'sending' : 'queued', '', false));
   const spc = document.getElementById('sendProgressCard');
   if (spc) spc.style.display = 'block';
-  document.getElementById('liveLog').innerHTML = '';
+  setEl('progressText', '0 of ' + rows.length);
   const res = await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loads})});
   const data = await res.json();
   if (!data.ok) {
     document.getElementById('sendBtn').disabled = false;
+    if (_sendJob) _sendJob.rows.forEach(idx => setQueueRowState(idx, 'queued', '', false));
+    _sendJob = null;
+    resetSendProgressUI(true);
     if (data.error && data.error.toLowerCase().includes('already running')) {
       const confirmed = await showConfirm('A previous send job appears to be stuck.\n\nReset it and try again?', { okText: 'Reset job', danger: false, title: 'Send job stuck' });
       if (confirmed) {
@@ -4654,33 +4755,104 @@ async function startSend() {
   pollInterval = setInterval(pollStatus, 1500);
 }
 async function pollStatus() {
-  const s = await (await fetch('/api/send-status')).json();
-  if (!s || !s.total) {
-    resetSendProgressUI();
-    return;
-  }
-  const pct = s.total ? Math.round(100 * s.current / s.total) : 0;
+  let s;
+  try { s = await (await fetch('/api/send-status')).json(); } catch (e) { return; }
+  if (!s || !s.total) { if (!pollInterval) resetSendProgressUI(true); return; }
+  const card = document.getElementById('sendProgressCard');
+  if (card) card.style.display = 'block';
+  const log = s.log || [];
+  const doneN = Math.min(s.total, log.length || s.current || 0);
+  const pct = s.total ? Math.round(100 * doneN / s.total) : 0;
   document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressText').textContent = `${s.current} / ${s.total}`;
-  document.getElementById('progressPct').textContent = pct + '%';
-  document.getElementById('pSent').textContent = s.sent;
-  document.getElementById('pErr').textContent = s.errors;
-  document.getElementById('liveLog').innerHTML = s.log.slice(-20).reverse().map(r =>
-    `<div class="log-row-${r.status}" style="display:flex;align-items:center;gap:6px;padding:3px 0">
-      <i class="ph-bold ${r.status === 'sent' ? 'ph-check-circle' : 'ph-x-circle'}" style="font-size:13px;flex-shrink:0"></i>
-      <span style="color:var(--text3);font-size:12px">${r.time}</span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.email}</span>
-      ${r.error ? '<span style="font-size:12px;opacity:.7">'+r.error+'</span>' : ''}
-    </div>`
-  ).join('');
+  const plane = document.getElementById('spPlane');
+  if (plane) plane.style.left = `clamp(10px, ${pct}%, calc(100% - 10px))`;
+  setEl('progressText', `${doneN} of ${s.total}`);
+  setEl('progressPct', pct + '%');
+  _spBump('pSent', s.sent || 0, 'sent');
+  _spBump('pErr', s.errors || 0, 'errors');
+  _spBump('pSkip', s.skipped || 0, 'skipped');
+  document.querySelector('.sp-counter.err')?.classList.toggle('has', (s.errors || 0) > 0);
+
+  // queue rows: log[k] belongs to the k-th load of the job
+  if (_sendJob) {
+    _sendJob.rows.forEach((idx, k) => {
+      const e = log[k];
+      const st = e ? (e.status === 'sent' ? 'sent' : e.status === 'error' ? 'error' : 'skipped')
+        : (k === log.length && !s.done ? (s.next_in != null ? 'next' : 'sending') : 'queued');
+      if (_sendJob.state[k] !== st) {
+        _sendJob.state[k] = st; _sendJob.err[k] = e ? (e.error || '') : '';
+        setQueueRowState(idx, st, _sendJob.err[k], true);
+      }
+    });
+  }
+
+  // live log, newest first; only new lines slide in
+  const fresh = log.length - _spLast.logShown;
+  document.getElementById('liveLog').innerHTML = log.slice(-30).reverse().map((r, i) => {
+    const t = r.at ? new Date(r.at).toLocaleTimeString([], {hour:'numeric', minute:'2-digit', second:'2-digit'}) : r.time;
+    const icon = r.status === 'sent' ? 'ph-check-circle' : r.status === 'error' ? 'ph-x-circle' : 'ph-arrow-bend-up-right';
+    return `<div class="log-row log-row-${r.status}${i < fresh ? ' new' : ''}">
+      <i class="ph-bold ${icon}" style="font-size:13px;flex-shrink:0"></i>
+      <span style="color:var(--text3);font-size:12px">${esc(t)}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.email)}</span>
+      ${r.error ? '<span style="font-size:12px;opacity:.7">' + esc(r.error) + '</span>' : ''}
+    </div>`;
+  }).join('');
+  _spLast.logShown = log.length;
+
+  // what happens next: countdown between emails, or "sending to …"
+  const next = document.getElementById('spNext'), ring = document.getElementById('spRing');
+  card.classList.toggle('waiting', s.next_in != null && !s.done);
+  card.classList.toggle('sending-now', s.next_in == null && !s.done);
+  if (!s.done) {
+    next.hidden = false;
+    if (s.next_in != null) {
+      setEl('spTitle', 'Waiting before the next email');
+      _spNext = { until: Date.now() + s.next_in * 1000, total: s.next_total || s.next_in || 1, email: s.next_email || '' };
+      const draw = () => {
+        if (!_spNext) return;
+        const left = Math.max(0, (_spNext.until - Date.now()) / 1000);
+        document.getElementById('spNextText').innerHTML = `Next email in <b>${_spFmt(left)}</b>` + (_spNext.email ? ` · ${esc(_spNext.email)}` : '');
+        if (ring) ring.style.strokeDashoffset = (50.27 * (1 - left / _spNext.total)).toFixed(2);
+      };
+      draw();
+      if (!_spTick) _spTick = setInterval(draw, 1000);
+    } else {
+      _spNext = null; clearInterval(_spTick); _spTick = null;
+      setEl('spTitle', `Sending ${Math.min(doneN + 1, s.total)} of ${s.total}`);
+      const to = log.length < s.total && _sendJob ? (parsedLoads[_sendJob.rows[log.length]] || {}).email : '';
+      document.getElementById('spNextText').innerHTML = to ? `Sending to <b>${esc(to)}</b>…` : 'Sending…';
+    }
+  }
+
   if (s.done) {
     clearInterval(pollInterval);
     pollInterval = null;
+    _spNext = null; clearInterval(_spTick); _spTick = null;
+    next.hidden = true;
+    card.classList.add('done');
+    const spIcon = document.getElementById('spIcon'); if (spIcon) spIcon.className = 'ph-bold ph-check-circle';
+    setEl('spTitle', `Done — ${s.sent} sent` + (s.errors ? `, ${s.errors} failed` : '') + (s.skipped ? `, ${s.skipped} skipped` : ''));
+    if (_sendJob && _sendJob.started) setEl('spElapsed', ' · ' + _spFmt((Date.now() - _sendJob.started) / 1000));
+    document.getElementById('spClose')?.removeAttribute('hidden');
     document.getElementById('sendBtn').disabled = false;
-    toast(`Done! Sent: ${s.sent}, Errors: ${s.errors}`);
+    toast(`Done — sent ${s.sent} of ${s.total}` + (s.errors ? `, ${s.errors} failed` : ''), s.errors > 0 && !s.sent);
     loadDailyStats();
     loadParseContext();
+    updateSelectedCount();
   }
+}
+
+// A send survives a reload: pick the card up again if a job is still running.
+async function resumeSendProgress() {
+  try {
+    const s = await (await fetch('/api/send-status')).json();
+    if (s && s.running && !pollInterval) {
+      document.getElementById('sendBtn') && (document.getElementById('sendBtn').disabled = true);
+      pollInterval = setInterval(pollStatus, 1500);
+      pollStatus();
+    }
+  } catch (e) {}
 }
 
 // ── INTELLIGENCE ──────────────────────────────────────────────────────────────
@@ -4968,6 +5140,9 @@ function setInsightsTab(tab) {
     b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   document.querySelectorAll('.ins-panel').forEach(p => { p.hidden = p.dataset.ins !== tab; });
+  const per = document.getElementById('insPeriod');
+  if (per) per.hidden = !(tab === 'overview' || tab === 'timing');
+  syncAnPeriod();
   const want = '#/insights/' + tab;
   if (location.hash !== want) history.replaceState({ page: 'insights' }, '', location.pathname + location.search + want);
   if (tab === 'overview') { loadAnalytics(); loadDashboard(); }
@@ -5531,13 +5706,13 @@ function renderCatBar() {
   const keys = Object.keys(TRIAGE_CATS).filter(k => (cats[k] || 0) > 0 || repliesCat === k);
   let html = '';
   if (keys.length) {
-    html += '<span class="tq-suggest-lbl">Auto-detected</span>';
+    html += '<span class="tq-cat-sep" aria-hidden="true"></span>';
     keys.forEach(k => {
       const c = TRIAGE_CATS[k];
       const n = cats[k] || 0;
       const on = repliesCat === k;
       const st = on ? `border-color:${c.color};color:${c.color};background:color-mix(in srgb, ${c.color} 9%, transparent)` : '';
-      html += `<button class="tq-cat-chip${on ? ' active' : ''}" style="${st}" onclick="tqSetCat('${k}')">${c.emoji} ${c.label} <span class="n">${n}</span></button>`;
+      html += `<button class="tq-cat-chip${on ? ' active' : ''}" style="${st}" onclick="tqSetCat('${k}')" title="Auto-detected: ${c.label}">${c.emoji} ${c.label} <span class="n">${n}</span></button>`;
     });
     // Bulk action for the selected category: ignore-recommended → "Ignore all",
     // followup-recommended → "Follow-up all" (pipeline + configured stage)
@@ -5737,7 +5912,10 @@ async function fetchReplies(silent) {
   btn.disabled = false;
 }
 function parseReplyDate(r) {
-  return new Date(r.received_at || r.date || '2000-01-01');
+  // received_at is naive UTC ("2026-10-02 14:29") — read it as UTC, not local time
+  const raw = r.received_at || '';
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(raw)) return new Date(raw.replace(' ', 'T') + (raw.length <= 16 ? ':00Z' : 'Z'));
+  return new Date(raw || r.date || '2000-01-01');
 }
 
 // Build contact groups from raw replies
@@ -5784,7 +5962,12 @@ function relTime(r) {
   const days = Math.floor(h / 24);
   if (days === 1) return 'yesterday';
   if (days < 7)  return days + 'd ago';
-  return (r.received_at || r.date || '').slice(5,10);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('en-US', sameYear ? {month:'short', day:'numeric'} : {month:'short', day:'numeric', year:'numeric'});
+}
+function fullTime(r) {
+  const d = parseReplyDate(r);
+  return isNaN(d) ? '' : d.toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
 }
 
 // Parse company name from "from" field
@@ -5864,18 +6047,17 @@ function tqCard(msgs) {
 
   // Right column: show actions only for unprocessed states; otherwise show reset
   const showActions = (state === 'new' || state === 'viewed');
-  const recLabel = (txt, on) => on
-    ? '<span class="tq-action-label">' + txt + '<span class="tq-rec-tag">Recommended</span></span>' : txt;
+  const recLabel = (txt, on) => txt;   // the recommended button is marked by style (tq-emph) + its title
   const rightHtml = showActions
     ? '<div class="tq-card-right" onclick="event.stopPropagation()">' +
-        '<button class="tq-action tq-action-fu' + (rec === 'followup' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]">' +
+        '<button class="tq-action tq-action-fu' + (rec === 'followup' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'follow_up\')"  title="Follow-up [F]' + (rec === 'followup' ? ' — recommended' : '') + '">' +
           '<i class="ph-bold ph-clock-countdown"></i> ' + recLabel('Follow-up', rec === 'followup') + ' <span class="tq-action-key">F</span></button>' +
-        '<button class="tq-action tq-action-no' + (rec === 'ignore' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]">' +
+        '<button class="tq-action tq-action-no' + (rec === 'ignore' ? ' tq-emph' : '') + '"  onclick="markContact(\'' + emailEsc + '\',\'not_interested\')" title="Ignore [X]' + (rec === 'ignore' ? ' — recommended' : '') + '">' +
           '<i class="ph-bold ph-x"></i> ' + recLabel('Ignore', rec === 'ignore') + ' <span class="tq-action-key">X</span></button>' +
         '<button class="tq-action tq-action-block" onclick="markContactStop(\'' + emailEsc + '\')" title="Block + Stop List [B]">' +
           '<i class="ph-bold ph-prohibit"></i> Block <span class="tq-action-key">B</span></button>' +
       '</div>'
-    : '<div class="tq-card-right" onclick="event.stopPropagation()" style="justify-content:center;align-items:center;gap:6px;padding:10px 10px;display:flex;flex-direction:column;">' +
+    : '<div class="tq-card-right" onclick="event.stopPropagation()">' +
         '<button class="tq-compact-reset" style="width:100%;text-align:center" onclick="markContact(\'' + emailEsc + '\',\'new\')"><i class="ph-bold ph-arrow-counter-clockwise"></i> Reset</button>' +
         '<button class="tq-compact-reset" style="color:var(--red);width:100%;text-align:center" onclick="markContactStop(\'' + emailEsc + '\')"><i class="ph-bold ph-prohibit"></i> Block</button>' +
       '</div>';
@@ -5894,7 +6076,7 @@ function tqCard(msgs) {
             tqStatePill(state) +
             catBadge +
             '<span class="tq-reply-badge"><i class="ph-bold ph-chat-dots" style="font-size:12px"></i> ' + replyCount + '</span>' +
-            '<span class="tq-time">' + time + '</span>' +
+            '<span class="tq-time" title="' + esc(fullTime(latest)) + '">' + time + '</span>' +
           '</div>' +
           '<div class="tq-company">' + esc(company) + '</div>' +
           '<div class="tq-email">' + esc(emailRaw) +
@@ -5932,8 +6114,8 @@ function tqCompactRow(msgs) {
       '<div class="tq-compact-email">' + esc(emailRaw) + '</div>' +
     '</div>' +
     '<span class="tq-compact-icon">' + stateIcon + '</span>' +
-    (latest.auto_processed ? '<span title="Auto-processed by triage">🤖</span>' : '') +
-    '<span class="tq-compact-time">' + time + '</span>' +
+    (latest.auto_processed ? '<i class="ph-bold ph-robot" style="color:var(--text3)" title="Auto-processed by triage"></i>' : '') +
+    '<span class="tq-compact-time" title="' + esc(fullTime(latest)) + '">' + time + '</span>' +
     '<button class="tq-compact-reset" onclick="markContact(\'' + emailEsc + '\',\'new\')" title="Move back to queue"><i class="ph-bold ph-arrow-counter-clockwise"></i></button>' +
   '</div>';
 }
@@ -6687,7 +6869,7 @@ function renderFuCurrentView() {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-let _dash = null, _dashPeriod = '30';
+let _dash = null;
 const _DASH_S = { light: ['#2a78d6', '#1baf7a'], dark: ['#3987e5', '#199e70'] };
 function _dashDark() { return (document.documentElement.getAttribute('data-theme') || 'dark') !== 'light'; }
 
@@ -6700,11 +6882,11 @@ async function loadDashboard() {
 function renderDashboard() {
   const d = _dash; if (!d) return;
   const h = d.health;
-  const seg = p => `<button class="an-tab-sm${_dashPeriod === p ? ' active' : ''}" onclick="_dashPeriod='${p}';renderDashboard()">${p} days</button>`;
+  const [plabel, fkey] = _AN_PERIODS[_anPeriod] || _AN_PERIODS.lifetime;
   const fp = document.getElementById('insFunnelPeriod');
-  if (fp) fp.innerHTML = seg('7') + seg('30');
+  if (fp) fp.textContent = plabel.toLowerCase();
   const fe = document.getElementById('insFunnel');
-  if (fe) fe.innerHTML = _insFunnelHtml(d.funnel[_dashPeriod]);
+  if (fe) fe.innerHTML = _insFunnelHtml(d.funnel[fkey] || d.funnel['30']);
   const he = document.getElementById('insHealth');
   if (he) he.innerHTML = `
     <div class="dash-card"><div class="dash-k">No next step</div>
@@ -7786,7 +7968,8 @@ function setEl(id, v) { const e=document.getElementById(id); if(e) e.textContent
 // ── ANALYTICS REDESIGN ────────────────────────────────────────────────────────
 let _anStats = null;
 let _anAiData = null;
-let _anPeriod = 'lifetime';
+let _anPeriod = (() => { try { return localStorage.getItem('insights_period') || 'lifetime'; } catch (e) { return 'lifetime'; } })();
+const _AN_PERIODS = { today: ['Today', 'today'], week: ['Last 7 days', '7'], month: ['Last 30 days', '30'], lifetime: ['All time', 'all'] };
 
 function setHtml(id, html) { const e = document.getElementById(id); if (e) e.innerHTML = html; }
 
@@ -7832,9 +8015,19 @@ function renderAnalytics() {
   renderAnKpis(); renderAnQuality(); renderAnTiming();
 }
 
+function syncAnPeriod() {
+  document.querySelectorAll('#insPeriod [data-period]').forEach(b => {
+    const on = b.dataset.period === _anPeriod;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
 function setAnPeriod(p) {
+  if (!_AN_PERIODS[p]) p = 'lifetime';
   _anPeriod = p;
-  document.querySelectorAll('.an-tab').forEach(b => b.classList.toggle('active', b.getAttribute('onclick').includes("'" + p + "'")));
+  try { localStorage.setItem('insights_period', p); } catch (e) {}
+  syncAnPeriod();
+  renderDashboard();                // the funnel follows the same period
   loadAnalytics();
 }
 
@@ -7956,6 +8149,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   loadFollowups();
   loadQuota();
+  resumeSendProgress();
   checkScheduledDue();
   // Load replies first, then daily stats (reuses cached allReplies)
   loadReplies().then(() => loadDailyStats());

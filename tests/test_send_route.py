@@ -253,3 +253,26 @@ def test_outreach_template_renders_route_token():
     out = _m.render_template_text('Load {route} on {date} ({equip}) — {name}, {company}, {phone} {unknown}', load, cfg)
     assert out == 'Load Chicago, IL → Dallas, TX on 3/15 (V) — Bo, Acme, 555 {unknown}'
     assert _m.render_template_text('{route}', {'origin': 'Chicago, IL'}, {}) == 'Chicago, IL'
+
+
+def test_send_status_counts_down_to_the_next_email(app, db):
+    """Between emails the Send page shows "Next email in 0:23": the status payload
+    carries seconds left (next_in), never the raw server clock (next_at)."""
+    import time
+    from app.models import SendJob
+    with flask_app.test_client() as client:
+        user = _make_user_and_login(db, client)
+        job = SendJob(user_id=user.id, kind='outreach', status='running', total=3)
+        db.session.add(job); db.session.commit()
+        state = _m._user_send_state(user.id)
+        state.update(running=True, done=False, total=3, current=1, sent=1, errors=0, skipped=0, job_id=job.id,
+                     log=[{'time': '10:00:00', 'at': '2026-10-06T10:00:00Z', 'status': 'sent', 'email': 'a@x.com', 'error': ''}],
+                     next_at=time.time() + 20, next_total=25, next_email='b@x.com')
+        try:
+            s = client.get('/api/send-status').get_json()
+            assert 'next_at' not in s and 18 <= s['next_in'] <= 20
+            assert s['next_total'] == 25 and s['next_email'] == 'b@x.com'
+            state.update(next_at=None)
+            assert client.get('/api/send-status').get_json()['next_in'] is None
+        finally:
+            state.update(running=False, done=True)

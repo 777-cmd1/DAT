@@ -123,7 +123,13 @@ URL: `/admin`
 ## Insights (замість Dashboard / Analytics / Intelligence) — 2026-10
 Стартова сторінка — **Send** (над чергою — тонкий рядок «Today X of N sent · replies · quota»).
 `#/insights/<overview|lanes|domains|timing>`; старі `#/dashboard`, `#/stats`, `#/intelligence` редіректять.
-Overview бере `/api/dashboard` (спільне `_dashboard_data` з дайджестом) + `/api/stats`.
+Overview бере `/api/dashboard` (спільне `_dashboard_data` з дайджестом) + `/api/stats`. Один перемикач періоду
+(Today / 7 / 30 days / All time) на Overview і Timing: `/api/stats?period=today|week|month|lifetime`, воронка
+`funnel['today'|'7'|'30'|'all']` — ті самі локальні дні.
+Send: після вставки поле DAT згортається в рядок (Edit розгортає); у черзі під статусом — причина пропуску,
+тема листа — в підказці рядка (`buildSubject` = дзеркало `_build_subject`). Картка відправки: літачок на смузі,
+відлік до наступного листа (`/api/send-status` → `next_in/next_total/next_email`), рядки черги живо міняють
+статус (Queued → Sending… → Sent), лог з локальним часом (`at`), стан «Done» з тривалістю; переживає перезавантаження.
 Дизайн-система: токени тем у першому `<style>` + шар «DESIGN SYSTEM (2026-10)» в кінці; семантика
 кольорів accent=дія, red=проблема, yellow=увага, green=успіх, blue=інфо; одна головна кнопка на екран.
 Undo: Pause / Block (Follow-up, і bulk), Ignore / Block (Replies), прибрати рейт — `toastUndo(msg, commit, revert)`:

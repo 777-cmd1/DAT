@@ -957,6 +957,36 @@ tr:last-child td { border-bottom: none; }
 [data-theme="dark"] .tk-beam { display:block; }
 [data-theme="dark"] .tk-road .dk-win { fill:#ffd166; opacity:.85; }
 .tk-road.tk-compact { height:100px; margin:2px 0 0; }
+/* scenery: sky follows the theme, hills and trees drift slower than the truck */
+.tk-road { --hills:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='44' viewBox='0 0 360 44'%3E%3Cpath d='M0 44V30Q45 10 95 24T190 18T285 26T360 30V44Z' fill='%23e4e8ef'/%3E%3Cpath d='M0 44V36Q60 24 120 34T240 30T360 36V44Z' fill='%23d8dee8'/%3E%3C/svg%3E"); --trees:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='30' viewBox='0 0 260 30'%3E%3Cpath d='M20 30V22' stroke='%23b3a58f' stroke-width='2'/%3E%3Cpath d='M20 6L12 24H28Z' fill='%23b9cbb5'/%3E%3Cpath d='M31 30V24' stroke='%23b3a58f' stroke-width='2'/%3E%3Cpath d='M31 12L25 26H37Z' fill='%23b9cbb5'/%3E%3Cpath d='M96 30V20' stroke='%23b3a58f' stroke-width='2'/%3E%3Ccircle cx='96' cy='16' r='7' fill='%23c6d6bf'/%3E%3Cpath d='M150 30V4M144 7H156' stroke='%23c4c8d0' stroke-width='1.4'/%3E%3Cpath d='M200 30V23' stroke='%23b3a58f' stroke-width='2'/%3E%3Cpath d='M200 9L193 25H207Z' fill='%23b9cbb5'/%3E%3Cpath d='M232 30V21' stroke='%23b3a58f' stroke-width='2'/%3E%3Ccircle cx='232' cy='17' r='6' fill='%23c6d6bf'/%3E%3C/svg%3E");
+  --sky:linear-gradient(180deg, color-mix(in srgb, var(--blue) 9%, transparent), transparent 85%); --edge:#f4f4f6; --center:#f2c94c; }
+[data-theme="dark"] .tk-road { --hills:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='44' viewBox='0 0 360 44'%3E%3Cpath d='M0 44V30Q45 10 95 24T190 18T285 26T360 30V44Z' fill='%2323262e'/%3E%3Cpath d='M0 44V36Q60 24 120 34T240 30T360 36V44Z' fill='%231d2027'/%3E%3C/svg%3E"); --trees:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='30' viewBox='0 0 260 30'%3E%3Cpath d='M20 30V22' stroke='%233a3530' stroke-width='2'/%3E%3Cpath d='M20 6L12 24H28Z' fill='%2328302a'/%3E%3Cpath d='M31 30V24' stroke='%233a3530' stroke-width='2'/%3E%3Cpath d='M31 12L25 26H37Z' fill='%2328302a'/%3E%3Cpath d='M96 30V20' stroke='%233a3530' stroke-width='2'/%3E%3Ccircle cx='96' cy='16' r='7' fill='%232c352d'/%3E%3Cpath d='M150 30V4M144 7H156' stroke='%233a3d45' stroke-width='1.4'/%3E%3Cpath d='M200 30V23' stroke='%233a3530' stroke-width='2'/%3E%3Cpath d='M200 9L193 25H207Z' fill='%2328302a'/%3E%3Cpath d='M232 30V21' stroke='%233a3530' stroke-width='2'/%3E%3Ccircle cx='232' cy='17' r='6' fill='%232c352d'/%3E%3C/svg%3E");
+  --sky:radial-gradient(1px 1px at 18px 8px, #ffffffb0 50%, transparent 55%), radial-gradient(1px 1px at 74px 22px, #ffffff80 50%, transparent 55%),
+        radial-gradient(1.2px 1.2px at 131px 12px, #ffffffa0 50%, transparent 55%), radial-gradient(1px 1px at 190px 30px, #ffffff70 50%, transparent 55%),
+        linear-gradient(180deg, #121624, transparent 90%); --edge:#9a9aa5; --center:#c9a227; }
+.tk-road::before { content:''; position:absolute; left:0; right:0; top:0; bottom:18px; border-radius:8px 8px 0 0; pointer-events:none;
+  background:var(--sky); background-size:220px 44px, 220px 44px, 220px 44px, 220px 44px, 100% 100%; }
+.tk-sun { position:absolute; top:10px; right:34%; width:16px; height:16px; border-radius:50%; pointer-events:none;
+  background:#ffd166; box-shadow:0 0 0 4px color-mix(in srgb, #ffd166 25%, transparent); opacity:.85; }
+[data-theme="dark"] .tk-sun { background:#e9e6da; box-shadow:-4px 0 0 0 #121624 inset; opacity:.9; }
+.tk-far, .tk-near { position:absolute; left:0; right:0; pointer-events:none; background-repeat:repeat-x;
+  animation-play-state:paused; }
+.tk-far  { bottom:18px; height:44px; background-image:var(--hills); background-size:360px 44px; animation:tkFar 60s linear infinite paused; }
+.tk-near { bottom:18px; height:30px; background-image:var(--trees); background-size:260px 30px; animation:tkNear 18s linear infinite paused; }
+.tk-road.driving .tk-far, .tk-road.driving .tk-near { animation-play-state:running; }
+@keyframes tkFar  { to { background-position:-360px 0; } }
+@keyframes tkNear { to { background-position:-260px 0; } }
+/* US two-lane road: yellow centre line, white edge lines */
+.tk-asphalt { background:linear-gradient(var(--edge), var(--edge)) 0 2px / 100% 1.5px no-repeat,
+  linear-gradient(var(--edge), var(--edge)) 0 calc(100% - 3px) / 100% 1.5px no-repeat, var(--road); }
+.tk-road .tk-dashes { background:repeating-linear-gradient(90deg, var(--center) 0 16px, transparent 16px 34px); }
+/* delivered: envelopes fly out of the dock */
+.tk-env { position:absolute; left:40%; top:6px; font-size:14px; color:var(--accent); pointer-events:none; opacity:0;
+  animation: tkEnv 1.3s cubic-bezier(.2,.7,.3,1) forwards; }
+.tk-env:nth-child(odd) { color:var(--green); }
+@keyframes tkEnv { 0% { opacity:0; transform:translate(0, 10px) scale(.6) rotate(0); }
+  15% { opacity:1; }
+  100% { opacity:0; transform:translate(var(--dx), var(--dy)) scale(1) rotate(var(--rot)); } }
 /* truck details, lights, ETA, clickable posts */
 .tk-shadow { fill:rgba(0,0,0,.16); }
 [data-theme="dark"] .tk-shadow { fill:rgba(0,0,0,.5); }
@@ -4823,8 +4853,9 @@ function truckSceneHtml() {
     `<rect class="dk-gap" x="30" y="21" width="26" height="32"/>` +
     `<g class="dk-door"><rect x="30" y="21" width="26" height="32"/><path d="M30 27.5h26M30 34h26M30 40.5h26M30 47h26"/></g></svg>` +
     (end ? '<span class="tk-badge"><i class="ph-bold ph-check"></i></span><span class="tk-eta"></span>' : '') + `</div>`;
-  return dock(false) +
-    `<div class="tk-lane"><div class="tk-asphalt"><div class="tk-dashes"></div></div><div class="tk-done"></div><div class="tk-stops"></div>` +
+  return `<span class="tk-sun"></span>` + dock(false) +
+    `<div class="tk-lane"><div class="tk-far"></div><div class="tk-near"></div>` +
+    `<div class="tk-asphalt"><div class="tk-dashes"></div></div><div class="tk-done"></div><div class="tk-stops"></div>` +
     `<div class="tk-sign"><span class="tk-sign-dot"></span><span class="tk-sign-text"></span></div>` +
     `<div class="tk-truck"><div class="tk-beam"></div><svg viewBox="0 0 88 36">` +
       `<ellipse class="tk-shadow" cx="44" cy="34.3" rx="43" ry="1.7"/>` +
@@ -4909,6 +4940,23 @@ function truckScene(road, frac, mode, sign, opts) {
   road.classList.toggle('waiting', mode === 'waiting');
   road.classList.toggle('arrived', mode === 'done');
   const moved = (mode !== 'parked' && p !== prev) || (mode === 'done' && !road._arrived);
+  if (mode === 'done' && !road._arrived && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    clearTimeout(road._env);
+    road._env = setTimeout(() => {      // delivered: a handful of envelopes fly out of the dock
+      const dock = road.querySelector('.tk-dock-end');
+      if (!dock) return;
+      for (let i = 0; i < 6; i++) {
+        const env = document.createElement('i');
+        env.className = 'ph-bold ph-envelope-simple tk-env';
+        env.style.setProperty('--dx', (-70 + i * 18 + Math.random() * 10).toFixed(0) + 'px');
+        env.style.setProperty('--dy', (-46 - Math.random() * 26).toFixed(0) + 'px');
+        env.style.setProperty('--rot', (-30 + Math.random() * 60).toFixed(0) + 'deg');
+        env.style.animationDelay = (i * 70) + 'ms';
+        env.addEventListener('animationend', () => env.remove());
+        dock.appendChild(env);
+      }
+    }, 2300);
+  }
   road._arrived = mode === 'done';
   if (moved) {                          // wheels turn and the lane lines run only while it drives
     road.classList.add('driving');

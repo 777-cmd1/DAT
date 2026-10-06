@@ -872,26 +872,153 @@ tr:last-child td { border-bottom: none; }
 .sp-close { border:0; background:none; color:var(--text3); width:26px; height:26px; border-radius:6px; cursor:pointer; }
 .sp-close:hover { background:var(--surface2); color:var(--text); }
 .sp-close[hidden] { display:none; }
-.sp-track { position:relative; height:8px; margin:12px 16px 8px; border-radius:99px; background:var(--border); }
-.sp-bar-fill { height:100%; width:0; border-radius:99px; background:var(--accent); transition:width .6s var(--ease), background .3s; }
-.sp-plane { position:absolute; top:50%; left:0; font-size:18px; color:var(--accent); pointer-events:none;
-  transform:translate(-50%, -50%) rotate(45deg); transition:left .6s var(--ease), color .3s; }
-.sp-card.waiting .sp-plane { animation: spBob 1.6s ease-in-out infinite; }
-@keyframes spBob { 50% { transform:translate(-50%, -80%) rotate(45deg); } }
-.sp-card.done .sp-bar-fill { background:var(--green); }
-.sp-card.done .sp-plane { color:var(--green); animation: spFlyOff .8s var(--ease) forwards; }
-@keyframes spFlyOff { to { transform:translate(60px, -40px) rotate(30deg); opacity:0; } }
+/* ── truck scene: origin dock → road → delivery dock ── */
+.tk-road { --p:0; --road:#3b3b44; --line:#e9e9ef; --trailer:#ffffff; --trailer-edge:#c3c3ce; --frame:#3b3b44;
+  --tire:#232329; --rim:#c8c8d2; --glass:#d6e6ff; --wall:#ececf1; --wall-edge:#cbcbd5; --roof:#c4c4cf;
+  --gap:#2e2e35; --door:#b4b4c0; --door-line:#9d9dab;
+  --tw:112px;                      /* truck width — everything on the road is placed from it */
+  position:relative; display:flex; align-items:flex-end; height:108px; margin:4px 16px 2px; }
+[data-theme="dark"] .tk-road { --road:#3a3a43; --line:#8a8a95; --trailer:#3a3a42; --trailer-edge:#64646e; --frame:#64646e;
+  --tire:#0c0c0f; --rim:#7a7a85; --glass:#3b4d6b; --wall:#33333b; --wall-edge:#4a4a54; --roof:#474751;
+  --gap:#101013; --door:#585862; --door-line:#6c6c77; }
+.tk-dock { flex:0 0 88px; height:80px; position:relative; z-index:3; }
+.tk-dock svg { display:block; width:100%; height:100%; overflow:visible; }
+.tk-dock-end svg { transform:scaleX(-1); }
+.dk-roof { fill:var(--roof); } .dk-wall { fill:var(--wall); stroke:var(--wall-edge); stroke-width:1; }
+.dk-win { fill:var(--glass); } .dk-gap { fill:var(--gap); }
+.dk-door rect { fill:var(--door); } .dk-door path { stroke:var(--door-line); stroke-width:1; fill:none; }
+.dk-door { transform-box:fill-box; transform-origin:50% 0; transition:transform .6s var(--ease); }
+.tk-road.parked .tk-dock-start .dk-door { transform:scaleY(.1); }
+.tk-road:not(.parked) .tk-dock-start .dk-door { transition-delay:.9s; }
+.tk-road.arrived .tk-dock-end .dk-door { animation: tkDoorCycle 2.6s var(--ease) forwards; }
+@keyframes tkDoorCycle { 0% { transform:scaleY(1); } 12%, 70% { transform:scaleY(.1); } 100% { transform:scaleY(1); } }
+.tk-badge { position:absolute; top:-6px; right:4px; width:22px; height:22px; border-radius:50%; background:var(--green);
+  color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; transform:scale(0); }
+.tk-road.arrived .tk-badge { animation: tkBadge .4s var(--ease) 2.2s forwards; }
+@keyframes tkBadge { 0% { transform:scale(0); } 70% { transform:scale(1.2); } 100% { transform:scale(1); } }
+.tk-lane { position:relative; flex:1; height:100%; overflow:hidden; }
+.tk-asphalt { position:absolute; left:0; right:0; bottom:0; height:18px; background:var(--road); }
+.tk-dashes { position:absolute; left:0; right:0; top:8px; height:2px;
+  background:repeating-linear-gradient(90deg, var(--line) 0 16px, transparent 16px 34px); }
+.tk-road.driving .tk-dashes { animation: tkDash .5s linear infinite; }
+@keyframes tkDash { to { background-position:-34px 0; } }
+.tk-done { position:absolute; left:0; bottom:0; height:2px; width:calc(var(--p) * 100%); background:var(--accent);
+  transition:width 1.2s cubic-bezier(.45,0,.25,1), background .3s; }
+.tk-road.arrived .tk-done { width:100%; background:var(--green); }
+.tk-truck { position:absolute; bottom:4px; left:calc((100% - var(--tw)) * var(--p)); width:var(--tw); height:calc(var(--tw) * .41);
+  transition:left 1.2s cubic-bezier(.45,0,.25,1); }
+.tk-road.parked .tk-truck { left:calc(-1 * var(--tw) - 12px); }
+.tk-road.arrived .tk-truck { left:calc(100% + 12px); transition-duration:1.6s; }
+.tk-truck svg { display:block; width:100%; height:100%; overflow:visible; }
+.tk-trailer { fill:var(--trailer); stroke:var(--trailer-edge); stroke-width:1; }
+.tk-rib { stroke:var(--trailer-edge); stroke-width:1; fill:none; }
+.tk-frame { fill:var(--frame); } .tk-stack { fill:var(--frame); }
+.tk-cab { fill:var(--accent); } .tk-glass { fill:var(--glass); } .tk-lamp { fill:#ffd166; }
+.tk-tire { fill:var(--tire); } .tk-rim { fill:var(--rim); } .tk-spoke { stroke:var(--tire); stroke-width:1.2; }
+.tk-wheel { transform-box:fill-box; transform-origin:center; }
+.tk-road.driving .tk-wheel { animation: tkSpin .45s linear infinite; }
+@keyframes tkSpin { to { transform:rotate(360deg); } }
+.tk-puff { fill:var(--trailer-edge); opacity:0; transform-box:fill-box; transform-origin:center; }
+.tk-road.waiting .tk-puff { animation: tkPuff 1.8s ease-out infinite; }
+.tk-road.waiting .tk-puff.d2 { animation-delay:.9s; }
+@keyframes tkPuff { 0% { opacity:.55; transform:translate(0, 0) scale(.6); } 100% { opacity:0; transform:translate(-7px, -9px) scale(1.5); } }
+.tk-sign { position:absolute; bottom:calc(var(--tw) * .41 + 10px); left:calc((100% - var(--tw)) * var(--p) + var(--tw) * .7); transform:translateX(-50%);
+  display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:99px; white-space:nowrap;
+  background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow);
+  font-size:12px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;
+  transition:left 1.2s cubic-bezier(.45,0,.25,1), opacity .2s; }
+.tk-sign-dot { width:8px; height:8px; border-radius:50%; background:var(--green); }
+.tk-road.waiting .tk-sign-dot { background:var(--red); }
+.tk-road.parked .tk-sign, .tk-road.arrived .tk-sign { opacity:0; }
+/* trailer follows the load's equipment; a post per email; night details */
+.tk-road .tv-reefer, .tk-road .tv-flat { display:none; }
+.tk-road.eq-reefer .tv-reefer { display:inline; }
+.tk-road.eq-flat .tv-box { display:none; }
+.tk-road.eq-flat .tv-flat { display:inline; }
+.tk-label { font:700 11px 'Plus Jakarta Sans', sans-serif; fill:var(--text2); }
+.tk-unit { fill:var(--trailer); stroke:var(--trailer-edge); stroke-width:1; }
+.tk-unit-vent { stroke:var(--trailer-edge); stroke-width:1; fill:none; }
+.tk-deck { fill:var(--frame); }
+.tk-crate { fill:#c9a36b; stroke:#a8834d; stroke-width:1; }
+.tk-strap { stroke:#e0a83a; stroke-width:1.2; fill:none; }
+[data-theme="dark"] .tk-crate { fill:#8a6d43; stroke:#6e5532; }
+.tk-stops { position:absolute; inset:0; pointer-events:none; }
+.tk-stop { position:absolute; bottom:18px; width:2px; height:16px; margin-left:-1px; background:var(--trailer-edge); }
+.tk-stop i { position:absolute; top:-9px; left:50%; width:11px; height:11px; margin-left:-5.5px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--trailer-edge); transition:background .3s, border-color .3s, transform .3s; }
+.tk-stop[data-st="sent"] i { background:var(--green); border-color:var(--green); transform:scale(1.1); }
+.tk-stop[data-st="skipped"] i { background:var(--text3); border-color:var(--text3); }
+.tk-stop[data-st="error"] { background:transparent; }
+.tk-stop[data-st="error"] i { top:2px; width:12px; height:14px; margin-left:-6px; border:0; border-radius:2px;
+  background:var(--red); clip-path:polygon(50% 0, 100% 100%, 0 100%); }
+.tk-tick { position:absolute; bottom:18px; width:2px; height:6px; margin-left:-1px; background:var(--trailer-edge); }
+.tk-beam { display:none; position:absolute; left:100%; bottom:8px; width:72px; height:26px; margin-left:-3px; pointer-events:none;
+  background:linear-gradient(90deg, rgba(255,214,102,.5), rgba(255,214,102,0)); clip-path:polygon(0 42%, 100% 0, 100% 100%, 0 58%); }
+[data-theme="dark"] .tk-beam { display:block; }
+[data-theme="dark"] .tk-road .dk-win { fill:#ffd166; opacity:.85; }
+.tk-road.tk-compact { height:100px; margin:2px 0 0; }
+/* scenery: sky follows the theme, hills and trees drift slower than the truck */
+.tk-road { --hills:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='44' viewBox='0 0 360 44'%3E%3Cpath d='M0 44V30Q45 10 95 24T190 18T285 26T360 30V44Z' fill='%23e4e8ef'/%3E%3Cpath d='M0 44V36Q60 24 120 34T240 30T360 36V44Z' fill='%23d8dee8'/%3E%3C/svg%3E"); --trees:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='30' viewBox='0 0 260 30'%3E%3Cpath d='M20 30V22' stroke='%23b3a58f' stroke-width='2'/%3E%3Cpath d='M20 6L12 24H28Z' fill='%23b9cbb5'/%3E%3Cpath d='M31 30V24' stroke='%23b3a58f' stroke-width='2'/%3E%3Cpath d='M31 12L25 26H37Z' fill='%23b9cbb5'/%3E%3Cpath d='M96 30V20' stroke='%23b3a58f' stroke-width='2'/%3E%3Ccircle cx='96' cy='16' r='7' fill='%23c6d6bf'/%3E%3Cpath d='M150 30V4M144 7H156' stroke='%23c4c8d0' stroke-width='1.4'/%3E%3Cpath d='M200 30V23' stroke='%23b3a58f' stroke-width='2'/%3E%3Cpath d='M200 9L193 25H207Z' fill='%23b9cbb5'/%3E%3Cpath d='M232 30V21' stroke='%23b3a58f' stroke-width='2'/%3E%3Ccircle cx='232' cy='17' r='6' fill='%23c6d6bf'/%3E%3C/svg%3E");
+  --sky:linear-gradient(180deg, color-mix(in srgb, var(--blue) 9%, transparent), transparent 85%); --edge:#f4f4f6; --center:#f2c94c; }
+[data-theme="dark"] .tk-road { --hills:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='44' viewBox='0 0 360 44'%3E%3Cpath d='M0 44V30Q45 10 95 24T190 18T285 26T360 30V44Z' fill='%2323262e'/%3E%3Cpath d='M0 44V36Q60 24 120 34T240 30T360 36V44Z' fill='%231d2027'/%3E%3C/svg%3E"); --trees:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='30' viewBox='0 0 260 30'%3E%3Cpath d='M20 30V22' stroke='%233a3530' stroke-width='2'/%3E%3Cpath d='M20 6L12 24H28Z' fill='%2328302a'/%3E%3Cpath d='M31 30V24' stroke='%233a3530' stroke-width='2'/%3E%3Cpath d='M31 12L25 26H37Z' fill='%2328302a'/%3E%3Cpath d='M96 30V20' stroke='%233a3530' stroke-width='2'/%3E%3Ccircle cx='96' cy='16' r='7' fill='%232c352d'/%3E%3Cpath d='M150 30V4M144 7H156' stroke='%233a3d45' stroke-width='1.4'/%3E%3Cpath d='M200 30V23' stroke='%233a3530' stroke-width='2'/%3E%3Cpath d='M200 9L193 25H207Z' fill='%2328302a'/%3E%3Cpath d='M232 30V21' stroke='%233a3530' stroke-width='2'/%3E%3Ccircle cx='232' cy='17' r='6' fill='%232c352d'/%3E%3C/svg%3E");
+  --sky:radial-gradient(1px 1px at 18px 8px, #ffffffb0 50%, transparent 55%), radial-gradient(1px 1px at 74px 22px, #ffffff80 50%, transparent 55%),
+        radial-gradient(1.2px 1.2px at 131px 12px, #ffffffa0 50%, transparent 55%), radial-gradient(1px 1px at 190px 30px, #ffffff70 50%, transparent 55%),
+        linear-gradient(180deg, #121624, transparent 90%); --edge:#9a9aa5; --center:#c9a227; }
+.tk-road::before { content:''; position:absolute; left:0; right:0; top:0; bottom:18px; border-radius:8px 8px 0 0; pointer-events:none;
+  background:var(--sky); background-size:220px 44px, 220px 44px, 220px 44px, 220px 44px, 100% 100%; }
+.tk-sun { position:absolute; top:10px; right:34%; width:16px; height:16px; border-radius:50%; pointer-events:none;
+  background:#ffd166; box-shadow:0 0 0 4px color-mix(in srgb, #ffd166 25%, transparent); opacity:.85; }
+[data-theme="dark"] .tk-sun { background:#e9e6da; box-shadow:-4px 0 0 0 #121624 inset; opacity:.9; }
+.tk-far, .tk-near { position:absolute; left:0; right:0; pointer-events:none; background-repeat:repeat-x;
+  animation-play-state:paused; }
+.tk-far  { bottom:18px; height:44px; background-image:var(--hills); background-size:360px 44px; animation:tkFar 60s linear infinite paused; }
+.tk-near { bottom:18px; height:30px; background-image:var(--trees); background-size:260px 30px; animation:tkNear 18s linear infinite paused; }
+.tk-road.driving .tk-far, .tk-road.driving .tk-near { animation-play-state:running; }
+@keyframes tkFar  { to { background-position:-360px 0; } }
+@keyframes tkNear { to { background-position:-260px 0; } }
+/* US two-lane road: yellow centre line, white edge lines */
+.tk-asphalt { background:linear-gradient(var(--edge), var(--edge)) 0 2px / 100% 1.5px no-repeat,
+  linear-gradient(var(--edge), var(--edge)) 0 calc(100% - 3px) / 100% 1.5px no-repeat, var(--road); }
+.tk-road .tk-dashes { background:repeating-linear-gradient(90deg, var(--center) 0 16px, transparent 16px 34px); }
+/* delivered: envelopes fly out of the dock */
+.tk-env { position:absolute; left:40%; top:6px; font-size:14px; color:var(--accent); pointer-events:none; opacity:0;
+  animation: tkEnv 1.3s cubic-bezier(.2,.7,.3,1) forwards; }
+.tk-env:nth-child(odd) { color:var(--green); }
+@keyframes tkEnv { 0% { opacity:0; transform:translate(0, 10px) scale(.6) rotate(0); }
+  15% { opacity:1; }
+  100% { opacity:0; transform:translate(var(--dx), var(--dy)) scale(1) rotate(var(--rot)); } }
+/* truck details, lights, ETA, clickable posts */
+.tk-shadow { fill:rgba(0,0,0,.16); }
+[data-theme="dark"] .tk-shadow { fill:rgba(0,0,0,.5); }
+.tk-tape-w { stroke:#fff; stroke-width:1.3; }
+.tk-tape-r { stroke:#e5484d; stroke-width:1.3; stroke-dasharray:3 3; }
+.tk-marker { fill:#ffb020; }
+.tk-tail { fill:#8f2d2d; transition:fill .2s; }
+.tk-road.waiting .tk-tail, .tk-road.parked .tk-tail { fill:#ff3b30; filter:drop-shadow(0 0 1.5px #ff3b30); }
+.tk-flap { fill:var(--frame); }
+.tk-chrome { fill:var(--rim); }
+.tk-door { stroke:color-mix(in srgb, #000 25%, var(--accent)); stroke-width:.8; fill:none; }
+.tk-sleeper { filter:brightness(.92); }
+.tk-body { transform-box:view-box; }
+.tk-road.stopping .tk-body { animation: tkDip .45s ease-out; }
+@keyframes tkDip { 35% { transform:translateY(.9px); } 70% { transform:translateY(-.3px); } }
+.tk-road.hazard .tk-marker { animation: tkBlink .7s step-end infinite; }
+@keyframes tkBlink { 50% { opacity:.12; } }
+.tk-eta { position:absolute; bottom:calc(100% + 6px); right:0; white-space:nowrap; font-size:12px; font-weight:600;
+  color:var(--text2); background:var(--surface); border:1px solid var(--border); border-radius:99px; padding:1px 8px;
+  font-variant-numeric:tabular-nums; }
+.tk-eta:empty, .tk-road.arrived .tk-eta, .tk-road.parked .tk-eta { display:none; }
+.tk-stop { pointer-events:auto; cursor:pointer; }
+.tk-stop::before { content:''; position:absolute; left:-7px; right:-7px; top:-12px; bottom:0; }
+.tk-stop:hover i { transform:scale(1.25); }
+tr.q-flash td { animation: qFlash 1.6s ease-out; }
+@keyframes qFlash { 0%, 30% { background:color-mix(in srgb, var(--accent) 16%, transparent); } }
+
 .sp-card.done .sp-title i { color:var(--green); animation: spPop .35s var(--ease); }
 @keyframes spPop { 0% { transform:scale(.6); } 70% { transform:scale(1.15); } 100% { transform:scale(1); } }
 .sp-next { display:flex; align-items:center; gap:8px; padding:2px 16px 0; font-size:13px; color:var(--text2); }
 .sp-next[hidden] { display:none; }
 .sp-next b { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
-.sp-ring { width:16px; height:16px; transform:rotate(-90deg); flex-shrink:0; }
-.sp-ring circle { fill:none; stroke:var(--border); stroke-width:2.5; }
-.sp-ring .sp-ring-fill { stroke:var(--accent); stroke-dasharray:50.27; stroke-dashoffset:0; transition:stroke-dashoffset 1s linear; }
-.sp-card.sending-now .sp-ring { animation: spin 1s linear infinite; }
-.sp-card.sending-now .sp-ring .sp-ring-fill { stroke-dashoffset:37.7; transition:none; }
-@keyframes spin { to { transform:rotate(270deg); } }
 .sp-counters { display:flex; gap:8px; flex-wrap:wrap; padding:12px 16px; }
 .sp-counter { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--text2); padding:4px 10px;
   border-radius:99px; background:var(--surface2); border:1px solid var(--border); }
@@ -2574,13 +2701,12 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
           <!-- SENDING: lives outside the parse results so a reload mid-send still shows it -->
           <div class="sb-card sp-card" id="sendProgressCard" style="display:none" aria-live="polite">
             <div class="sp-head">
-              <span class="sp-title"><i class="ph-bold ph-paper-plane-tilt" id="spIcon"></i><span id="spTitle">Sending</span></span>
+              <span class="sp-title"><i class="ph-bold ph-truck" id="spIcon"></i><span id="spTitle">Sending</span></span>
               <span class="sp-meta"><span id="progressText">0 of 0</span> · <span id="progressPct">0%</span><span id="spElapsed"></span></span>
               <button type="button" class="sp-close" id="spClose" onclick="resetSendProgressUI(true)" title="Close" aria-label="Close" hidden><i class="ph-bold ph-x"></i></button>
             </div>
-            <div class="sp-track"><div class="sp-bar-fill" id="progressFill"></div><i class="ph-bold ph-paper-plane-tilt sp-plane" id="spPlane"></i></div>
+            <div class="tk-road" id="spRoad" aria-hidden="true"></div>
             <div class="sp-next" id="spNext" hidden>
-              <svg class="sp-ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="8" class="sp-ring-fill" id="spRing"/></svg>
               <span id="spNextText"></span>
             </div>
             <div class="sp-counters">
@@ -3028,7 +3154,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
                         onclick="hideFuBulkProgress()" title="Dismiss">✕</button>
               </span>
             </div>
-            <div class="fu-progress-track"><div class="fu-progress-fill" id="fuProgressFill"></div></div>
+            <div class="tk-road tk-compact" id="fuRoad" aria-hidden="true"></div>
             <div class="fu-progress-issues" id="fuProgressIssues" style="display:none"></div>
           </div>
 
@@ -4403,12 +4529,13 @@ let activeParseFilter = 'all';
 function resetSendProgressUI(force) {
   if (pollInterval && !force) return;
   const card = document.getElementById('sendProgressCard');
-  if (card) { card.style.display = 'none'; card.classList.remove('waiting', 'done', 'sending-now'); }
+  if (card) { card.style.display = 'none'; card.classList.remove('done'); }
   clearInterval(_spTick); _spTick = null;
   _spLast = { sent: 0, errors: 0, skipped: 0, logShown: 0 };
   if (force) _sendJob = null;
-  ['progressFill'].forEach(id => { const e = document.getElementById(id); if (e) e.style.width = '0%'; });
-  const plane = document.getElementById('spPlane'); if (plane) plane.style.left = '0%';
+  const road = document.getElementById('spRoad');
+  if (road) { road._p = null; road._arrived = false; const st = road.querySelector('.tk-stops'); if (st) { st._n = -1; st.innerHTML = ''; }
+    truckScene(road, 0, 'parked', '', { label: '', equip: '' }); }
   setEl('progressText', '0 of 0'); setEl('progressPct', '0%'); setEl('spElapsed', '');
   setEl('pSent', '0'); setEl('pErr', '0'); setEl('pSkip', '0'); setEl('spTitle', 'Sending');
   document.getElementById('spClose')?.setAttribute('hidden', '');
@@ -4713,6 +4840,166 @@ function setQueueRowState(idx, st, err, animate) {
     cell.appendChild(fly);
   }
 }
+// ── Truck scene: leaves the origin dock, drives one stop per email, backs into
+// the delivery dock when the job is done. Decorative (aria-hidden) — the card's
+// title and the "Next email in …" line carry the same information as text.
+function truckSceneHtml() {
+  const wheel = x => `<g transform="translate(${x} 29.9)"><g class="tk-wheel"><circle class="tk-tire" r="4.2"/>` +
+    `<circle class="tk-rim" r="1.9"/><path class="tk-spoke" d="M0-3.1V3.1M-3.1 0H3.1"/></g></g>`;
+  const dock = end => `<div class="tk-dock tk-dock-${end ? 'end' : 'start'}">` +
+    `<svg viewBox="0 0 60 54"><path class="dk-roof" d="M1 17 30 5 59 17Z"/>` +
+    `<rect class="dk-wall" x="3" y="16" width="54" height="37" rx="1.5"/>` +
+    `<rect class="dk-win" x="8" y="23" width="14" height="8" rx="1"/>` +
+    `<rect class="dk-gap" x="30" y="21" width="26" height="32"/>` +
+    `<g class="dk-door"><rect x="30" y="21" width="26" height="32"/><path d="M30 27.5h26M30 34h26M30 40.5h26M30 47h26"/></g></svg>` +
+    (end ? '<span class="tk-badge"><i class="ph-bold ph-check"></i></span><span class="tk-eta"></span>' : '') + `</div>`;
+  return `<span class="tk-sun"></span>` + dock(false) +
+    `<div class="tk-lane"><div class="tk-far"></div><div class="tk-near"></div>` +
+    `<div class="tk-asphalt"><div class="tk-dashes"></div></div><div class="tk-done"></div><div class="tk-stops"></div>` +
+    `<div class="tk-sign"><span class="tk-sign-dot"></span><span class="tk-sign-text"></span></div>` +
+    `<div class="tk-truck"><div class="tk-beam"></div><svg viewBox="0 0 88 36">` +
+      `<ellipse class="tk-shadow" cx="44" cy="34.3" rx="43" ry="1.7"/>` +
+      `<g class="tk-body">` +
+      `<circle class="tk-puff" cx="61.5" cy="1" r="2.2"/><circle class="tk-puff d2" cx="61.5" cy="1" r="2.2"/>` +
+      // dry van / reefer box: DOT tape, roof markers, tail light, progress label
+      `<g class="tv-box"><rect class="tk-trailer" x="1" y="4" width="52" height="20" rx="2"/><path class="tk-rib" d="M7 6v16M47 6v16"/>` +
+      `<path class="tk-tape-w" d="M2.5 22.4h49"/><path class="tk-tape-r" d="M2.5 22.4h49"/>` +
+      `<circle class="tk-marker" cx="3.2" cy="5.4" r=".9"/><circle class="tk-marker" cx="50.8" cy="5.4" r=".9"/>` +
+      `<text class="tk-label" x="27" y="17.2" text-anchor="middle"></text></g>` +
+      `<g class="tv-reefer"><rect class="tk-unit" x="47.2" y="6" width="5.8" height="10" rx="1"/><path class="tk-unit-vent" d="M48.6 9h3M48.6 11.3h3M48.6 13.6h3"/></g>` +
+      // flatbed with strapped freight
+      `<g class="tv-flat"><rect class="tk-deck" x="1" y="20" width="52" height="4" rx="1"/>` +
+      `<rect class="tk-crate" x="4" y="9" width="17" height="11" rx="1"/><rect class="tk-crate" x="24" y="12" width="12" height="8" rx="1"/>` +
+      `<rect class="tk-crate" x="39" y="7" width="11" height="13" rx="1"/><path class="tk-strap" d="M12.5 9v11M30 12v8M44.5 7v13"/>` +
+      `<circle class="tk-marker" cx="2.4" cy="20.6" r=".9"/></g>` +
+      `<rect class="tk-tail" x=".2" y="18" width="1.7" height="3.2" rx=".5"/>` +
+      `<rect class="tk-frame" x="2" y="24" width="82" height="2.4" rx="1.1"/>` +
+      `<rect class="tk-flap" x="4.2" y="24.5" width="1.2" height="6.2" rx=".4"/><rect class="tk-flap" x="55.4" y="24.5" width="1.2" height="6.2" rx=".4"/>` +
+      // sleeper + day cab, stack, mirror, grille, fuel tank, lights
+      `<rect class="tk-stack" x="62.2" y="1.5" width="2" height="9" rx="1"/>` +
+      `<rect class="tk-cab tk-sleeper" x="56" y="7" width="9.5" height="17.5" rx="1.6"/>` +
+      `<path class="tk-cab" d="M64.5 24.5V10a2.5 2.5 0 0 1 2.5-2.5h7.2l5.4 7.4H83a2 2 0 0 1 2 2v7.6z"/>` +
+      `<path class="tk-glass" d="M68.2 9.5h5.1l4.1 5.5h-9.2z"/><path class="tk-door" d="M67.2 16v8"/>` +
+      `<rect class="tk-frame" x="78.4" y="9.6" width="1.2" height="4.2" rx=".5"/>` +
+      `<rect class="tk-chrome" x="84" y="16.6" width="1.6" height="7" rx=".5"/>` +
+      `<rect class="tk-chrome" x="68.6" y="20.8" width="8" height="4.2" rx="2"/>` +
+      `<circle class="tk-marker" cx="73" cy="7.2" r=".8"/><circle class="tk-marker" cx="76" cy="7.2" r=".8"/>` +
+      `<rect class="tk-lamp" x="84.3" y="17.4" width="2" height="2.6" rx=".8"/>` +
+      `</g>` +
+      wheel(9.5) + wheel(18.5) + wheel(60.5) + wheel(68.5) + wheel(80.5) +
+    `</svg></div></div>` + dock(true);
+}
+// Trailer body for a load's equipment code (DAT / Truckstop).
+function _truckEquip(code) {
+  const c = (code || '').toUpperCase();
+  if (c === 'R' || c === 'RZ') return 'reefer';
+  if (/^(F|FD|FSD|FSDV|SD|SDL|DD|RGN|LB|MX|HS|C|SV)$/.test(c)) return 'flat';
+  return 'van';
+}
+// One post per email (the truck's nose reaches post k after email k); the last
+// stop is the delivery dock. More than 20 emails → a tick every 10 % instead.
+function _truckStops(road, stops, info) {
+  const box = road.querySelector('.tk-stops');
+  if (!box || !stops) return;
+  const n = stops.length, at = f => `calc((100% - var(--tw)) * ${f} + var(--tw) + 8px)`;   // just ahead of the bumper
+  if (box._n !== n) {
+    box._n = n;
+    box.innerHTML = n > 20
+      ? Array.from({length: 9}, (_, i) => `<span class="tk-tick" style="left:${at((i + 1) / 10)}"></span>`).join('')
+      : stops.slice(0, -1).map((_, k) => `<span class="tk-stop" style="left:${at((k + 1) / n)}"><i></i></span>`).join('');
+  }
+  if (n <= 20) box.querySelectorAll('.tk-stop').forEach((el, k) => {
+    el.dataset.st = stops[k] || 'queued';
+    const it = info && info[k];
+    if (it) { el.title = it.title || ''; el.dataset.idx = it.idx == null ? '' : it.idx; }
+  });
+}
+// Click a post → the matching row in the review queue, briefly highlighted.
+function focusQueueRow(idx) {
+  let row = document.getElementById('qrow-' + idx);
+  if (!row && activeParseFilter !== 'all') { setParseFilter('all'); row = document.getElementById('qrow-' + idx); }
+  if (!row) return;
+  row.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+  row.classList.remove('q-flash'); void row.offsetWidth; row.classList.add('q-flash');
+}
+// frac 0..1 = share of the job delivered; mode: parked | sending | waiting | done
+// opts: {stops: [state per email], equip: load code, label: text on the trailer}
+function truckScene(road, frac, mode, sign, opts) {
+  if (!road) return;
+  if (!road.firstChild) {
+    road.innerHTML = truckSceneHtml();
+    road.addEventListener('click', e => {
+      const st = e.target.closest('.tk-stop');
+      if (st && st.dataset.idx) focusQueueRow(+st.dataset.idx);
+    });
+  }
+  const prev = road._p == null ? -1 : road._p, p = Math.max(0, Math.min(1, frac));
+  road._p = p;
+  road.style.setProperty('--p', p.toFixed(4));
+  road.classList.toggle('parked', mode === 'parked');
+  road.classList.toggle('waiting', mode === 'waiting');
+  road.classList.toggle('arrived', mode === 'done');
+  const moved = (mode !== 'parked' && p !== prev) || (mode === 'done' && !road._arrived);
+  if (mode === 'done' && !road._arrived && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    clearTimeout(road._env);
+    road._env = setTimeout(() => {      // delivered: a handful of envelopes fly out of the dock
+      const dock = road.querySelector('.tk-dock-end');
+      if (!dock) return;
+      for (let i = 0; i < 6; i++) {
+        const env = document.createElement('i');
+        env.className = 'ph-bold ph-envelope-simple tk-env';
+        env.style.setProperty('--dx', (-70 + i * 18 + Math.random() * 10).toFixed(0) + 'px');
+        env.style.setProperty('--dy', (-46 - Math.random() * 26).toFixed(0) + 'px');
+        env.style.setProperty('--rot', (-30 + Math.random() * 60).toFixed(0) + 'deg');
+        env.style.animationDelay = (i * 70) + 'ms';
+        env.addEventListener('animationend', () => env.remove());
+        dock.appendChild(env);
+      }
+    }, 2300);
+  }
+  road._arrived = mode === 'done';
+  if (moved) {                          // wheels turn and the lane lines run only while it drives
+    road.classList.add('driving');
+    clearTimeout(road._drive);
+    road._drive = setTimeout(() => {
+      road.classList.remove('driving');
+      if (mode !== 'done') {           // the body settles on its springs when it stops
+        road.classList.add('stopping');
+        setTimeout(() => road.classList.remove('stopping'), 450);
+      }
+    }, mode === 'done' ? 1700 : 1300);
+  }
+  if (sign != null) { const t = road.querySelector('.tk-sign-text'); if (t) t.textContent = sign; }
+  if (opts) {
+    if (opts.stops) _truckStops(road, opts.stops, opts.stopInfo);
+    if (opts.eta !== undefined) { const e = road.querySelector('.tk-eta'); if (e) e.textContent = opts.eta || ''; }
+    if (opts.hazard) {                 // a failed email: flashers for a few seconds
+      road.classList.add('hazard');
+      clearTimeout(road._hz);
+      road._hz = setTimeout(() => road.classList.remove('hazard'), 3500);
+    }
+    if (opts.equip !== undefined) {
+      const eq = _truckEquip(opts.equip);
+      ['van', 'reefer', 'flat'].forEach(k => road.classList.toggle('eq-' + k, k === eq));
+    }
+    if (opts.label != null) { const l = road.querySelector('.tk-label'); if (l) l.textContent = opts.label; }
+  }
+}
+const _SP_SEND_SEC = 4;              // rough time one email takes to go out
+function _spEta(s, log, doneN) {
+  const left = s.total - doneN;
+  if (s.done || left <= 0) return null;
+  const ts = log.map(e => e.at ? Date.parse(e.at) : NaN).filter(t => !isNaN(t));
+  const pace = ts.length >= 2 ? (ts[ts.length - 1] - ts[0]) / 1000 / (ts.length - 1) : (s.delay_avg || 32) + _SP_SEND_SEC;
+  const sec = (s.next_in != null ? s.next_in : 0) + _SP_SEND_SEC + (left - 1) * pace;
+  return { at: new Date(Date.now() + sec * 1000), sec };
+}
+function _spEtaText(eta) {
+  if (!eta) return '';
+  const t = eta.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const m = Math.round(eta.sec / 60);
+  return `ETA ${t} · ${m >= 1 ? '~' + m + ' min' : '<1 min'}`;
+}
 function _spFmt(sec) { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
 function _spBump(id, val, key) {
   const el = document.getElementById(id); if (!el) return;
@@ -4727,13 +5014,15 @@ async function startSend() {
   if (!loads.length) { toast('No valid loads selected', true); return; }
   document.getElementById('sendBtn').disabled = true;
   resetSendProgressUI(true);
-  const spIcon = document.getElementById('spIcon'); if (spIcon) spIcon.className = 'ph-bold ph-paper-plane-tilt';
+  const spIcon = document.getElementById('spIcon'); if (spIcon) spIcon.className = 'ph-bold ph-truck';
   const rows = checked.filter(i => !parsedLoads[i].skip);
   _sendJob = { rows, state: rows.map(() => 'queued'), err: rows.map(() => ''), started: Date.now() };
   rows.forEach((idx, k) => setQueueRowState(idx, k === 0 ? 'sending' : 'queued', '', false));
   const spc = document.getElementById('sendProgressCard');
   if (spc) spc.style.display = 'block';
   setEl('progressText', '0 of ' + rows.length);
+  truckScene(document.getElementById('spRoad'), 0, 'parked', '', {
+    stops: rows.map(() => 'queued'), equip: (parsedLoads[rows[0]] || {}).equip, label: '0/' + rows.length });
   const res = await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loads})});
   const data = await res.json();
   if (!data.ok) {
@@ -4763,9 +5052,28 @@ async function pollStatus() {
   const log = s.log || [];
   const doneN = Math.min(s.total, log.length || s.current || 0);
   const pct = s.total ? Math.round(100 * doneN / s.total) : 0;
-  document.getElementById('progressFill').style.width = pct + '%';
-  const plane = document.getElementById('spPlane');
-  if (plane) plane.style.left = `clamp(10px, ${pct}%, calc(100% - 10px))`;
+  // the truck stands at the last delivered stop while waiting and rolls toward
+  // the next one while that email is being sent
+  const road = document.getElementById('spRoad');
+  const waiting = s.next_in != null && !s.done;
+  const frac = s.done ? 1 : s.total ? (doneN + (waiting ? 0 : 0.4)) / s.total : 0;
+  const curLoad = _sendJob ? parsedLoads[_sendJob.rows[Math.min(log.length, _sendJob.rows.length - 1)]] : null;
+  const stState = e => e ? (e.status === 'sent' ? 'sent' : e.status === 'error' ? 'error' : 'skipped') : 'queued';
+  const eta = _spEta(s, log, doneN);
+  truckScene(road, frac, s.done ? 'done' : waiting ? 'waiting' : 'sending', waiting ? '' : 'Sending', {
+    stops: Array.from({length: s.total}, (_, k) => stState(log[k])),
+    stopInfo: Array.from({length: s.total}, (_, k) => {
+      const e = log[k], idx = _sendJob ? _sendJob.rows[k] : null, l = idx != null ? parsedLoads[idx] || {} : {};
+      const when = e && e.at ? new Date(e.at).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : '';
+      const what = !e ? 'Queued' : e.status === 'sent' ? `Sent ${when}` : e.status === 'error' ? `Failed: ${e.error || 'not sent'}` : `Skipped: ${e.error || ''}`;
+      return { idx, title: [`#${k + 1}`, (e && e.email) || l.email || '', l.origin ? `${l.origin} → ${l.destination}` : '', what].filter(Boolean).join(' · ') };
+    }),
+    equip: curLoad ? curLoad.equip : undefined,
+    label: `${doneN}/${s.total}`,
+    eta: eta ? 'ETA ' + eta.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '',
+    hazard: (s.errors || 0) > (_spLast.errors || 0),
+  });
+  setEl('spElapsed', eta ? ' · ' + _spEtaText(eta) : '');
   setEl('progressText', `${doneN} of ${s.total}`);
   setEl('progressPct', pct + '%');
   _spBump('pSent', s.sent || 0, 'sent');
@@ -4801,9 +5109,7 @@ async function pollStatus() {
   _spLast.logShown = log.length;
 
   // what happens next: countdown between emails, or "sending to …"
-  const next = document.getElementById('spNext'), ring = document.getElementById('spRing');
-  card.classList.toggle('waiting', s.next_in != null && !s.done);
-  card.classList.toggle('sending-now', s.next_in == null && !s.done);
+  const next = document.getElementById('spNext');
   if (!s.done) {
     next.hidden = false;
     if (s.next_in != null) {
@@ -4813,7 +5119,7 @@ async function pollStatus() {
         if (!_spNext) return;
         const left = Math.max(0, (_spNext.until - Date.now()) / 1000);
         document.getElementById('spNextText').innerHTML = `Next email in <b>${_spFmt(left)}</b>` + (_spNext.email ? ` · ${esc(_spNext.email)}` : '');
-        if (ring) ring.style.strokeDashoffset = (50.27 * (1 - left / _spNext.total)).toFixed(2);
+        truckScene(road, road ? road._p : 0, 'waiting', _spFmt(left));   // the red light counts down
       };
       draw();
       if (!_spTick) _spTick = setInterval(draw, 1000);
@@ -4832,7 +5138,7 @@ async function pollStatus() {
     next.hidden = true;
     card.classList.add('done');
     const spIcon = document.getElementById('spIcon'); if (spIcon) spIcon.className = 'ph-bold ph-check-circle';
-    setEl('spTitle', `Done — ${s.sent} sent` + (s.errors ? `, ${s.errors} failed` : '') + (s.skipped ? `, ${s.skipped} skipped` : ''));
+    setEl('spTitle', `Delivered — ${s.sent} sent` + (s.errors ? `, ${s.errors} failed` : '') + (s.skipped ? `, ${s.skipped} skipped` : ''));
     if (_sendJob && _sendJob.started) setEl('spElapsed', ' · ' + _spFmt((Date.now() - _sendJob.started) / 1000));
     document.getElementById('spClose')?.removeAttribute('hidden');
     document.getElementById('sendBtn').disabled = false;
@@ -7571,6 +7877,8 @@ async function trackFuBulkJob() {
   if (labelEl) labelEl.textContent = 'Sending follow-ups…';
   if (fill) fill.style.width = '0%';
   if (countEl) countEl.textContent = '…';
+  const road = document.getElementById('fuRoad');
+  if (road) { road._p = null; road._arrived = false; truckScene(road, 0, 'parked', '', { equip: 'V', label: '' }); }
 
   let last = null;
   try {
@@ -7582,6 +7890,7 @@ async function trackFuBulkJob() {
           const total = last.total || 0, cur = Math.min(last.current || 0, total);
           if (countEl) countEl.textContent = cur + '/' + total;
           if (fill && total) fill.style.width = Math.round(cur / total * 100) + '%';
+          if (road && total && last.running) truckScene(road, cur / total, 'sending', 'Sending', { label: cur + '/' + total });
           if (!last.running) break;
         }
       } catch(e) { /* transient network error — keep polling */ }
@@ -7625,9 +7934,10 @@ function _renderFuBulkSummary(s) {
     issues.style.display = '';
     if (closeBtn) closeBtn.style.display = '';   // keep panel open until dismissed
   } else {
-    setTimeout(hideFuBulkProgress, 1800);
+    setTimeout(hideFuBulkProgress, 3400);      // after the truck backs into the dock
   }
   if (fill) fill.style.width = '100%';
+  truckScene(document.getElementById('fuRoad'), 1, 'done', '', { label: (s.total || 0) + '/' + (s.total || 0) });
 }
 
 function hideFuBulkProgress() {

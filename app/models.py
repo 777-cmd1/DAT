@@ -512,6 +512,9 @@ class FollowupContact(db.Model):
     # replied and awaits a human answer (🔥 in the Today queue).
     touch_enabled = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     attention_at  = db.Column(db.DateTime, nullable=True)
+    # Consecutive scheduler send failures — drives the retry backoff so a dead
+    # Gmail token can't make the scheduler hammer the same contact every tick.
+    send_fail_count = db.Column(db.Integer, default=0, nullable=False, server_default='0')
     last_followup_sent_at = db.Column(db.DateTime)
     last_reply_at = db.Column(db.DateTime)
     last_activity_at = db.Column(db.DateTime)

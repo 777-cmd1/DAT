@@ -6975,6 +6975,40 @@ def _prefetch_replies_before_sending(now):
     return hold
 
 
+# ── Scheduler send-failure backoff ───────────────────────────────────────────
+# A failed scheduler send used to leave next_followup_at untouched: the contact
+# stayed due, every tick retried it and wrote another followup_events row. One
+# account with a revoked Gmail token produced 368k rows (12k per contact) and
+# filled the database volume, which took production down on 2026-10-27.
+SEND_FAIL_BACKOFF_HOURS = [6, 24, 72]   # 1st / 2nd / 3rd+ consecutive failure
+SEND_FAIL_GIVE_UP_AFTER = 5             # then stop auto-retrying, ask a human
+
+def _record_send_failure(fc, event_type, err, now=None):
+    """Back off a failed scheduler send instead of retrying it on every tick.
+
+    Writes an event only on the first failure and on giving up — never once per
+    attempt — so a broken account can no longer flood followup_events. Returns
+    True once auto-sending for this contact has been given up on.
+    """
+    now = now or _utcnow()
+    n = (fc.send_fail_count or 0) + 1
+    fc.send_fail_count = n
+    hours = SEND_FAIL_BACKOFF_HOURS[min(n, len(SEND_FAIL_BACKOFF_HOURS)) - 1]
+    fc.next_followup_at = now + timedelta(hours=hours)
+    gave_up = n >= SEND_FAIL_GIVE_UP_AFTER
+    if gave_up:
+        fc.attention_at = now           # 🔥 surfaces it for manual handling
+    if n == 1 or n == SEND_FAIL_GIVE_UP_AFTER:
+        _record_event(fc, event_type, actor_type='scheduler',
+                      from_stage=fc.stage, to_stage=fc.stage,
+                      metadata_json=json.dumps({'error': str(err), 'attempt': n}),
+                      notes=('Send failed - auto-send paused, needs attention'
+                             if gave_up else 'Send failed - backing off'))
+    app.logger.warning('scheduler send failed (attempt %s) for %s: %s',
+                       n, fc.contact_email, err)
+    return gave_up
+
+
 def _run_scheduled_followups():
     """Process due follow-up contacts and send emails. Called from daemon thread.
     Uses SELECT FOR UPDATE SKIP LOCKED on PostgreSQL to prevent duplicate sends."""
@@ -7060,14 +7094,12 @@ def _run_scheduled_followups():
                         fc.completed_fu3_at = now
                         _schedule_touch(fc, force=True)   # drip done → cadence takes over (same as manual send)
 
+                    fc.send_fail_count = 0
                     _record_event(fc, 'auto_send', actor_type='scheduler',
                                   from_stage=old_stage, to_stage=fc.stage)
                     sent_total += 1
                 else:
-                    _record_event(fc, 'auto_send', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage,
-                                  metadata_json=json.dumps({'error': str(err)}),
-                                  notes='Send failed - will retry')
+                    _record_send_failure(fc, 'auto_send', err, now)
 
                 db.session.commit()
             except Exception as e:
@@ -7118,15 +7150,13 @@ def _run_scheduled_followups():
                     fc.last_followup_sent_at = now
                     fc.last_activity_at = now
                     _restore_contact_schedule(fc, now=now)
+                    fc.send_fail_count = 0
                     _record_event(fc, 'scheduled_once_sent', actor_type='scheduler',
                                   from_stage=fc.stage, to_stage=fc.stage)
                     processed_ids.add(fc.id)
                     sched_total += 1
                 else:
-                    _record_event(fc, 'scheduled_once_sent', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage,
-                                  metadata_json=json.dumps({'error': str(err)}),
-                                  notes='Send failed - will retry')
+                    _record_send_failure(fc, 'scheduled_once_sent', err, now)
                 db.session.commit()
             except Exception as e:
                 db.session.rollback()
@@ -7187,14 +7217,12 @@ def _run_scheduled_followups():
                         app.logger.error(f'FU recurring next-date error for {fc.contact_email}: {ve}')
                         fc.next_followup_at = None
 
+                    fc.send_fail_count = 0
                     _record_event(fc, 'recurring_sent', actor_type='scheduler',
                                   from_stage=fc.stage, to_stage=fc.stage)
                     rec_total += 1
                 else:
-                    _record_event(fc, 'recurring_sent', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage,
-                                  metadata_json=json.dumps({'error': str(err)}),
-                                  notes='Send failed - will retry')
+                    _record_send_failure(fc, 'recurring_sent', err, now)
 
                 db.session.commit()
             except Exception as e:
@@ -7250,15 +7278,13 @@ def _run_scheduled_followups():
                     fc.last_activity_at = now
                     fc.attention_at = None
                     _schedule_touch(fc, ws, force=True)
+                    fc.send_fail_count = 0
                     _record_event(fc, 'touch_sent', actor_type='scheduler',
                                   from_stage=fc.stage, to_stage=fc.stage)
                     processed_ids.add(fc.id)
                     touch_total += 1
                 else:
-                    _record_event(fc, 'touch_sent', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage,
-                                  metadata_json=json.dumps({'error': str(err)}),
-                                  notes='Send failed - will retry')
+                    _record_send_failure(fc, 'touch_sent', err, now)
                 db.session.commit()
             except Exception as e:
                 db.session.rollback()
@@ -7456,6 +7482,7 @@ with app.app_context():
         # Follow-up cadence engine (Today's touches)
         ('followup_contacts', 'touch_enabled',       'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('followup_contacts', 'attention_at',        'TIMESTAMP'),
+        ('followup_contacts', 'send_fail_count',     'INTEGER NOT NULL DEFAULT 0'),
         ('users',             'session_version',     'INTEGER NOT NULL DEFAULT 0'),
         ('replies',           'matched_recipient',   'VARCHAR(255)'),
         ('replies',           'date_checked',        'BOOLEAN NOT NULL DEFAULT FALSE'),

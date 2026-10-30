@@ -107,15 +107,28 @@ _NEXT_WEEK = re.compile(r'\bnext\s+week\b')
 _NEXT_MONTH = re.compile(r'\bnext\s+month\b')
 _IN_N = re.compile(
     r'\bin\s+(\d{1,3}|' + '|'.join(_NUMBER_WORDS) + r')\s+(day|week|month)s?\b')
-_MONTH_DAY = re.compile(_MONTH_NAME + r'\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?!\d)')
-_DAY_MONTH = re.compile(r'\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?' + _MONTH_NAME + r'\b')
+_MONTH_DAY = re.compile(r'\b' + _MONTH_NAME + r'\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?!\d)')
+# "may" is left out of the day-first form: "1 may work" is prose, not 1 May.
+_MONTH_NAME_NO_MAY = _MONTH_NAME.replace('|may|', '|')
+_DAY_MONTH = re.compile(r'\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?' + _MONTH_NAME_NO_MAY + r'\b')
+# A date already past this year is only read as next year's when the text says
+# "come back later": otherwise it is an incidental date ("signed on Oct 12").
+_FORWARD_CUE = re.compile(r'\b(after|until|till|back)\b')
 
 
-def _explicit_date(month_word: str, day: int, now: datetime):
+def _norm(text) -> str:
+    """Lowercase, fold curly apostrophes to straight, collapse all whitespace."""
+    t = (text or '').lower().replace('’', "'").replace('‘', "'")
+    return ' '.join(t.split())
+
+
+def _explicit_date(month_word: str, day: int, now: datetime, roll_forward: bool):
     month = _MONTHS[month_word[:3]]
     try:
         candidate = now.replace(month=month, day=day)
         if candidate.date() < now.date():
+            if not roll_forward:
+                return None
             candidate = candidate.replace(year=now.year + 1)
     except ValueError:      # e.g. February 30
         return None
@@ -128,8 +141,9 @@ def parse_deferral(text: str, now: datetime):
     Never returns a datetime at or before `now`: a past date would make the
     contact instantly overdue, so None is returned instead.
     """
-    t = (text or '').lower()
+    t = _norm(text)
     result = None
+    roll = bool(_FORWARD_CUE.search(t))
 
     m = _IN_N.search(t)
     if m:
@@ -143,11 +157,11 @@ def parse_deferral(text: str, now: datetime):
     else:
         m = _MONTH_DAY.search(t)
         if m:
-            result = _explicit_date(m.group(1), int(m.group(2)), now)
+            result = _explicit_date(m.group(1), int(m.group(2)), now, roll)
         else:
             m = _DAY_MONTH.search(t)
             if m:
-                result = _explicit_date(m.group(2), int(m.group(1)), now)
+                result = _explicit_date(m.group(2), int(m.group(1)), now, roll)
 
     if result is None or result <= now or result - now > _MAX_DEFERRAL:
         return None
@@ -175,7 +189,7 @@ def interpret_reply(category, text: str, now: datetime):
     kind is one of 'load', 'refusal', 'deferral', 'unknown'. resume_at is only
     set for a 'deferral' that states a time, and is always after `now`.
     """
-    t = (text or '').lower()
+    t = _norm(text)    # real mail has curly apostrophes and hard-wrapped lines
     if category in (None, 'negative'):
         if any(p in t for p in _REFUSAL_PHRASES):
             return 'refusal', None

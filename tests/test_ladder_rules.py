@@ -71,7 +71,7 @@ def test_load_conversation_key_without_thread_falls_back_to_email_and_day():
 def test_parse_deferral_relative_and_explicit_dates():
     assert ladder.parse_deferral('check back in 3 days', NOW) == NOW + timedelta(days=3)
     assert ladder.parse_deferral('ping me in two weeks', NOW) == NOW + timedelta(days=14)
-    assert ladder.parse_deferral('try us March 15th', NOW) == datetime(2027, 3, 15, 9, 0, 0)
+    assert ladder.parse_deferral('check back March 15th', NOW) == datetime(2027, 3, 15, 9, 0, 0)
     assert ladder.parse_deferral('after 20 Nov please', NOW) == datetime(2026, 11, 20, 9, 0, 0)
 
 def test_parse_deferral_returns_none_rather_than_a_past_or_invalid_date():
@@ -109,3 +109,49 @@ def test_partial_cfg_falls_back_to_defaults():
 def test_hot_weekly_can_be_switched_off():
     cfg = dict(ladder.LADDER_DEFAULTS); cfg['hot_weekly'] = False
     assert ladder.next_touch_at('hot', 0, NOW, cfg) == NOW + timedelta(days=1)
+
+
+# --- review fixes: real-world email text -----------------------------------
+
+def test_curly_apostrophes_match_the_straight_phrases():
+    for text in ('we’re covered', 'It’s covered, thanks', 'We’RE covered this week'):
+        assert ladder.interpret_reply('negative', text, NOW)[0] == 'deferral', text
+    assert ladder.interpret_reply('negative', 'please don’t contact me', NOW) == ('refusal', None)
+
+def test_wrapped_lines_and_extra_spaces_do_not_break_phrases():
+    for text in ('nothing\nthis week', 'nothing  this   week', 'no loads\r\nthis week', 'we are\tcovered'):
+        assert ladder.interpret_reply('negative', text, NOW)[0] == 'deferral', text
+    assert ladder.interpret_reply('negative', 'do not\ncontact me', NOW) == ('refusal', None)
+    assert ladder.parse_deferral('try us next\nmonth', NOW) == NOW + timedelta(days=30)
+
+def test_the_shared_declined_phrases_are_deferrals_but_mc_blockers_stay_refusals():
+    for text in ("we're covered", "it's covered", 'all covered', 'load is covered', 'already covered',
+                 'nothing at this time', 'not at this time'):
+        assert ladder.interpret_reply('negative', text, NOW)[0] == 'deferral', text
+    for text in ("can't work with your mc", 'cannot work with your mc', 'can not work with your mc', 'not interested'):
+        assert ladder.interpret_reply('negative', text, NOW) == ('refusal', None), text
+
+
+# --- review fixes: incidental dates are not deferrals ----------------------
+
+def test_prose_containing_may_is_not_a_date():
+    assert ladder.parse_deferral('1 may work', NOW) is None
+    assert ladder.interpret_reply(None, '1 may work', NOW)[0] == 'unknown'
+    assert ladder.parse_deferral('5 May', NOW) is None            # past, no cue
+    assert ladder.parse_deferral('after May 5', NOW) == datetime(2027, 5, 5, 9, 0, 0)
+
+def test_month_stem_inside_a_word_is_not_a_month():
+    assert ladder.parse_deferral('check back grammar 12', NOW) is None
+
+def test_a_past_date_is_not_rolled_forward_without_a_forward_cue():
+    assert ladder.parse_deferral('we signed with another broker on Oct 12', NOW) is None
+    assert ladder.interpret_reply('negative', 'we signed with another broker on Oct 12', NOW) == ('refusal', None)
+    assert ladder.interpret_reply(None, 'booked it on Oct 12', NOW)[0] == 'unknown'
+
+def test_a_past_date_rolls_forward_only_with_a_forward_cue():
+    nxt = datetime(2027, 10, 12, 9, 0, 0)
+    for text in ('check back Oct 12', 'nothing until Oct 12', 'call me after 12 Oct', 'till Oct 12'):
+        assert ladder.parse_deferral(text, NOW) == nxt, text
+
+def test_a_future_date_this_year_needs_no_cue():
+    assert ladder.parse_deferral('Dec 5', NOW) == datetime(2026, 12, 5, 9, 0, 0)

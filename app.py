@@ -167,6 +167,20 @@ def _perf_end(response):
         app.logger.log(level, f'PERF {request.method} {request.path} → {elapsed_ms:.0f}ms')
     return response
 
+@app.after_request
+def _no_store_html(response):
+    """Never cache HTML: every page embeds a session-bound CSRF token.
+
+    A cached page carries a token from an older session, so the next POST is
+    rejected with "Invalid CSRF token" — which is what locked a user out of
+    /login on 2026-10-30. Responses here are user-specific anyway, so caching
+    them was never safe.
+    """
+    if response.mimetype == 'text/html':
+        response.headers['Cache-Control'] = 'no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+    return response
+
 # ── CSRF helpers ─────────────────────────────────────────────────────────────
 # Session-based CSRF token for HTML form pages (login, register, reset).
 # JSON-only API routes are covered by SameSite=Lax cookie.

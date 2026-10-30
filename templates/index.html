@@ -2669,7 +2669,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 
           <!-- DAT INPUT CARD -->
           <div class="dat-input-card">
-            <div class="dat-input-header" onclick="if (this.parentElement.classList.contains('collapsed')) setDatCollapsed(false)">
+            <div class="dat-input-header" onclick="if (this.parentElement.classList.contains('collapsed')) setDatCollapsed(false, true)">
               <div class="dat-input-title">
                 <i class="ph-bold ph-terminal" style="font-size:14px;color:var(--blue)"></i>
                 DAT Text Input
@@ -2678,17 +2678,17 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
               <div class="dat-input-status">
                 <div class="dat-parse-dot" id="datParseDot"></div>
                 <span class="dat-input-hint" id="datParseHint">paste to auto-parse</span>
-                <button type="button" class="dat-edit" id="datEditBtn" onclick="event.stopPropagation();setDatCollapsed(false)" hidden>
+                <button type="button" class="dat-edit" id="datEditBtn" onclick="event.stopPropagation();setDatCollapsed(false, true)" hidden>
                   <i class="ph-bold ph-pencil-simple"></i> Edit</button>
               </div>
             </div>
             <textarea id="datText"
               placeholder="Paste copied loads from DAT One here…&#10;&#10;The app will automatically detect routes, dates, equipment and broker emails."
-              onpaste="_datPasted = true" oninput="debounceParse(); updateDatMeta()"></textarea>
+              oninput="debounceParse(); updateDatMeta()"></textarea>
             <div class="dat-input-footer">
               <span class="dat-line-count" id="datLineMeta">0 lines</span>
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <button class="btn btn-outline" id="datCollapseBtn" style="font-size:12px;padding:5px 12px" onclick="setDatCollapsed(true)" hidden>
+                <button class="btn btn-outline" id="datCollapseBtn" style="font-size:12px;padding:5px 12px" onclick="setDatCollapsed(true, true)" hidden>
                   <i class="ph-bold ph-caret-up" style="font-size:13px;margin-right:3px;vertical-align:middle"></i>Collapse
                 </button>
                 <button class="btn btn-outline" style="font-size:12px;padding:5px 12px" onclick="document.getElementById('datText').value='';updateDatMeta();document.getElementById('parseResults').style.display='none';document.getElementById('parseResults').removeAttribute('data-has-results');activeParseFilter='all';parsedLoads=[];setDatCollapsed(false);document.getElementById('datParseDot').className='dat-parse-dot';document.getElementById('datParseHint').textContent='paste to auto-parse'">
@@ -3895,7 +3895,7 @@ function nav(page, el) {
       setParseFilter('all');                       // recount + render the queue
       const pr = document.getElementById('parseResults');
       if (pr) { pr.style.display = 'block'; pr.setAttribute('data-has-results', 'true'); }
-      setDatCollapsed(parsedLoads.length > 0);
+      setDatCollapsed(datFoldPref() && parsedLoads.length > 0);
       // Restore checked state
       const savedChecked = sessionStorage.getItem('dat_checked');
       if (savedChecked) {
@@ -4579,10 +4579,16 @@ function loadSendDemoDat() {
   updateDatMeta();
   loadParseContext().finally(() => parseDat());
 }
-// The input folds to one line after a paste is parsed, so the queue sits right
-// under it; Edit (or a click on the header) opens it again.
-let _datPasted = false;
-function setDatCollapsed(on) {
+// Folding the input is a manual choice and is remembered. It used to fold itself
+// after every parsed paste, which meant clicking Edit again on each new batch of
+// loads — loads arrive in batches, so that fought the user on every round.
+const DAT_FOLD_KEY = 'dat_input_folded';
+
+function datFoldPref() {
+  try { return localStorage.getItem(DAT_FOLD_KEY) === '1'; } catch(e) { return false; }
+}
+
+function setDatCollapsed(on, persist) {
   const card = document.querySelector('.dat-input-card');
   if (!card) return;
   card.classList.toggle('collapsed', on);
@@ -4593,6 +4599,14 @@ function setDatCollapsed(on) {
   const meta = document.getElementById('datCollapsedMeta');
   if (meta) meta.textContent = on ? '· ' + (document.getElementById('datLineMeta')?.textContent || '') : '';
   if (!on) document.getElementById('datText')?.focus();
+  if (persist) { try { localStorage.setItem(DAT_FOLD_KEY, on ? '1' : '0'); } catch(e) {} }
+}
+
+// Re-apply the current fold state so the Edit/Collapse buttons refresh after a
+// parse, without changing whether the input is open.
+function refreshDatFold() {
+  const card = document.querySelector('.dat-input-card');
+  setDatCollapsed(!!card && card.classList.contains('collapsed'));
 }
 function debounceParse() {
   const text = document.getElementById('datText').value.trim();
@@ -4615,8 +4629,7 @@ function parseDat() {
   const results = document.getElementById('parseResults');
   results.style.display = 'block';
   results.setAttribute('data-has-results', 'true');
-  setDatCollapsed(_datPasted && parsedLoads.length > 0);
-  _datPasted = false;
+  refreshDatFold();   // keep it open — only the user folds the input now
 }
 
 // Mirrors _build_subject() on the server: "Origin to Destination, date, Van, 53 ft"

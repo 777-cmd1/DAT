@@ -45,3 +45,4 @@ instance/
 Thumbs.db
 .idea/
 .vscode/
+.superpowers/

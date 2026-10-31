@@ -2568,6 +2568,98 @@ html.sb-collapsed .nav-section + .nav-item { margin-top: 12px; }
 html.sb-collapsed .nav-badge { position: absolute; top: 5px; right: 9px; width: 8px; height: 8px; min-width: 0; padding: 0;
   font-size: 0; background: var(--accent); }
 html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
+
+/* ── Follow-up funnel scoreboard (2026-10) ──
+   Rung colours are a temperature scale built from the design tokens:
+   client = green (success), hot = yellow (attention), warm = muted yellow,
+   neutral = blue (info), cold and off-ladder = grey. */
+#fuFunnelTab { display: flex; flex-direction: column; gap: 14px; }
+.fu-fn-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow); padding: 18px 20px; min-width: 0; }
+.fu-fn-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.fu-fn-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.fu-fn-sub { font-size: 12px; color: var(--text3); }
+.fu-fn-note { font-size: 12px; color: var(--text3); line-height: 1.5; margin-top: 10px; }
+.fu-fn-empty { font-size: 13px; color: var(--text2); line-height: 1.5; padding: 4px 0; }
+.fu-fn-error { font-size: 13px; color: var(--red); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fu-rg-client { --rg: var(--green); }
+.fu-rg-hot { --rg: var(--yellow); }
+.fu-rg-warm { --rg: color-mix(in srgb, var(--yellow) 55%, var(--text3)); }
+.fu-rg-neutral { --rg: var(--blue); }
+.fu-rg-cold, .fu-rg-dormant, .fu-rg-excluded { --rg: var(--text3); }
+.fu-rg-pill { display: inline-block; font-size: 12px; font-weight: 600; line-height: 1.5; padding: 1px 8px; border-radius: 999px;
+  white-space: nowrap; color: var(--rg, var(--text2)); background: color-mix(in srgb, var(--rg, var(--text3)) 12%, transparent); }
+/* rung strip */
+.fu-rung-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.fu-rung { text-align: left; font: inherit; color: inherit; cursor: pointer; min-width: 0;
+  background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--rg); border-radius: 12px; padding: 12px 14px;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.fu-rung:hover { background: var(--surface3); border-color: var(--border-h); border-left-color: var(--rg); }
+.fu-rung-n { font-size: 28px; font-weight: 700; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
+.fu-rung.zero .fu-rung-n { color: var(--text3); }
+.fu-rung-name { margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: .04em; color: var(--rg); }
+.fu-rung-d { margin-top: 2px; font-size: 12px; color: var(--text3); }
+.fu-rung-aside { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.fu-rung-chip { font: inherit; font-size: 12px; color: var(--text2); cursor: pointer; background: transparent;
+  border: 1px dashed var(--border2); border-radius: 10px; padding: 6px 12px;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.fu-rung-chip:hover { background: var(--surface2); border-color: var(--border-h); color: var(--text); }
+.fu-rung-chip b { color: var(--text); font-variant-numeric: tabular-nums; margin-right: 4px; }
+/* needs you */
+.fu-ny-row { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 6px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; }
+.fu-ny-row:last-of-type { margin-bottom: 0; }
+.fu-ny-why { flex: 0 0 auto; }
+.fu-ny-who { flex: 1 1 200px; min-width: 0; }
+.fu-ny-name { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fu-ny-email { font-size: 12px; color: var(--text3); overflow-wrap: anywhere; }
+.fu-ny-detail { flex: 1.4 1 240px; min-width: 0; font-size: 12px; color: var(--text2); line-height: 1.5; overflow-wrap: anywhere; }
+.fu-ny-attn { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 10%, transparent); }
+.fu-ny-info { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
+/* conversion */
+.fu-cv { border-top: 1px solid var(--border); }
+.fu-cv:first-of-type { border-top: 0; }
+.fu-cv > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; padding: 10px 0; }
+.fu-cv > summary::-webkit-details-marker { display: none; }
+.fu-cv > summary:hover .fu-cv-name { filter: brightness(1.15); }
+.fu-cv-name { flex: 0 0 96px; }
+.fu-cv-bar { flex: 2 1 200px; min-width: 150px; display: flex; align-items: center; gap: 10px; }
+.fu-cv-n { flex: 0 0 auto; min-width: 34px; font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.fu-cv-track { flex: 1; height: 10px; border-radius: 4px; background: var(--surface3); overflow: hidden; }
+.fu-cv-fill { height: 100%; border-radius: 4px; background: var(--rg); opacity: .85; }
+.fu-cv-pct { flex: 1 1 130px; font-size: 12px; color: var(--text2); }
+.fu-cv-pct b { color: var(--text); font-variant-numeric: tabular-nums; }
+.fu-cv-lost { flex: 1 1 150px; font-size: 12px; color: var(--text2); }
+.fu-cv-lost b { color: var(--text); font-variant-numeric: tabular-nums; }
+.fu-cv-lost.none { color: var(--text3); }
+.fu-cv-caret { flex: 0 0 auto; margin-left: auto; font-size: 13px; color: var(--text3); transition: transform var(--dur-fast) var(--ease); }
+.fu-cv[open] .fu-cv-caret { transform: rotate(180deg); }
+.fu-cv-body { padding: 2px 0 14px 0; display: flex; flex-direction: column; gap: 12px; }
+.fu-cv-counts { font-size: 12px; color: var(--text2); }
+.fu-cv-counts b { color: var(--text); font-variant-numeric: tabular-nums; }
+.fu-cv-gl { font-size: 12px; font-weight: 600; color: var(--text3); margin-bottom: 6px; }
+.fu-cv-reason + .fu-cv-reason { margin-top: 8px; }
+.fu-cv-reason-t { font-size: 12px; color: var(--text); margin-bottom: 4px; }
+.fu-cv-reason-t b { font-variant-numeric: tabular-nums; }
+.fu-people { display: flex; flex-wrap: wrap; gap: 6px; }
+.fu-person { font-size: 12px; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; max-width: 100%; overflow-wrap: anywhere; }
+.fu-people.collapsed .fu-person.more { display: none; }
+.fu-people-more { font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: transparent; border: 0; cursor: pointer; padding: 1px 4px; }
+.fu-cv-tot { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px 18px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.fu-cv-tot-v { font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.fu-cv-tot-l { font-size: 12px; color: var(--text3); margin-top: 2px; line-height: 1.4; }
+/* activity */
+.fu-act { font-size: 13px; color: var(--text2); line-height: 1.7; }
+.fu-act b { color: var(--text); font-variant-numeric: tabular-nums; }
+.fu-act-sep { color: var(--border2); margin: 0 6px; }
+/* queue filtered to one rung */
+.fu-rung-filter { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); }
+@media (max-width: 900px) { .fu-rung-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .fu-rung-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fu-fn-card { padding: 14px; }
+  .fu-cv-name { flex-basis: 100%; }
+}
 </style>
   <!-- Phosphor Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
@@ -3058,13 +3150,14 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
     <div class="page" id="page-followup">
       <div class="fu-page-header">
         <div>
-          <div class="page-title">Follow-up Queue</div>
-          <div class="page-sub">Urgency-first queue for daily follow-up execution
+          <div class="page-title">Follow-up</div>
+          <div class="page-sub">Where your contacts stand on the ladder, and what needs you
             <button class="terms-btn" onclick="openTermsGlossary()" title="What the labels mean">ⓘ Terms</button></div>
         </div>
         <div class="fu-header-actions">
           <div class="fu-tabs fu-tabs-compact">
-            <button class="fu-tab active" id="fuTabContacts" onclick="switchFuTab('contacts')">Queue</button>
+            <button class="fu-tab active" id="fuTabFunnel" onclick="switchFuTab('funnel')">Funnel</button>
+            <button class="fu-tab" id="fuTabContacts" onclick="switchFuTab('contacts')">Queue</button>
             <button class="fu-tab" id="fuTabAnalytics" onclick="switchFuTab('analytics')">Analytics</button>
           </div>
           <button class="btn btn-primary" style="font-size:13px;padding:8px 14px" onclick="openAddContactModal()">
@@ -3073,8 +3166,39 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
         </div>
       </div>
 
-      <div id="fuContactsTab">
+      <!-- FUNNEL SCOREBOARD (default view) -->
+      <div id="fuFunnelTab">
+        <section class="fu-fn-card" aria-labelledby="fuLadderTitle">
+          <div class="fu-fn-head">
+            <h2 class="fu-fn-title" id="fuLadderTitle">The ladder</h2>
+            <span class="fu-fn-sub" id="fuLadderSub">All your contacts, right now</span>
+          </div>
+          <div id="fuLadder"></div>
+        </section>
+        <section class="fu-fn-card" aria-labelledby="fuNeedsTitle">
+          <div class="fu-fn-head">
+            <h2 class="fu-fn-title" id="fuNeedsTitle">Needs you</h2>
+            <span class="fu-fn-sub" id="fuNeedsSub"></span>
+          </div>
+          <div id="fuNeedsYou"></div>
+        </section>
+        <section class="fu-fn-card" aria-labelledby="fuConvTitle">
+          <div class="fu-fn-head">
+            <h2 class="fu-fn-title" id="fuConvTitle">Conversion, last 30 days</h2>
+          </div>
+          <div id="fuConversion"></div>
+        </section>
+        <section class="fu-fn-card" aria-labelledby="fuActTitle">
+          <div class="fu-fn-head">
+            <h2 class="fu-fn-title" id="fuActTitle">What the system did in the last 24 hours</h2>
+          </div>
+          <div id="fuActivity"></div>
+        </section>
+      </div>
+
+      <div id="fuContactsTab" style="display:none">
         <div class="fu-queue-shell">
+          <div class="fu-rung-filter" id="fuRungFilter" style="display:none"></div>
           <div class="fu-viewbar">
             <div class="fu-view-toggle">
               <button class="fu-view-btn active" id="fuViewTable" onclick="setFuViewMode('table')" title="Table view"><i class="ph-bold ph-list"></i> Table</button>
@@ -3913,7 +4037,7 @@ function nav(page, el) {
   if (page === 'templates')     loadTemplates();
   if (page === 'settings')      loadSettings();
   if (page === 'replies')       initReplies();
-  if (page === 'followup')      { loadFollowups(); resumeFuBulkIfRunning(); }
+  if (page === 'followup')      { if (fuTab === 'funnel') loadFuFunnel(); else loadFollowups(); resumeFuBulkIfRunning(); }
   if (page === 'pipeline')      loadPipeline();
   const titles = { send:'Send', replies:'Replies', followup:'Follow-up', stats:'Analytics',
                    intelligence:'Intelligence', templates:'Templates', stop:'Stop List',
@@ -6603,7 +6727,7 @@ async function markRStop(sid) {
 }
 
 // ── FOLLOW-UP v2 ──────────────────────────────────────────────────────────────
-let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSpecialFilter = '', fuTab = 'contacts';
+let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSpecialFilter = '', fuRungFilter = '', fuTab = 'funnel';   // fuTab: 'funnel' | 'contacts' | 'analytics'
 let _fuDropdownContactId = null;
 let selectedFuIds = new Set();
 let fuSentFilter = '';            // '' | 'unsent_today' | 'today' | 'yesterday'  (client-side)
@@ -6632,6 +6756,7 @@ function buildFuFilterParams() {
   if (fuStageFilter) params.set('stage', fuStageFilter);
   if (fuStateFilter) params.set('state', fuStateFilter);
   if (fuSpecialFilter) params.set('filter', fuSpecialFilter);
+  if (fuRungFilter) params.set('rung', fuRungFilter);
   const q = (document.getElementById('fuSearch')?.value||'').trim();
   if (q) params.set('q', q);
   return params;
@@ -6803,10 +6928,8 @@ async function loadFollowups() {
   renderFuCurrentView();
 }
 
+// The sidebar badge is the "Needs you" count (setFuBadge), never the queue size.
 function updateFuBadge() {
-  const n = (fuCounts.active || 0) + (fuCounts.paused || 0);
-  const b = document.getElementById('fuBadge');
-  if (b) { b.textContent = n; b.style.display = n > 0 ? 'inline' : 'none'; }
   const na = document.getElementById('fuNeedsActionCount');
   const ov = document.getElementById('fuOverdueCount');
   const sc = document.getElementById('fuScheduledCount');
@@ -6826,10 +6949,14 @@ function renderFuStatsBar() {
 
 function switchFuTab(tab) {
   fuTab = tab;
+  document.getElementById('fuTabFunnel').classList.toggle('active', tab==='funnel');
   document.getElementById('fuTabContacts').classList.toggle('active', tab==='contacts');
   document.getElementById('fuTabAnalytics').classList.toggle('active', tab==='analytics');
+  document.getElementById('fuFunnelTab').style.display = tab==='funnel' ? '' : 'none';
   document.getElementById('fuContactsTab').style.display = tab==='contacts' ? '' : 'none';
   document.getElementById('fuAnalyticsTab').style.display = tab==='analytics' ? '' : 'none';
+  if (tab==='funnel') loadFuFunnel();
+  if (tab==='contacts') loadFollowups();
   if (tab==='analytics') loadFuAnalytics();
 }
 
@@ -6849,6 +6976,7 @@ function setFuSpecialFilter(v) {
 }
 
 function syncFuFilterControls() {
+  renderFuRungFilter();
   document.getElementById('fuStateSelect').value = fuStateFilter || '';
   document.getElementById('fuStageSelect').value = fuStageFilter || '';
   const sentSel = document.getElementById('fuSentSelect');
@@ -6861,6 +6989,7 @@ function resetFuFilters() {
   fuStageFilter = '';
   fuStateFilter = '';
   fuSpecialFilter = '';
+  fuRungFilter = '';
   fuSentFilter = '';
   fuSortKey = '';
   fuSortDir = 'desc';
@@ -8211,6 +8340,230 @@ function loadCandidates(q) {
   }, 250);
 }
 
+// ── Funnel scoreboard (the default Follow-up view) ───────────────────────────
+// Reads /api/followups/funnel, /needs-you and /activity. Rung order is the
+// owner's: most valuable first. The API's key order is alphabetical, so it is
+// applied here and nowhere else.
+const FU_RUNG_ORDER = ['client', 'hot', 'warm', 'neutral', 'cold'];
+const FU_RUNG_DESC = { client: 'no automatic emails', hot: '2 or more loads', warm: '1 load',
+                       neutral: 'replied, no load yet', cold: 'no reply yet' };
+// "Needs you" arrives already in the API's priority order (a promised load ahead of a promised
+// rate sheet); the list is rendered in that order and never re-sorted here.
+const FU_NY_REASON = {
+  unparsed_reply:         { label: 'Reply to read',           cls: 'fu-ny-info' },
+  promised_load_vanished: { label: 'Promised a load',         cls: 'fu-ny-attn' },
+  promised_not_delivered: { label: 'Promised, not delivered', cls: 'fu-ny-attn' },
+  client_silent:          { label: 'Client gone quiet',       cls: 'fu-ny-attn' }
+};
+const FU_LOST_REASON = {
+  exhausted:   'Went quiet after every attempt',
+  refused:     'Said no or asked us to stop',
+  excluded:    'Excluded by you',
+  manual:      'Moved to dormant by you',
+  unspecified: 'No reason recorded'
+};
+let _fuFunnelSeq = 0;
+
+function fuPlural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+function fuRungPill(r) { return '<span class="fu-rg-pill fu-rg-' + esc(r) + '">' + esc(String(r).toUpperCase()) + '</span>'; }
+
+function setFuBadge(n) {
+  const b = document.getElementById('fuBadge');
+  if (!b) return;
+  b.textContent = n;
+  b.style.display = n > 0 ? 'inline' : 'none';
+}
+
+// Badge only (app start, before the Follow-up page has been opened).
+async function refreshFuBadge() {
+  try {
+    const r = await fetch('/api/followups/needs-you');
+    if (!r.ok) return;
+    setFuBadge(((await r.json()).items || []).length);
+  } catch (e) {}
+}
+
+function fuLoadingBlock(id) {
+  const el = document.getElementById(id);
+  if (el && !el.firstChild) el.innerHTML = '<div class="skel-lines"><span class="skel"></span><span class="skel w80"></span></div>';
+}
+function fuFailedBlock(id, what) {
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = '<div class="fu-fn-error">Could not load ' + esc(what) +
+    '<button class="btn btn-secondary btn-sm" onclick="loadFuFunnel()">Try again</button></div>';
+}
+
+async function loadFuFunnel() {
+  const seq = ++_fuFunnelSeq;
+  ['fuLadder', 'fuNeedsYou', 'fuConversion', 'fuActivity'].forEach(fuLoadingBlock);
+  const get = async url => { const r = await fetch(url); if (!r.ok) throw new Error(r.status); return r.json(); };
+  const [fn, ny, ac] = await Promise.allSettled([
+    get('/api/followups/funnel'), get('/api/followups/needs-you'), get('/api/followups/activity?hours=24')
+  ]);
+  if (seq !== _fuFunnelSeq) return;                      // a newer load is under way
+  if (fn.status === 'fulfilled') renderFuFunnel(fn.value);
+  else { fuFailedBlock('fuLadder', 'the ladder'); fuFailedBlock('fuConversion', 'the conversion'); }
+  if (ny.status === 'fulfilled') {
+    renderNeedsYou(ny.value.items || [], ny.value);
+    setFuBadge((ny.value.items || []).length);
+  } else fuFailedBlock('fuNeedsYou', 'the list');
+  if (ac.status === 'fulfilled') renderFuActivity(ac.value);
+  else fuFailedBlock('fuActivity', 'the activity');
+}
+
+function renderFuFunnel(data) {
+  renderFuLadder(data.rungs || {});
+  renderFuConversion(data);
+}
+
+// Rung strip: every contact the user has now (whole base, not the 30-day cohort).
+function renderFuLadder(rungs) {
+  const n = k => rungs[k] || 0;
+  const onLadder = FU_RUNG_ORDER.reduce((t, k) => t + n(k), 0);
+  const everything = onLadder + n('dormant') + n('excluded');
+  const sub = document.getElementById('fuLadderSub');
+  if (sub) sub.textContent = everything
+    ? fuPlural(onLadder, 'contact', 'contacts') + ' on the ladder, right now'
+    : 'All your contacts, right now';
+  const tile = k => `<button class="fu-rung fu-rg-${k}${n(k) ? '' : ' zero'}" onclick="fuTierClick('${k}')" title="Open the ${k.toUpperCase()} list">` +
+      `<div class="fu-rung-n">${n(k)}</div><div class="fu-rung-name">${k.toUpperCase()}</div>` +
+      `<div class="fu-rung-d">${esc(FU_RUNG_DESC[k])}</div></button>`;
+  const el = document.getElementById('fuLadder');
+  if (!el) return;
+  el.innerHTML = '<div class="fu-rung-strip">' + FU_RUNG_ORDER.map(tile).join('') + '</div>' +
+    '<div class="fu-rung-aside">' +
+      `<button class="fu-rung-chip" onclick="fuTierClick('dormant')" title="Open the DORMANT list"><b>${n('dormant')}</b>Dormant: resting, wakes when they send a load</button>` +
+      `<button class="fu-rung-chip" onclick="fuTierClick('excluded')" title="Open the EXCLUDED list"><b>${n('excluded')}</b>Excluded: never contacted again</button>` +
+    '</div>' +
+    (everything ? '' : '<div class="fu-fn-note">No contacts in follow-up yet. Add one with Add Contact, or from a reply on the Replies page.</div>');
+}
+
+// "Needs you": a short list, normally near-empty. Order is the API's.
+function renderNeedsYou(items, meta) {
+  meta = meta || {};
+  const el = document.getElementById('fuNeedsYou');
+  const sub = document.getElementById('fuNeedsSub');
+  if (!el) return;
+  if (sub) sub.textContent = items.length ? fuPlural(items.length, 'contact', 'contacts') : '';
+  const grace = meta.promise_grace_days, horizon = meta.promise_horizon_days;
+  const note = (grace != null && horizon != null)
+    ? `<div class="fu-fn-note">A promise is listed once it is ${fuPlural(grace, 'day', 'days')} old and dropped after ${fuPlural(horizon, 'day', 'days')}. ` +
+      'An older promise is not shown here, so this list is not every promise ever made.</div>'
+    : '';
+  if (!items.length) {
+    el.innerHTML = '<div class="fu-fn-empty">Nothing needs you right now.</div>' + note;
+    return;
+  }
+  el.innerHTML = items.map(it => {
+    const why = FU_NY_REASON[it.reason] || { label: it.reason || 'Needs a look', cls: 'fu-ny-attn' };
+    const name = it.contact_name || it.contact_email || '';
+    const showEmail = it.contact_email && it.contact_email !== name;
+    return '<div class="fu-ny-row">' +
+      `<span class="fu-ny-why fu-rg-pill ${why.cls}">${esc(why.label)}</span>` +
+      '<div class="fu-ny-who"><div class="fu-ny-name">' + esc(name) + ' ' + fuRungPill(it.rung) + '</div>' +
+        (showEmail ? '<div class="fu-ny-email">' + esc(it.contact_email) + '</div>' : '') + '</div>' +
+      '<div class="fu-ny-detail">' + esc(it.detail || '') + '</div>' +
+      `<button class="btn btn-secondary btn-sm" onclick="fuTierClick('${esc(it.rung)}')" title="Open the ${esc(String(it.rung).toUpperCase())} list">Open</button>` +
+    '</div>';
+  }).join('') + note;
+}
+
+function fuPeopleHtml(people) {
+  const LIMIT = 24;
+  const chips = (people || []).map((p, i) =>
+    `<span class="fu-person${i >= LIMIT ? ' more' : ''}" title="${esc(p.email)}">${esc(p.name || p.email)}</span>`).join('');
+  if (!chips) return '';
+  const more = people.length > LIMIT
+    ? `<button class="fu-people-more" onclick="const c=this.parentNode;const x=c.classList.toggle('collapsed');this.textContent=x?'Show all ${people.length}':'Show fewer'">Show all ${people.length}</button>`
+    : '';
+  return `<div class="fu-people${people.length > LIMIT ? ' collapsed' : ''}">${chips}${more}</div>`;
+}
+
+// Conversion in absolute numbers: who reached each step, who dropped out and why.
+function renderFuConversion(data) {
+  const el = document.getElementById('fuConversion');
+  if (!el) return;
+  const rows = data.conversion || [], t = data.totals || {}, w = data.window || {};
+  const title = document.getElementById('fuConvTitle');
+  if (title && w.days) title.textContent = 'Conversion, last ' + w.days + ' days';
+  const pct = v => (v === null || v === undefined) ? '—' : (Math.round(v * 10) / 10) + '%';
+  const caption = w.cohort ? '<div class="fu-fn-note" style="margin:0 0 10px">' + esc(w.cohort) + '</div>' : '';
+  const entered = t.entered || 0;
+  const stat = (v, l) => `<div><div class="fu-cv-tot-v">${v}</div><div class="fu-cv-tot-l">${l}</div></div>`;
+  const dayStat = stat(t.avg_days_between_loads == null ? '—' : t.avg_days_between_loads, 'days between loads, on average');
+  const loadStat = stat((t.loads_this_month || 0), 'loads this month');
+
+  if (!entered) {
+    el.innerHTML = caption +
+      '<div class="fu-fn-empty">Nobody was in play over this period, so there is nothing to convert yet.</div>' +
+      '<div class="fu-cv-tot">' + dayStat + loadStat + '</div>';
+    return;
+  }
+  const byRung = {}; rows.forEach(r => { byRung[r.rung] = r; });
+  const steps = rows.map((r, i) => {
+    const prev = i ? rows[i - 1] : null, next = rows[i + 1] || null;
+    const ofPrev = prev
+      ? `<b>${r.reached}</b> of ${prev.reached}${r.pct_of_previous === null ? '' : ' (<b>' + pct(r.pct_of_previous) + '</b>)'} reached ${esc(prev.rung.toUpperCase())}`
+      : 'everyone in play';
+    const lost = r.lost
+      ? `<span class="fu-cv-lost"><b>${r.lost}</b> dropped out here</span>`
+      : '<span class="fu-cv-lost none">no one dropped out here</span>';
+    const moved = r.reached - r.lost - r.still_here;
+    const counts = `<b>${r.reached}</b> reached ${esc(r.rung.toUpperCase())} · <b>${r.still_here}</b> still here` +
+      (next ? ` · <b>${moved}</b> went on to ${esc(next.rung.toUpperCase())}` : '') + ` · <b>${r.lost}</b> dropped out`;
+    const reasons = (r.lost_reasons || []).map(lr =>
+      `<div class="fu-cv-reason"><div class="fu-cv-reason-t"><b>${lr.count}</b> · ${esc(FU_LOST_REASON[lr.reason] || lr.reason)}</div>${fuPeopleHtml(lr.contacts)}</div>`).join('');
+    return `<details class="fu-cv fu-rg-${esc(r.rung)}"><summary>` +
+        `<span class="fu-cv-name">${fuRungPill(r.rung)}</span>` +
+        `<span class="fu-cv-bar"><span class="fu-cv-n">${r.reached}</span><span class="fu-cv-track"><span class="fu-cv-fill" style="display:block;width:${Math.min(100, r.reached / entered * 100)}%"></span></span></span>` +
+        `<span class="fu-cv-pct">${ofPrev}</span>${lost}` +
+        '<i class="fu-cv-caret ph-bold ph-caret-down" aria-hidden="true"></i></summary>' +
+      '<div class="fu-cv-body"><div class="fu-cv-counts">' + counts + '</div>' +
+        (reasons ? '<div><div class="fu-cv-gl">Dropped out here, and why</div>' + reasons + '</div>' : '') +
+        (r.reached ? `<div><div class="fu-cv-gl">Everyone who reached ${esc(r.rung.toUpperCase())}</div>${fuPeopleHtml(r.reached_contacts)}</div>` : '') +
+      '</div></details>';
+  }).join('');
+  const clientReached = byRung.client ? byRung.client.reached : 0;
+  el.innerHTML = caption + steps + '<div class="fu-cv-tot">' +
+    stat(entered, 'contacts in play') +
+    stat((t.warm_or_better || 0) + ' <span class="fu-fn-sub">(' + pct(t.warm_or_better_pct) + ')</span>', 'reached WARM or better') +
+    stat(clientReached + ' <span class="fu-fn-sub">(' + pct(t.end_to_end_pct) + ')</span>', 'reached CLIENT') +
+    stat((t.lost || 0), 'dropped out in total') + dayStat + loadStat + '</div>';
+}
+
+function renderFuActivity(a) {
+  const el = document.getElementById('fuActivity');
+  if (!el) return;
+  const sent = a.sent || 0, raised = a.raised || 0, quieted = a.quieted || 0, stopped = a.stopped || 0;
+  if (!(sent || raised || quieted || stopped)) {
+    el.innerHTML = '<div class="fu-act">Nothing in the last ' + esc(a.hours || 24) + ' hours: no touches sent and no contact changed rung.</div>';
+    return;
+  }
+  const sep = '<span class="fu-act-sep">·</span>';
+  el.innerHTML = '<div class="fu-act">' + [
+    `Sent <b>${sent}</b> ${sent === 1 ? 'touch' : 'touches'}`,
+    `raised a rung <b>${raised}</b> ${raised === 1 ? 'time' : 'times'}`,
+    `quieted <b>${quieted}</b> ${quieted === 1 ? 'contact' : 'contacts'} (every attempt used)`,
+    `stopped <b>${stopped}</b> ${stopped === 1 ? 'contact' : 'contacts'} (said no or asked us to stop)`
+  ].join(sep) + '</div>';
+}
+
+// A tier opens its list. Task 9's list (openFuTier) takes over when it exists;
+// until then the tier opens the Queue narrowed to that rung.
+function fuTierClick(rung) {
+  if (typeof openFuTier === 'function') { openFuTier(rung); return; }
+  fuRungFilter = rung; fuSpecialFilter = ''; fuStageFilter = ''; fuStateFilter = '';
+  switchFuTab('contacts');
+}
+function renderFuRungFilter() {
+  const el = document.getElementById('fuRungFilter');
+  if (!el) return;
+  el.style.display = fuRungFilter ? '' : 'none';
+  el.innerHTML = fuRungFilter
+    ? 'Showing ' + fuRungPill(fuRungFilter) + ' only <button class="btn btn-secondary btn-sm" onclick="fuRungFilter=\'\';loadFollowups()">Show all</button>'
+    : '';
+}
+
 // ── Analytics tab ─────────────────────────────────────────────────────────────
 async function loadFuAnalytics() {
   const el = document.getElementById('fuAnalyticsContent');
@@ -8471,6 +8824,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.addEventListener('input', () => { renderSettingsPreview(); renderTemplatePreview(); });
   });
   loadFollowups();
+  refreshFuBadge();
   loadQuota();
   resumeSendProgress();
   checkScheduledDue();

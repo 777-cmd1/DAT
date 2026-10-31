@@ -5126,8 +5126,8 @@ DEFAULT_RUNG_TEMPLATES = {
         "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Do you have any hazmat, LTL, Mexico, Canada or high-value loads?\n"
-        "We run all of those, not only {route}.\n\n" + _SIGNATURE,
+        "Do you have any hazmat, LTL, Mexico, Canada or high-value loads? "
+        "We run all of those.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
         "Is anything moving next week?\n"
@@ -5151,7 +5151,7 @@ DEFAULT_RUNG_TEMPLATES = {
 
         "Hi,\n\n"
         "Do you ever have hazmat, LTL, Mexico, Canada or high-value loads? "
-        "We run those too, along with the lanes you already send us.\n\n" + _SIGNATURE,
+        "We run those too, along with any lanes you already have.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
         "Is there anything you need covered this week?\n"
@@ -7032,6 +7032,15 @@ def _ladder_raise_rung(fc):
         fc.rung = derived
 
 
+def _subject_opens_with_lane(subject, origin, destination):
+    """True when `subject` (minus any Re:/Fwd: prefixes) is "<origin> to <destination>"
+    followed by a comma or the end, matching whole names, case-insensitively."""
+    words = lambda t: r'\s+'.join(re.escape(w) for w in t.split())
+    return bool(re.match(
+        r'(?i)\s*(?:(?:re|fwd?)\s*:\s*)*' + words(origin) + r'\s+to\s+' + words(destination)
+        + r'\s*(?:,|$)', subject or ''))
+
+
 def _ladder_refresh_route(fc, reply, now):
     """Point current_route at the lane this reply answers, when that can be told.
 
@@ -7058,8 +7067,12 @@ def _ladder_refresh_route(fc, reply, now):
     if len(lanes) == 1:
         chosen = next(iter(lanes))
     else:
-        subject = (reply.subject or '').lower()
-        chosen = next(((o, d) for o, d in lanes if o.lower() in subject and d.lower() in subject), None)
+        # _build_subject writes "Origin to Destination, date, ..." and a reply only adds
+        # a Re:/Fwd: prefix, so the lane must open the subject, in that order and with
+        # whole city names. A looser match (both cities somewhere, the reverse lane,
+        # "North Houston" for "Houston") cannot tell two lanes apart: then leave it.
+        hits = [(o, d) for o, d in lanes if _subject_opens_with_lane(reply.subject, o, d)]
+        chosen = hits[0] if len(hits) == 1 else None
     if chosen:
         fc.current_route = f'{chosen[0]} \u2192 {chosen[1]}'
 
@@ -7103,12 +7116,16 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
             return None
         fc.load_count = (fc.load_count or 0) + 1
         fc.last_load_at = now
-        _ladder_refresh_route(fc, reply, now)
         _ladder_raise_rung(fc)
         fc.exit_reason = None
         fc.touch_attempt = 0
         _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, 0, now, cfg), ws)
         _ladder_record_load(fc, conv_key, old_rung, notes=f'load #{fc.load_count} received')
+        try:
+            with db.session.begin_nested():     # a failed lookup rolls back to here, not the load
+                _ladder_refresh_route(fc, reply, now)
+        except Exception:
+            app.logger.warning('ladder route refresh failed for %s', fc.contact_email, exc_info=True)
     elif kind == 'refusal':
         fc.rung = 'dormant'
         fc.exit_reason = 'refused'

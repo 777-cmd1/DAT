@@ -390,3 +390,55 @@ def test_a_reply_that_is_not_a_load_leaves_the_route_alone(app, db):
     _reply(db, fc, category='rate_request', body='what is your rate?', thread='t1',
            subject='Re: your load')
     assert fc.current_route == 'Old, TX \u2192 Elsewhere, TX'
+
+
+def test_a_round_trip_lane_is_not_mistaken_for_its_reverse(app, db):
+    """Both directions mention both cities: only the order the subject uses tells them apart."""
+    fc = _contact(db, rung='neutral', current_route='Old, TX → Elsewhere, TX')
+    _send(db, fc, 'Laredo, TX', 'Dallas, TX', hours_ago=9)
+    _send(db, fc, 'Dallas, TX', 'Laredo, TX', hours_ago=2)           # the newer one
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1',
+           subject='Re: Laredo, TX to Dallas, TX, 1/5, Van')
+    assert fc.current_route == 'Laredo, TX → Dallas, TX'
+
+
+def test_the_reverse_subject_picks_the_reverse_lane(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX → Elsewhere, TX')
+    _send(db, fc, 'Laredo, TX', 'Dallas, TX', hours_ago=2)
+    _send(db, fc, 'Dallas, TX', 'Laredo, TX', hours_ago=9)
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1',
+           subject='RE: Dallas, TX to Laredo, TX, 1/5, Van')
+    assert fc.current_route == 'Dallas, TX → Laredo, TX'
+
+
+def test_a_longer_city_name_does_not_match_a_shorter_one(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX → Elsewhere, TX')
+    _send(db, fc, 'North Houston, TX', 'Miami, FL', hours_ago=9)
+    _send(db, fc, 'Houston, TX', 'Miami, FL', hours_ago=2)           # the newer one
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1',
+           subject='Re: Houston, TX to Miami, FL, 1/5, Van')
+    assert fc.current_route == 'Houston, TX → Miami, FL'
+    _reply(db, fc, category='gave_info', body='another load', thread='t2',
+           subject='Re: North Houston, TX to Miami, FL, 1/6')
+    assert fc.current_route == 'North Houston, TX → Miami, FL'
+
+
+def test_a_subject_that_only_mentions_the_cities_loosely_changes_nothing(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX → Elsewhere, TX')
+    _send(db, fc, 'Laredo, TX', 'Dallas, TX', hours_ago=9)
+    _send(db, fc, 'Dallas, TX', 'Laredo, TX', hours_ago=2)
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1',
+           subject='Re: loads between Dallas, TX and Laredo, TX')
+    assert fc.current_route == 'Old, TX → Elsewhere, TX'
+
+
+def test_a_failed_route_refresh_costs_only_the_route(app, db, monkeypatch):
+    """The load is still counted, the rung raised, the attempts reset and a touch scheduled."""
+    def boom(*a, **k):
+        raise RuntimeError('db hiccup')
+    monkeypatch.setattr(_app, '_ladder_refresh_route', boom)
+    fc = _contact(db, rung='neutral', touch_attempt=2, current_route='Old, TX → Elsewhere, TX')
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1')
+    assert (fc.rung, fc.load_count, fc.touch_attempt) == ('warm', 1, 0)
+    assert fc.next_followup_at is not None and fc.next_followup_at > _app._utcnow()
+    assert fc.current_route == 'Old, TX → Elsewhere, TX'

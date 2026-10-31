@@ -383,6 +383,15 @@ def _due(db, **kw):
     return _contact(db, **kw)
 
 
+def test_the_copy_asserts_no_more_than_the_data_knows(app):
+    """Not that they send us lanes, and not that we run the lane we emailed about."""
+    hot3 = _app.DEFAULT_RUNG_TEMPLATES['hot'][2]
+    assert 'already send' not in hot3 and hot3.count('{route}') == 0
+    assert 'any lanes you already have' in hot3
+    warm3 = _app.DEFAULT_RUNG_TEMPLATES['warm'][2]
+    assert 'not only' not in warm3 and '{route}' not in warm3
+
+
 def test_the_scheduler_sends_the_rung_copy(app, db, bodies):
     fc = _due(db, rung='warm', current_route=ROUTE, touch_attempt=0)
     expected = _body(fc)

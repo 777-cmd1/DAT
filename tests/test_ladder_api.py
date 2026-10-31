@@ -100,6 +100,10 @@ def _ids(people):
     "No problem I'll send you a load",                          # "no problem" is a yes
     "Sorry, no loads right now - will send you a load when we do",   # a dash ends the clause
     "Sorry, no loads right now \u2013 will send you a load when we do",
+    "I can send you a load tomorrow",         # "I can" / "we can" is how a broker says yes
+    "We can send you a load on Friday",
+    "Sure, I can send you a load",
+    "yes I can get you a load",
 ])
 def test_a_load_promise_is_recognised(text):
     assert ladder.promise_kind(text) == 'load'
@@ -131,7 +135,8 @@ def test_a_refusal_or_offer_is_not_a_promise(text):
     'I wish I could send you a load',
     "I'd love to send you a load",
     'Hopefully we can send you a load soon',
-    'I can send you a load if you need one',
+    'I can send you a load if you need one',      # the condition comes after the phrase
+    'I have a load for you if you want it',
 ])
 def test_a_hedge_or_a_condition_is_not_a_promise(text):
     assert ladder.promise_kind(text) is None

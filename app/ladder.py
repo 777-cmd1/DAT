@@ -237,11 +237,13 @@ _OTHER_PROMISE_PHRASES = (
 _NOT_A_PROMISE = re.compile(
     r"\b(?:not|never|no|cannot|unable)\b|n't\b|"
     r"\b(?:want me to|would you like|do you|should i|shall i|can i|may i|"
-    r"if you|if i|if we|let you know if|wish|would love|i'd love|hopefully|i can|we can)\b")
+    r"if you|if i|if we|let you know if|wish|would love|i'd love|hopefully)\b")
 # A clause ends at punctuation, a spaced or long dash, or a "but"/"however".
 _CLAUSE_END = re.compile(r'[.!?;,\u2013\u2014]|\s-+\s|\b(?:but|however)\b')
 # "No problem, I'll send you a load" is a yes, not a no.
 _NO_PROBLEM = re.compile(r'\bno (?:problem|worries|issue)s?\b')
+# A condition tacked on after the phrase: "I can send you a load if you need one".
+_CONDITION_AFTER = re.compile(r'\bif you\b')
 _LOOKBACK = 40
 
 
@@ -253,7 +255,12 @@ def _promised(t: str, phrases) -> bool:
             ends = list(_CLAUSE_END.finditer(before))
             if ends:
                 before = before[ends[-1].end():]
-            if not _NOT_A_PROMISE.search(_NO_PROBLEM.sub(' ', before)):
+            after = t[start + len(phrase):start + len(phrase) + _LOOKBACK]
+            nxt = _CLAUSE_END.search(after)
+            if nxt:
+                after = after[:nxt.start()]
+            if (not _NOT_A_PROMISE.search(_NO_PROBLEM.sub(' ', before))
+                    and not _CONDITION_AFTER.search(after)):
                 return True
             start = t.find(phrase, start + 1)
     return False

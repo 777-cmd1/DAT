@@ -171,6 +171,22 @@ def test_funnel_counts_each_rung(app, db, client, me):
                              'client': 0, 'dormant': 3, 'excluded': 0}
 
 
+def test_funnel_says_whether_automatic_sending_is_on(app, db, client, me):
+    """The screen must be able to tell a quiet day from a switched-off engine."""
+    user, ws = me
+    data = _get(client, '/api/followups/funnel')
+    # a fresh workspace: both consents off (the ladder ships off), master switch default on
+    assert data['fu_auto_enabled'] is False
+    assert data['ladder_auto_enabled'] is False
+    assert data['auto_send_enabled'] is True
+    ws.fu_auto_enabled = True
+    ws.ladder_auto_enabled = True
+    ws.pipeline_config = {'auto_send_enabled': False}
+    db.session.commit()
+    data = _get(client, '/api/followups/funnel')
+    assert (data['fu_auto_enabled'], data['ladder_auto_enabled'], data['auto_send_enabled']) == (True, True, False)
+
+
 # ── funnel: conversion in whole contacts ─────────────────────────────────────
 
 def test_conversion_reports_absolute_numbers_not_only_percentages(app, db, client, me):

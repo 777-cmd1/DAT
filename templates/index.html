@@ -2652,6 +2652,9 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 .fu-act { font-size: 13px; color: var(--text2); line-height: 1.7; }
 .fu-act b { color: var(--text); font-variant-numeric: tabular-nums; }
 .fu-act-sep { color: var(--border2); margin: 0 6px; }
+.fu-act-off { font-size: 13px; color: var(--text); line-height: 1.5; padding: 10px 12px; margin-bottom: 8px; border-radius: 12px;
+  background: var(--yellow-dim); border: 1px solid color-mix(in srgb, var(--yellow) 40%, var(--border)); }
+.fu-act-off:last-child { margin-bottom: 0; }
 /* queue filtered to one rung */
 .fu-rung-filter { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); }
 @media (max-width: 900px) { .fu-rung-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -6564,7 +6567,7 @@ function tqCompactRow(msgs) {
 }
 
 function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function tqToggleExpand(id) {
@@ -6926,6 +6929,14 @@ async function loadFollowups() {
   renderFuStatsBar();
   if (fuViewMode === 'kanban') await loadPipelineStats();
   renderFuCurrentView();
+  fuRefreshSummary();
+}
+
+// Whatever changed the queue (Add Contact, a Replies-page add, an action) also moves the funnel
+// numbers and the sidebar badge. The funnel reloads only while it is on screen; otherwise just the badge.
+function fuRefreshSummary() {
+  const onScreen = document.getElementById('page-followup')?.classList.contains('active');
+  if (onScreen && fuTab === 'funnel') loadFuFunnel(); else refreshFuBadge();
 }
 
 // The sidebar badge is the "Needs you" count (setFuBadge), never the queue size.
@@ -8393,6 +8404,22 @@ function fuFailedBlock(id, what) {
     '<button class="btn btn-secondary btn-sm" onclick="loadFuFunnel()">Try again</button></div>';
 }
 
+const FU_ALL_RUNGS = ['cold', 'neutral', 'warm', 'hot', 'client', 'dormant', 'excluded'];
+// A short or missing block is a failed request, not an empty book: it must read as an error.
+function fuFunnelOk(d) {
+  const num = v => typeof v === 'number' && isFinite(v);
+  if (!d || !d.rungs || !d.totals || !d.window || typeof d.window.cohort !== 'string' || !Array.isArray(d.conversion)) return false;
+  if (!FU_ALL_RUNGS.every(k => num(d.rungs[k]))) return false;
+  if (d.conversion.length !== 5) return false;
+  const climb = ['cold', 'neutral', 'warm', 'hot', 'client'];
+  if (!climb.every((k, i) => d.conversion[i] && d.conversion[i].rung === k &&
+        num(d.conversion[i].reached) && num(d.conversion[i].lost) && num(d.conversion[i].still_here))) return false;
+  if (!['entered', 'lost', 'warm_or_better', 'loads_this_month'].every(k => num(d.totals[k]))) return false;
+  return ['fu_auto_enabled', 'ladder_auto_enabled', 'auto_send_enabled'].every(k => typeof d[k] === 'boolean');
+}
+function fuNeedsOk(d) { return !!d && Array.isArray(d.items); }
+function fuActivityOk(d) { return !!d && ['sent', 'raised', 'quieted', 'stopped'].every(k => typeof d[k] === 'number'); }
+
 async function loadFuFunnel() {
   const seq = ++_fuFunnelSeq;
   ['fuLadder', 'fuNeedsYou', 'fuConversion', 'fuActivity'].forEach(fuLoadingBlock);
@@ -8401,13 +8428,15 @@ async function loadFuFunnel() {
     get('/api/followups/funnel'), get('/api/followups/needs-you'), get('/api/followups/activity?hours=24')
   ]);
   if (seq !== _fuFunnelSeq) return;                      // a newer load is under way
-  if (fn.status === 'fulfilled') renderFuFunnel(fn.value);
+  const fnOk = fn.status === 'fulfilled' && fuFunnelOk(fn.value);
+  if (fnOk) renderFuFunnel(fn.value);
   else { fuFailedBlock('fuLadder', 'the ladder'); fuFailedBlock('fuConversion', 'the conversion'); }
-  if (ny.status === 'fulfilled') {
-    renderNeedsYou(ny.value.items || [], ny.value);
-    setFuBadge((ny.value.items || []).length);
+  if (ny.status === 'fulfilled' && fuNeedsOk(ny.value)) {
+    renderNeedsYou(ny.value.items, ny.value);
+    setFuBadge(ny.value.items.length);
   } else fuFailedBlock('fuNeedsYou', 'the list');
-  if (ac.status === 'fulfilled') renderFuActivity(ac.value);
+  // the activity sentence is only honest next to the switch states, which ride on the funnel payload
+  if (ac.status === 'fulfilled' && fuActivityOk(ac.value) && fnOk) renderFuActivity(ac.value, fn.value);
   else fuFailedBlock('fuActivity', 'the activity');
 }
 
@@ -8425,15 +8454,15 @@ function renderFuLadder(rungs) {
   if (sub) sub.textContent = everything
     ? fuPlural(onLadder, 'contact', 'contacts') + ' on the ladder, right now'
     : 'All your contacts, right now';
-  const tile = k => `<button class="fu-rung fu-rg-${k}${n(k) ? '' : ' zero'}" onclick="fuTierClick('${k}')" title="Open the ${k.toUpperCase()} list">` +
+  const tile = k => `<button class="fu-rung fu-rg-${k}${n(k) ? '' : ' zero'}" data-rung="${k}" onclick="fuTierClick(this.dataset.rung)" title="Open the ${k.toUpperCase()} list">` +
       `<div class="fu-rung-n">${n(k)}</div><div class="fu-rung-name">${k.toUpperCase()}</div>` +
       `<div class="fu-rung-d">${esc(FU_RUNG_DESC[k])}</div></button>`;
   const el = document.getElementById('fuLadder');
   if (!el) return;
   el.innerHTML = '<div class="fu-rung-strip">' + FU_RUNG_ORDER.map(tile).join('') + '</div>' +
     '<div class="fu-rung-aside">' +
-      `<button class="fu-rung-chip" onclick="fuTierClick('dormant')" title="Open the DORMANT list"><b>${n('dormant')}</b>Dormant: resting, wakes when they send a load</button>` +
-      `<button class="fu-rung-chip" onclick="fuTierClick('excluded')" title="Open the EXCLUDED list"><b>${n('excluded')}</b>Excluded: never contacted again</button>` +
+      `<button class="fu-rung-chip" data-rung="dormant" onclick="fuTierClick(this.dataset.rung)" title="Open the DORMANT list"><b>${n('dormant')}</b>Dormant: resting, wakes when they send a load</button>` +
+      `<button class="fu-rung-chip" data-rung="excluded" onclick="fuTierClick(this.dataset.rung)" title="Open the EXCLUDED list"><b>${n('excluded')}</b>Excluded: never contacted again</button>` +
     '</div>' +
     (everything ? '' : '<div class="fu-fn-note">No contacts in follow-up yet. Add one with Add Contact, or from a reply on the Replies page.</div>');
 }
@@ -8463,7 +8492,7 @@ function renderNeedsYou(items, meta) {
       '<div class="fu-ny-who"><div class="fu-ny-name">' + esc(name) + ' ' + fuRungPill(it.rung) + '</div>' +
         (showEmail ? '<div class="fu-ny-email">' + esc(it.contact_email) + '</div>' : '') + '</div>' +
       '<div class="fu-ny-detail">' + esc(it.detail || '') + '</div>' +
-      `<button class="btn btn-secondary btn-sm" onclick="fuTierClick('${esc(it.rung)}')" title="Open the ${esc(String(it.rung).toUpperCase())} list">Open</button>` +
+      `<button class="btn btn-secondary btn-sm" data-rung="${esc(it.rung)}" data-email="${esc(it.contact_email)}" onclick="fuTierClick(this.dataset.rung, this.dataset.email)" title="Open ${esc(name)} in the ${esc(String(it.rung).toUpperCase())} list">Open</button>` +
     '</div>';
   }).join('') + note;
 }
@@ -8502,9 +8531,11 @@ function renderFuConversion(data) {
   const byRung = {}; rows.forEach(r => { byRung[r.rung] = r; });
   const steps = rows.map((r, i) => {
     const prev = i ? rows[i - 1] : null, next = rows[i + 1] || null;
-    const ofPrev = prev
-      ? `<b>${r.reached}</b> of ${prev.reached}${r.pct_of_previous === null ? '' : ' (<b>' + pct(r.pct_of_previous) + '</b>)'} reached ${esc(prev.rung.toUpperCase())}`
-      : 'everyone in play';
+    // "4 of the 5 who reached COLD went on to NEUTRAL": the share of the step before that got this far
+    const ofPrev = !prev ? 'everyone in play'
+      : prev.reached === 0 ? `no one reached ${esc(prev.rung.toUpperCase())}`
+      : `<b>${r.reached}</b> of the ${prev.reached} who reached ${esc(prev.rung.toUpperCase())} went on to ${esc(r.rung.toUpperCase())}` +
+        (r.pct_of_previous === null ? '' : ' (<b>' + pct(r.pct_of_previous) + '</b>)');
     const lost = r.lost
       ? `<span class="fu-cv-lost"><b>${r.lost}</b> dropped out here</span>`
       : '<span class="fu-cv-lost none">no one dropped out here</span>';
@@ -8531,16 +8562,26 @@ function renderFuConversion(data) {
     stat((t.lost || 0), 'dropped out in total') + dayStat + loadStat + '</div>';
 }
 
-function renderFuActivity(a) {
+// `sw` is the funnel payload: it carries the three switches that gate every automatic send.
+function renderFuActivity(a, sw) {
   const el = document.getElementById('fuActivity');
   if (!el) return;
   const sent = a.sent || 0, raised = a.raised || 0, quieted = a.quieted || 0, stopped = a.stopped || 0;
+  const why = [];
+  if (!sw.fu_auto_enabled) why.push('Follow-up automation is switched off.');
+  if (!sw.ladder_auto_enabled) why.push('The warmth ladder has not been switched on yet.');
+  if (!sw.auto_send_enabled) why.push('The auto-send master switch is off.');
+  const off = why.length
+    ? '<div class="fu-act-off"><b>Automatic sending is off for the ladder.</b> No one on it is emailed unless you send it yourself. ' + esc(why.join(' ')) + '</div>'
+    : '';
   if (!(sent || raised || quieted || stopped)) {
-    el.innerHTML = '<div class="fu-act">Nothing in the last ' + esc(a.hours || 24) + ' hours: no touches sent and no contact changed rung.</div>';
+    // a switched-off engine is never reported as a quiet day
+    el.innerHTML = off || '<div class="fu-act">Nothing in the last ' + esc(a.hours || 24) +
+      ' hours: automatic sending is on for the ladder, but no touches were sent and no contact changed rung.</div>';
     return;
   }
   const sep = '<span class="fu-act-sep">·</span>';
-  el.innerHTML = '<div class="fu-act">' + [
+  el.innerHTML = off + '<div class="fu-act">' + [
     `Sent <b>${sent}</b> ${sent === 1 ? 'touch' : 'touches'}`,
     `raised a rung <b>${raised}</b> ${raised === 1 ? 'time' : 'times'}`,
     `quieted <b>${quieted}</b> ${quieted === 1 ? 'contact' : 'contacts'} (every attempt used)`,
@@ -8550,9 +8591,12 @@ function renderFuActivity(a) {
 
 // A tier opens its list. Task 9's list (openFuTier) takes over when it exists;
 // until then the tier opens the Queue narrowed to that rung.
-function fuTierClick(rung) {
-  if (typeof openFuTier === 'function') { openFuTier(rung); return; }
-  fuRungFilter = rung; fuSpecialFilter = ''; fuStageFilter = ''; fuStateFilter = '';
+// `email` (optional) lands on one person: the fallback puts it into the Queue search box.
+function fuTierClick(rung, email) {
+  if (typeof openFuTier === 'function') { openFuTier(rung, email); return; }
+  fuRungFilter = rung; fuSpecialFilter = ''; fuStageFilter = ''; fuStateFilter = ''; fuSentFilter = '';
+  const q = document.getElementById('fuSearch');
+  if (q) q.value = email || '';          // a stale search would make the list shorter than the tile's count
   switchFuTab('contacts');
 }
 function renderFuRungFilter() {
@@ -8824,7 +8868,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.addEventListener('input', () => { renderSettingsPreview(); renderTemplatePreview(); });
   });
   loadFollowups();
-  refreshFuBadge();
   loadQuota();
   resumeSendProgress();
   checkScheduledDue();

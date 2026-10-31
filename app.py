@@ -6884,8 +6884,16 @@ def api_followups_funnel():
     """The scoreboard numbers. `rungs` is today's whole base; `conversion` follows the
     contacts in play in the last 30 local days (entered, or any ladder event), one row per
     rung (cold to client), each with whole-contact counts and the people behind them;
-    `totals` rolls them up."""
-    return jsonify(_ladder_funnel(_current_user_id(), _utcnow()))
+    `totals` rolls them up. The three switches that gate every automatic send ride along,
+    so the screen can tell a quiet day from a switched-off engine."""
+    from app.models import Workspace
+    uid = _current_user_id()
+    data = _ladder_funnel(uid, _utcnow())
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    data['fu_auto_enabled'] = bool(ws and ws.fu_auto_enabled)
+    data['ladder_auto_enabled'] = bool(ws and ws.ladder_auto_enabled)
+    data['auto_send_enabled'] = bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True))
+    return jsonify(data)
 
 
 def _replies_by_contact(uid, contacts, since=None, only=False):

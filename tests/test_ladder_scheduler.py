@@ -1,0 +1,421 @@
+"""Warmth ladder: the scheduler sends the due touches and spends the attempt budget."""
+import sys
+import uuid
+from datetime import timedelta
+
+import pytest
+
+_app = sys.modules['_dat_mailer_app']
+
+
+def past(hours=2):
+    return _app._utcnow() - timedelta(hours=hours)
+
+
+def _workspace(db, fu_auto=True, cfg=None, oauth=False):
+    import bcrypt as _bcrypt
+    from app.models import EmailAccount, User, Workspace
+    pw = _bcrypt.hashpw(b'pass', _bcrypt.gensalt()).decode()
+    user = User(email=f'ls_{uuid.uuid4().hex[:8]}@test.com', name='L', password=pw, role='user')
+    db.session.add(user); db.session.flush()
+    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto, pipeline_config=cfg or {})
+    db.session.add(ws); db.session.flush()
+    db.session.add(EmailAccount(user_id=user.id, workspace_id=ws.id, gmail_address='me@test.com',
+                                your_name='Me', google_refresh_token='tok' if oauth else None))
+    db.session.commit()
+    return user, ws
+
+
+def _contact(db, user=None, ws=None, rung='neutral', **kw):
+    """An active, unpaused contact due for a ladder touch unless `kw` says otherwise."""
+    from app.models import FollowupContact
+    if user is None:
+        user, ws = _workspace(db)
+    kw.setdefault('load_count', {'warm': 1, 'hot': 2}.get(rung, 0))
+    kw.setdefault('next_followup_at', past())
+    kw.setdefault('touch_enabled', kw['next_followup_at'] is not None)
+    kw.setdefault('state', 'active')
+    kw.setdefault('stage', 'completed_fu3')
+    kw.setdefault('is_followup_enabled', False)
+    fc = FollowupContact(user_id=user.id, workspace_id=ws.id,
+                         contact_email=f'{uuid.uuid4().hex[:8]}@carrier.com', rung=rung, **kw)
+    db.session.add(fc); db.session.commit()
+    return fc
+
+
+@pytest.fixture(autouse=True)
+def _empty_queue(app, db):
+    """The scheduler scans every workspace, and committed rows outlive a test:
+    start each test with no contacts so the counts below are exact."""
+    from app.models import FollowupContact, FollowupEvent
+    FollowupEvent.query.delete()
+    FollowupContact.query.delete()
+    db.session.commit()
+
+
+@pytest.fixture
+def sent(monkeypatch):
+    """Capture outgoing follow-ups; every send succeeds."""
+    out = []
+    monkeypatch.setattr(_app, 'send_followup_email',
+                        lambda fu, tpl, cfg, uid=None: (out.append(fu['contact_email']), (True, None))[1])
+    return out
+
+
+def _run():
+    n = _app._run_ladder_touches(_app._utcnow())
+    _app.db.session.expire_all()
+    return n
+
+
+def _events(fc, event_type):
+    from app.models import FollowupEvent
+    return FollowupEvent.query.filter_by(followup_contact_id=fc.id, event_type=event_type).all()
+
+
+# ── Sending and the budget ───────────────────────────────────────────────────
+
+def test_due_contact_is_sent_and_the_attempt_is_spent(app, db, sent):
+    fc = _contact(db, rung='neutral', touch_attempt=0)
+    assert _run() == 1
+    assert sent == [fc.contact_email]
+    assert fc.touch_attempt == 1 and fc.rung == 'neutral'
+    assert fc.next_followup_at > _app._utcnow() + timedelta(days=1)   # touch 2: three days out
+    assert fc.last_followup_sent_at is not None
+    assert len(_events(fc, 'touch_sent')) == 1
+
+
+def test_the_rhythm_is_one_day_then_three_then_weekly(app, db, sent):
+    fc = _contact(db, rung='warm', touch_attempt=0)
+    assert _run() == 1                       # warm gets a budget of 5
+    first_gap = fc.next_followup_at - _app._utcnow()
+    assert fc.touch_attempt == 1 and timedelta(days=2) < first_gap < timedelta(days=4)
+    fc.next_followup_at = past(); _app.db.session.commit()
+    assert _run() == 1
+    second_gap = fc.next_followup_at - _app._utcnow()
+    assert fc.touch_attempt == 2 and timedelta(days=6) < second_gap < timedelta(days=8)
+
+
+def test_budget_exhaustion_goes_dormant_with_a_reason(app, db, sent):
+    fc = _contact(db, rung='neutral', touch_attempt=2)        # the 3rd of 3
+    assert _run() == 1                                        # the last attempt still goes out
+    assert fc.touch_attempt == 3
+    assert fc.rung == 'dormant' and fc.exit_reason == 'exhausted'
+    assert fc.next_followup_at is None and fc.touch_enabled is False
+    assert len(_events(fc, 'ladder_exhausted')) == 1
+
+
+def test_a_contact_already_over_budget_is_parked_without_a_send(app, db, sent):
+    fc = _contact(db, rung='neutral', touch_attempt=3)
+    assert _run() == 0 and sent == []
+    assert (fc.rung, fc.exit_reason, fc.next_followup_at) == ('dormant', 'exhausted', None)
+
+
+def test_a_load_refills_the_budget_but_replies_do_not(app, db, sent):
+    fc = _contact(db, rung='neutral', touch_attempt=3)
+    assert _run() == 0 and fc.rung == 'dormant'
+
+    def reply(category, body, thread):
+        from app.models import Reply
+        r = Reply(user_id=fc.user_id, msg_id=f'<{uuid.uuid4().hex}@m>', thread_id=thread,
+                  from_email=fc.contact_email, subject='Re: lane', body=body, triage_category=category)
+        db.session.add(r); db.session.commit()
+        _app._check_reply_stops_followup(fc.contact_email, fc.user_id, r)
+        db.session.commit(); db.session.refresh(fc)
+
+    reply('negative', 'nothing this week, try next week', 't1')      # a reply is not a load
+    fc.next_followup_at = past(); fc.touch_enabled = True; db.session.commit()
+    assert _run() == 0 and fc.rung == 'dormant' and sent == []
+
+    reply('gave_info', 'we have a load Laredo to Dallas', 't2')      # a load is
+    assert (fc.rung, fc.touch_attempt) == ('warm', 0)
+    fc.next_followup_at = past(); db.session.commit()
+    assert _run() == 1 and fc.touch_attempt == 1
+
+
+def test_warm_contacts_get_the_longer_budget(app, db, sent):
+    fc = _contact(db, rung='warm', touch_attempt=3)           # a neutral contact would be done
+    assert _run() == 1
+    assert fc.rung == 'warm' and fc.touch_attempt == 4 and fc.next_followup_at is not None
+
+
+# ── Who is never sent to ─────────────────────────────────────────────────────
+
+def test_client_is_never_sent_to(app, db, sent):
+    # Review Focus: CLIENT leaves automation entirely, even after a load
+    fc = _contact(db, rung='client', load_count=3)
+    assert _run() == 0 and sent == []
+    assert fc.touch_attempt == 0 and fc.rung == 'client'
+
+
+def test_a_load_from_a_client_schedules_nothing(app, db, sent):
+    from app.models import Reply
+    fc = _contact(db, rung='client', load_count=3, next_followup_at=None)
+    r = Reply(user_id=fc.user_id, msg_id='<c1@m>', thread_id='tc1', from_email=fc.contact_email,
+              subject='Re: lane', body='another load for you', triage_category='gave_info')
+    db.session.add(r); db.session.commit()
+    _app._check_reply_stops_followup(fc.contact_email, fc.user_id, r)
+    db.session.commit(); db.session.refresh(fc)
+    assert fc.rung == 'client' and fc.next_followup_at is None and not fc.touch_enabled
+    assert _run() == 0 and sent == []
+
+
+def test_paused_contact_is_skipped_but_kept(app, db, sent):
+    fc = _contact(db, rung='warm', auto_paused=True)
+    assert _run() == 0 and sent == []
+    assert fc.rung == 'warm' and fc.touch_attempt == 0
+
+
+@pytest.mark.parametrize('rung', ['excluded', 'dormant'])
+def test_excluded_and_dormant_are_never_sent_to(app, db, sent, rung):
+    fc = _contact(db, rung=rung)
+    assert _run() == 0 and sent == []
+    assert fc.rung == rung and fc.touch_attempt == 0
+
+
+def test_a_blocked_or_paused_state_is_never_sent_to(app, db, sent):
+    for state in ('paused', 'blocked'):
+        _contact(db, rung='warm', state=state)
+    assert _run() == 0 and sent == []
+
+
+def test_contacts_in_the_drip_or_on_a_one_time_schedule_are_left_to_their_own_path(app, db, sent):
+    user, ws = _workspace(db)
+    _contact(db, user, ws, rung='cold', is_followup_enabled=True, stage='fu1_scheduled')
+    _contact(db, user, ws, rung='cold', scheduled_once=True)
+    _contact(db, user, ws, rung='cold', recurring_enabled=True)
+    assert _run() == 0 and sent == []
+
+
+def test_a_contact_not_due_yet_is_not_sent(app, db, sent):
+    _contact(db, rung='warm', next_followup_at=_app._utcnow() + timedelta(hours=3))
+    assert _run() == 0 and sent == []
+
+
+# ── The kill switch and the master switch ────────────────────────────────────
+
+def test_kill_switch_still_stops_everything(app, db, sent):
+    user, ws = _workspace(db, fu_auto=False)
+    fc = _contact(db, user, ws, rung='warm', touch_attempt=4)   # would otherwise send and exhaust
+    before = fc.next_followup_at
+    assert _run() == 0 and sent == []
+    assert (fc.rung, fc.touch_attempt, fc.next_followup_at) == ('warm', 4, before)
+    assert fc.exit_reason is None and _events(fc, 'touch_sent') == []
+
+
+def test_auto_send_master_switch_blocks_the_ladder(app, db, sent):
+    user, ws = _workspace(db, cfg={'auto_send_enabled': False})
+    fc = _contact(db, user, ws, rung='warm')
+    assert _run() == 0 and sent == []
+    assert fc.touch_attempt == 0
+
+
+def test_the_scheduler_entry_point_sends_ladder_touches_only_when_the_switch_is_on(app, db, sent, monkeypatch):
+    monkeypatch.setattr(_app, 'fetch_replies_from_gmail', lambda uid=None, rate_limit=True: {})
+    on_user, on_ws = _workspace(db, fu_auto=True)
+    off_user, off_ws = _workspace(db, fu_auto=False)
+    on = _contact(db, on_user, on_ws, rung='warm')
+    off = _contact(db, off_user, off_ws, rung='warm')
+    _app._run_scheduled_followups()
+    db.session.expire_all()
+    assert sent == [on.contact_email]
+    assert on.touch_attempt == 1 and off.touch_attempt == 0
+
+
+def test_the_scheduler_checks_replies_before_a_ladder_touch(app, db, sent, monkeypatch):
+    user, ws = _workspace(db, oauth=True)
+    replier = _contact(db, user, ws, rung='warm')
+    quiet = _contact(db, user, ws, rung='warm')
+    checked = []
+
+    def fake_fetch(uid=None, rate_limit=True):
+        checked.append(uid)
+        from app.models import FollowupContact
+        fc = db.session.get(FollowupContact, replier.id)
+        fc.touch_enabled = False; fc.next_followup_at = None    # their reply lands first
+        db.session.commit()
+        return {'new': 1}
+    monkeypatch.setattr(_app, 'fetch_replies_from_gmail', fake_fetch)
+    _app._run_scheduled_followups()
+    assert user.id in checked
+    assert sent == [quiet.contact_email]
+
+
+def test_a_failed_reply_check_holds_the_ladder(app, db, sent, monkeypatch):
+    user, ws = _workspace(db, oauth=True)
+    fc = _contact(db, user, ws, rung='warm')
+    monkeypatch.setattr(_app, 'fetch_replies_from_gmail',
+                        lambda uid=None, rate_limit=True: {'error': 'HttpError 503'})
+    _app._run_scheduled_followups()
+    db.session.expire_all()
+    assert sent == [] and fc.touch_attempt == 0 and fc.next_followup_at is not None
+
+
+# ── Failures go through the existing backoff ─────────────────────────────────
+
+def test_send_failure_uses_the_existing_backoff(app, db, monkeypatch):
+    monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **k: (False, 'invalid_grant'))
+    fc = _contact(db, rung='neutral', touch_attempt=1)
+    start = _app._utcnow()
+    assert _run() == 0
+    assert fc.send_fail_count == 1
+    assert fc.next_followup_at >= start + timedelta(hours=_app.SEND_FAIL_BACKOFF_HOURS[0] - 1)
+    assert fc.touch_attempt == 1 and fc.rung == 'neutral'      # a failed send spends nothing
+
+
+def test_repeated_failures_back_off_further_and_write_two_events_at_most(app, db, monkeypatch):
+    monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **k: (False, 'invalid_grant'))
+    fc = _contact(db, rung='warm', touch_attempt=0)
+    gaps = []
+    for _ in range(_app.SEND_FAIL_GIVE_UP_AFTER + 3):
+        fc.next_followup_at = past(); db.session.commit()
+        before = _app._utcnow()
+        _run()
+        gaps.append((fc.next_followup_at - before).total_seconds() / 3600)
+    assert fc.send_fail_count == _app.SEND_FAIL_GIVE_UP_AFTER + 3
+    assert fc.touch_attempt == 0                               # the budget is never burned by failures
+    assert gaps[0] < gaps[1] < gaps[2] and gaps[2] >= 71
+    assert fc.attention_at is not None                         # given up: a human is asked
+    assert len(_events(fc, 'touch_sent')) == 2                 # first failure + give-up
+
+
+def test_a_success_after_failures_resets_the_counter(app, db, monkeypatch):
+    fc = _contact(db, rung='warm')
+    monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **k: (False, 'x'))
+    _run()
+    assert fc.send_fail_count == 1
+    monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **k: (True, None))
+    fc.next_followup_at = past(); db.session.commit()
+    assert _run() == 1 and fc.send_fail_count == 0 and fc.touch_attempt == 1
+
+
+# ── One bad row never aborts the tick ────────────────────────────────────────
+
+def test_an_unrecognised_rung_raises_attention_and_the_rest_still_send(app, db, sent):
+    user, ws = _workspace(db)
+    bad = _contact(db, user, ws, rung='legacy-value')
+    good = _contact(db, user, ws, rung='warm')
+    assert _run() == 1
+    assert sent == [good.contact_email]
+    assert bad.attention_at is not None and bad.touch_attempt == 0 and bad.rung == 'legacy-value'
+    assert _run() == 0                                          # still unrecognised: no second event
+    assert len(_events(bad, 'ladder_unknown')) == 1
+
+
+def test_an_exception_on_one_contact_does_not_stop_the_others(app, db, monkeypatch):
+    user, ws = _workspace(db)
+    first = _contact(db, user, ws, rung='warm', next_followup_at=past(5))
+    second = _contact(db, user, ws, rung='warm', next_followup_at=past(1))
+    out = []
+
+    def flaky(fu, tpl, cfg, uid=None):
+        if fu['contact_email'] == first.contact_email:
+            raise RuntimeError('boom')
+        out.append(fu['contact_email'])
+        return True, None
+    monkeypatch.setattr(_app, 'send_followup_email', flaky)
+    assert _run() == 1
+    assert out == [second.contact_email]
+    assert first.touch_attempt == 0 and second.touch_attempt == 1
+
+
+# ── The hour of day ──────────────────────────────────────────────────────────
+
+def test_the_next_touch_lands_at_the_configured_hour(app, db, sent):
+    user, ws = _workspace(db, cfg={'touch_hour': 15})            # 15:00 in the workspace zone (UTC)
+    fc = _contact(db, user, ws, rung='warm')
+    _run()
+    assert fc.next_followup_at.hour == 15 and fc.next_followup_at.minute == 0
+    assert fc.next_followup_at > _app._utcnow()
+
+
+def test_the_next_touch_follows_the_workspace_time_zone(app, db, sent):
+    user, ws = _workspace(db, cfg={'touch_hour': 9, 'timezone': 'America/Chicago'})
+    fc = _contact(db, user, ws, rung='warm')
+    _run()
+    local = fc.next_followup_at.replace(tzinfo=_app.UTC).astimezone(_app._tz_named('America/Chicago'))
+    assert local.hour == 9
+
+
+def test_a_load_reply_dates_the_touch_at_the_same_hour(app, db):
+    from app.models import Reply
+    user, ws = _workspace(db, cfg={'touch_hour': 15})
+    fc = _contact(db, user, ws, rung='neutral', next_followup_at=None)
+    r = Reply(user_id=user.id, msg_id='<h1@m>', thread_id='th1', from_email=fc.contact_email,
+              subject='Re: lane', body='load Laredo to Dallas', triage_category='gave_info')
+    db.session.add(r); db.session.commit()
+    _app._check_reply_stops_followup(fc.contact_email, user.id, r)
+    db.session.commit(); db.session.refresh(fc)
+    assert fc.rung == 'warm' and fc.next_followup_at.hour == 15
+
+
+# ── The stage-cadence sweep cannot undo the ladder ───────────────────────────
+
+def test_the_sweep_does_not_wipe_a_ladder_date_in_a_stage_that_is_off(app, db):
+    user, ws = _workspace(db)                    # stage 1 cadence is "off" by default
+    fc = _contact(db, user, ws, rung='neutral', pipeline_stage=1,
+                  next_followup_at=_app._utcnow() + timedelta(days=2))
+    when = fc.next_followup_at
+    assert _app._schedule_touch(fc, ws) is False
+    _app._normalize_followup_contact(fc)
+    assert fc.next_followup_at == when and fc.touch_enabled is True
+    assert _app._schedule_touch(fc, ws, force=True) is True      # an explicit re-base stays on the ladder
+    assert fc.touch_enabled and fc.next_followup_at is not None
+
+
+@pytest.mark.parametrize('rung', ['dormant', 'client', 'excluded'])
+def test_the_sweep_gives_no_date_to_a_contact_the_ladder_has_parked(app, db, rung):
+    user, ws = _workspace(db, cfg={'cadence': {'2': {'days': 3, 'mode': 'auto'}}})
+    fc = _contact(db, user, ws, rung=rung, pipeline_stage=2, next_followup_at=None)
+    assert _app._schedule_touch(fc, ws) is False
+    assert _app._schedule_touch(fc, ws, force=True) is False
+    _app._normalize_followup_contact(fc)
+    assert fc.next_followup_at is None and fc.touch_enabled is False
+
+
+def test_a_stage_move_rebases_a_warm_contact_on_the_ladder_not_the_stage(app, db):
+    user, ws = _workspace(db)
+    fc = _contact(db, user, ws, rung='warm', next_followup_at=_app._utcnow() + timedelta(days=5))
+    ok, _ = _app._apply_pipeline_stage(fc, 3, actor_user_id=user.id)   # stage 3's cadence is 7 days
+    assert ok and fc.touch_enabled
+    assert _app._utcnow() < fc.next_followup_at < _app._utcnow() + timedelta(days=3)   # touch 1: next day
+
+
+def test_skipping_a_ladder_touch_pushes_it_one_rung_interval_and_spends_nothing(app, db):
+    user, ws = _workspace(db)
+    fc = _contact(db, user, ws, rung='neutral', touch_attempt=1)
+    assert _app._schedule_touch(fc, ws, force=True) is True            # what "skip" does
+    gap = fc.next_followup_at - _app._utcnow()
+    assert timedelta(days=2) < gap < timedelta(days=4) and fc.touch_attempt == 1   # touch 2: three days
+
+
+def test_the_sweep_fills_a_missing_date_on_a_live_rung(app, db):
+    user, ws = _workspace(db)
+    fc = _contact(db, user, ws, rung='warm', pipeline_stage=1, next_followup_at=None)
+    assert _app._schedule_touch(fc, ws) is True
+    assert fc.touch_enabled and fc.next_followup_at > _app._utcnow()
+
+
+def test_the_sweep_leaves_a_paused_ladder_contact_undated(app, db):
+    user, ws = _workspace(db)
+    fc = _contact(db, user, ws, rung='warm', auto_paused=True, next_followup_at=None)
+    assert _app._schedule_touch(fc, ws, force=True) is False
+    assert fc.next_followup_at is None and not fc.touch_enabled
+
+
+def test_the_old_stage_cadence_is_still_used_for_a_fresh_cold_contact(app, db):
+    user, ws = _workspace(db)
+    fc = _contact(db, user, ws, rung='cold', pipeline_stage=2, next_followup_at=None)
+    assert _app._schedule_touch(fc, ws, force=True) is True
+    assert fc.touch_enabled and fc.next_followup_at is not None
+
+
+# ── The pre-send reply check knows about the ladder ──────────────────────────
+
+def test_would_auto_send_follows_the_ladder_rules(app, db):
+    user, ws = _workspace(db)
+    assert _app._would_auto_send(_contact(db, user, ws, rung='warm'), ws) is True
+    assert _app._would_auto_send(_contact(db, user, ws, rung='warm', auto_paused=True), ws) is False
+    assert _app._would_auto_send(_contact(db, user, ws, rung='client'), ws) is False
+    ws.fu_auto_enabled = False
+    assert _app._would_auto_send(_contact(db, user, ws, rung='warm'), ws) is False

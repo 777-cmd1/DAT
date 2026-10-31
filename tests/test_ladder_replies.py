@@ -119,8 +119,9 @@ def test_deferral_without_a_date_keeps_the_normal_rhythm(app, db):
     fc = _contact(db, rung='neutral', touch_attempt=1)
     _reply(db, fc, category='negative', body='nothing right now, thanks')
     assert (fc.rung, fc.touch_attempt) == ('neutral', 1)       # a reply buys no patience
-    expected = _app._utcnow() + timedelta(days=3)               # second touch: +3 days
-    assert abs((fc.next_followup_at - expected).total_seconds()) < 60
+    expected = _app._utcnow() + timedelta(days=3)               # second touch: +3 days...
+    assert fc.next_followup_at.date() == expected.date()
+    assert fc.next_followup_at.hour == 14                       # ...at the default touch hour
 
 
 def test_deferral_for_a_paused_contact_schedules_nothing(app, db):

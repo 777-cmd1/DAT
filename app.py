@@ -1103,6 +1103,20 @@ def _best_reply_hour(uid):
     return hour
 
 
+def _at_touch_hour(nxt, ws, uid):
+    """Move a due date to the hour carriers actually answer (config: 'auto' =
+    computed from reply history as a UTC hour, or a fixed 0-23 hour in the
+    user's time zone). Falls back to the date as given."""
+    try:
+        hour_cfg = (ws.pipeline_config or {}).get('touch_hour', 'auto') if ws else 'auto'
+        if hour_cfg == 'auto':
+            hour = max(0, min(23, _best_reply_hour(uid)))
+            return nxt.replace(hour=hour, minute=0, second=0, microsecond=0)
+        return _local_at_hour(nxt, max(0, min(23, int(hour_cfg))), _ws_tz(ws))
+    except Exception:
+        return nxt
+
+
 def _schedule_touch(fc, ws=None, force=False, stagger=False):
     """Iron rule: an active contact whose FU drip is not running always carries a
     next stage-cadence touch (or touch_enabled=False when the stage mode is off).
@@ -1116,6 +1130,18 @@ def _schedule_touch(fc, ws=None, force=False, stagger=False):
     if (fc.state != 'active' or fc.is_followup_enabled
             or fc.scheduled_once or fc.recurring_enabled):
         return False
+    if _ladder_owns_schedule(fc):
+        # The warmth ladder dates this contact, not the stage cadence: a stage
+        # date would be sent by the scheduler (client, dormant) or replace the
+        # ladder's own rhythm, and a stage whose mode is "off" would wipe it.
+        if fc.rung in _ladder.OFF_LADDER or fc.rung == 'client':
+            _ladder_set_next(fc, None)
+            return False
+        if not force and fc.touch_enabled and fc.next_followup_at:
+            return False
+        _ladder_set_next(fc, _ladder.next_touch_at(
+            fc.rung, fc.touch_attempt or 0, _utcnow(), _ladder.LADDER_DEFAULTS), ws)
+        return fc.next_followup_at is not None
     ws = ws or (db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None)
     cad = _cadence_for_stage(ws, fc.pipeline_stage or 1)
     if cad.get('mode') == 'off' or not cad.get('days'):
@@ -1132,20 +1158,7 @@ def _schedule_touch(fc, ws=None, force=False, stagger=False):
         except (ValueError, TypeError):
             pass
     fc.touch_enabled = True
-    nxt = _utcnow() + timedelta(days=days)
-    # Land the touch at the hour carriers actually answer (config: 'auto' =
-    # computed from reply history as a UTC hour, or a fixed 0-23 hour in the
-    # user's time zone)
-    try:
-        hour_cfg = (ws.pipeline_config or {}).get('touch_hour', 'auto') if ws else 'auto'
-        if hour_cfg == 'auto':
-            hour = max(0, min(23, _best_reply_hour(fc.user_id)))
-            nxt = nxt.replace(hour=hour, minute=0, second=0, microsecond=0)
-        else:
-            nxt = _local_at_hour(nxt, max(0, min(23, int(hour_cfg))), _ws_tz(ws))
-    except Exception:
-        pass
-    fc.next_followup_at = nxt
+    fc.next_followup_at = _at_touch_hour(_utcnow() + timedelta(days=days), ws, fc.user_id)
     return True
 
 
@@ -6883,14 +6896,32 @@ def _ladder_record_load(fc, conv_key, from_rung=None, notes=None):
                          metadata_json=json.dumps({'conv': conv_key}), notes=notes)
 
 
-def _ladder_set_next(fc, when):
+def _ladder_set_next(fc, when, ws=None):
     """Set (or clear) the next touch. Only an active, unpaused contact on a
-    scheduled rung (not client/dormant/excluded) is ever given a date."""
+    scheduled rung (not client/dormant/excluded) is ever given a date, and the
+    date lands at the touch hour the rest of the app uses (`_at_touch_hour`)."""
     if (when is not None and (fc.state != 'active' or fc.auto_paused
                               or fc.rung not in _ladder.RUNGS or fc.rung == 'client')):
         when = None
+    if when is not None:
+        if ws is None and fc.workspace_id:
+            from app.models import Workspace
+            ws = db.session.get(Workspace, fc.workspace_id)
+        landed = _at_touch_hour(when, ws, fc.user_id)
+        when = landed if landed > _utcnow() else when   # never land in the past
     fc.next_followup_at = when
     fc.touch_enabled = when is not None
+
+
+def _ladder_owns_schedule(fc):
+    """True once the warmth ladder, not the stage cadence, dates this contact:
+    it is off the ladder or CLIENT, has climbed past cold, or the ladder has
+    already touched it. A fresh cold contact still follows the stage cadence
+    until the ladder first acts on it."""
+    if fc.rung in _ladder.OFF_LADDER or fc.rung == 'client':
+        return True
+    return fc.rung in _ladder.RUNGS and (
+        fc.rung != 'cold' or bool(fc.touch_attempt) or bool(fc.load_count) or bool(fc.exit_reason))
 
 
 def _ladder_raise_rung(fc):
@@ -6943,7 +6974,7 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
         _ladder_raise_rung(fc)
         fc.exit_reason = None
         fc.touch_attempt = 0
-        _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, 0, now, cfg))
+        _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, 0, now, cfg), ws)
         _ladder_record_load(fc, conv_key, old_rung, notes=f'load #{fc.load_count} received')
     elif kind == 'refusal':
         fc.rung = 'dormant'
@@ -6961,7 +6992,7 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
         _ladder_raise_rung(fc)
         # no stated date: the contact keeps its place in the normal rhythm
         _ladder_set_next(fc, resume_at or _ladder.next_touch_at(
-            fc.rung, fc.touch_attempt or 0, now, cfg))
+            fc.rung, fc.touch_attempt or 0, now, cfg), ws)
         _record_event(fc, 'ladder_deferral', actor_type='system',
                       from_state=old_rung, to_state=fc.rung,
                       notes='asked to come back ' + (resume_at.strftime('%Y-%m-%d')
@@ -7078,7 +7109,7 @@ def _would_auto_send(fc, ws):
     if fc.is_followup_enabled:
         return bool(ws and ws.fu_auto_enabled and fc.stage in ('fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled'))
     if fc.touch_enabled:
-        return _cadence_for_stage(ws, fc.pipeline_stage or 1).get('mode') == 'auto'
+        return _ladder_would_send(fc, ws)
     return False
 
 
@@ -7179,6 +7210,118 @@ def _record_send_failure(fc, event_type, err, now=None):
     app.logger.warning('scheduler send failed (attempt %s) for %s: %s',
                        n, fc.contact_email, err)
     return gave_up
+
+
+_LADDER_SENDABLE = ('cold', 'neutral', 'warm', 'hot')   # client/dormant/excluded are never emailed
+
+
+def _ladder_would_send(fc, ws):
+    """True if the ladder scheduler would email this due contact without a click."""
+    return bool(ws and ws.fu_auto_enabled and fc.rung in _LADDER_SENDABLE and not fc.auto_paused)
+
+
+def _ladder_exhaust(fc, now, ws=None):
+    """The last allowed attempt is spent: park the contact. Only a load revives it."""
+    old_rung = fc.rung
+    fc.rung = 'dormant'
+    fc.exit_reason = 'exhausted'
+    _ladder_set_next(fc, None, ws)
+    _record_event(fc, 'ladder_exhausted', actor_type='scheduler',
+                  from_state=old_rung, to_state='dormant',
+                  notes=f'{fc.touch_attempt or 0} attempts spent with no further load')
+
+
+def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
+    """Send the warmth ladder's due touches; returns how many went out.
+
+    Behind the workspace kill switch (fu_auto_enabled) and the auto-send master
+    switch. One attempt is spent per successful send; a failed send goes through
+    _record_send_failure's backoff and spends nothing. `hold_uids` are users whose
+    pre-send reply check failed; `skip_ids` are contacts another path already sent.
+    """
+    from app.models import FollowupContact, EmailAccount, Workspace
+    cfg = _ladder.LADDER_DEFAULTS
+    gate = {}
+    try:
+        # The drip, one-time and recurring paths own the contacts flagged for them.
+        q = FollowupContact.query.join(
+            Workspace, Workspace.id == FollowupContact.workspace_id
+        ).filter(
+            Workspace.fu_auto_enabled == True,
+            FollowupContact.state == 'active',
+            FollowupContact.auto_paused == False,
+            FollowupContact.touch_enabled == True,
+            FollowupContact.is_followup_enabled == False,
+            FollowupContact.scheduled_once == False,
+            FollowupContact.recurring_enabled == False,
+            FollowupContact.next_followup_at <= now,
+            db.or_(FollowupContact.rung.is_(None),
+                   FollowupContact.rung.notin_(_ladder.OFF_LADDER + ('client',))),
+        ).order_by(FollowupContact.next_followup_at)
+        try:
+            contacts = q.with_for_update(skip_locked=True, of=FollowupContact).all()
+        except Exception:
+            contacts = q.all()
+    except Exception as e:
+        app.logger.error(f'FU ladder query error: {e}')
+        return 0
+
+    sent = 0
+    for fc in contacts:
+        if fc.id in skip_ids or fc.user_id in hold_uids or not _auto_send_on(fc.workspace_id, gate):
+            continue
+        try:
+            if fc.rung not in _LADDER_SENDABLE:
+                # a legacy or unmigrated rung: never guess, ask a human (once)
+                if fc.attention_at is None:
+                    fc.attention_at = now
+                    _record_event(fc, 'ladder_unknown', actor_type='scheduler',
+                                  from_state=fc.rung, to_state=fc.rung,
+                                  notes=f'unrecognised rung {fc.rung!r}')
+                    db.session.commit()
+                continue
+            ws = db.session.get(Workspace, fc.workspace_id)
+            if (fc.touch_attempt or 0) >= _ladder.budget_for(fc.rung, cfg):
+                _ladder_exhaust(fc, now, ws)
+                db.session.commit()
+                continue
+
+            acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
+            if not acct:
+                continue
+            template_text = _get_random_fu_template(fc.user_id)
+            if not template_text:
+                continue
+            send_cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
+                        'phone': acct.your_phone or '', 'route': fc.current_route or '',
+                        'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
+            fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
+                       'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
+                       'source_thread_id': fc.source_thread_id or ''}
+            ok, err = send_followup_email(fu_dict, template_text, send_cfg, uid=fc.user_id)
+            if ok:
+                fc.touch_attempt = (fc.touch_attempt or 0) + 1
+                fc.last_followup_sent_at = now
+                fc.last_activity_at = now
+                fc.attention_at = None
+                fc.send_fail_count = 0
+                _record_event(fc, 'touch_sent', actor_type='scheduler',
+                              from_state=fc.rung, to_state=fc.rung,
+                              notes=f'ladder touch {fc.touch_attempt} on {fc.rung}')
+                if fc.touch_attempt >= _ladder.budget_for(fc.rung, cfg):
+                    _ladder_exhaust(fc, now, ws)
+                else:
+                    _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, fc.touch_attempt, now, cfg), ws)
+                sent += 1
+            else:
+                _record_send_failure(fc, 'touch_sent', err, now)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f'FU ladder error for {fc.contact_email}: {e}')
+    if sent:
+        app.logger.info(f'FU scheduler: sent {sent} ladder touches')
+    return sent
 
 
 def _run_scheduled_followups():
@@ -7404,66 +7547,10 @@ def _run_scheduled_followups():
         if rec_total:
             app.logger.info(f'FU scheduler: sent {rec_total} recurring follow-ups')
 
-        # ── Path 3: Stage-cadence touches (auto mode only) ───────────────────
-        # Manual-mode touches just sit in Today/Overdue until the user acts.
-        try:
-            tq = FollowupContact.query.filter(
-                FollowupContact.state == 'active',
-                FollowupContact.touch_enabled == True,
-                FollowupContact.is_followup_enabled == False,
-                FollowupContact.recurring_enabled == False,
-                FollowupContact.next_followup_at <= now,
-            )
-            try:
-                touches = tq.with_for_update(skip_locked=True).all()
-            except Exception:
-                touches = tq.all()
-        except Exception as e:
-            app.logger.error(f'FU touch scheduler query error: {e}')
-            return sent_total + rec_total
-
-        from app.models import Workspace as _WS
-        touch_total = 0
-        for fc in touches:
-            if fc.id in processed_ids or not _allowed(fc):
-                continue
-            try:
-                ws = db.session.get(_WS, fc.workspace_id) if fc.workspace_id else None
-                cad = _cadence_for_stage(ws, fc.pipeline_stage or 1)
-                if cad.get('mode') != 'auto':
-                    continue   # manual/off — leave it in the Today queue
-                template_text = _get_random_fu_template(fc.user_id)
-                if not template_text:
-                    continue
-                acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
-                if not acct:
-                    continue
-                cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
-                       'phone': acct.your_phone or '', 'route': fc.current_route or '',
-                       'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
-                fu_dict = {'contact_email': fc.contact_email, 'reply_subject': fc.reply_subject or '',
-                           'reply_msg_id': fc.reply_msg_id or '', 'current_route': fc.current_route or '',
-                           'source_thread_id': fc.source_thread_id or ''}
-                ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
-                if ok:
-                    fc.last_followup_sent_at = now
-                    fc.last_activity_at = now
-                    fc.attention_at = None
-                    _schedule_touch(fc, ws, force=True)
-                    fc.send_fail_count = 0
-                    _record_event(fc, 'touch_sent', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage)
-                    processed_ids.add(fc.id)
-                    touch_total += 1
-                else:
-                    _record_send_failure(fc, 'touch_sent', err, now)
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                app.logger.error(f'FU touch scheduler error for {fc.contact_email}: {e}')
-
-        if touch_total:
-            app.logger.info(f'FU scheduler: sent {touch_total} cadence touches')
+        # ── Path 3: Warmth-ladder touches ────────────────────────────────────
+        # Replaces the stage-cadence touches: the ladder decides who is due and
+        # how often; fu_auto_enabled and the auto-send master switch gate it.
+        touch_total = _run_ladder_touches(now, hold_uids, processed_ids)
 
         # ── Path 4: Weekly digest emails (Mondays, after 06:00 user time) ────
         try:

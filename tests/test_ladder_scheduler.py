@@ -432,7 +432,7 @@ def test_a_missing_account_asks_for_attention_once(app, db, sent):
 
 
 def test_a_missing_template_asks_for_attention_once(app, db, sent, monkeypatch):
-    monkeypatch.setattr(_app, '_get_random_fu_template', lambda uid, **k: '')
+    monkeypatch.setattr(_app, '_template_for_rung', lambda uid, rung, fc: None)
     fc = _contact(db, rung='warm')
     assert _run() == 0 and sent == []
     assert fc.attention_at is not None

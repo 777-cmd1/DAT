@@ -5072,6 +5072,81 @@ DEFAULT_FU_TEMPLATES = {
     'FU3': "Hi,\n\nLast follow-up — if you have loads in the future, please reach out.\n\nBest,\n{name}\n{company} | {phone}",
 }
 
+# Copy for the warmth ladder, one tuple of bodies per rung; the attempt number picks
+# the body (attempt % len), so the next touch never repeats the last word for word and
+# a different ask leads each time. A user's own Template(level=<RUNG>) replaces these.
+# CLIENT is never scheduled, so it has no copy.
+#
+# Variables resolved at pick time (_render_rung_body): {route} {origin} {destination}
+# {last_rate}. A line that mentions one the contact has no value for is dropped, so
+# every email keeps at least one question on a line of its own. {name} {company}
+# {phone} are the sender's and are filled in by send_followup_email.
+_SIGNATURE = "{name}\n{company} | {phone}"
+DEFAULT_RUNG_TEMPLATES = {
+    # No reply yet: nothing to recall, so ask what is moving, offer the lanes out of
+    # their city and the services they may not know we run.
+    'cold': (
+        "Hi,\n\n"
+        "Do you have any loads open right now?\n"
+        "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Do you have any hazmat, LTL, Mexico, Canada or high-value loads open? "
+        "We run all of those.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Which lanes do you move most often?\n"
+        "We have trucks sitting in {origin} and can look at other lanes from there.\n\n" + _SIGNATURE,
+    ),
+    # They answered but have not sent a load yet.
+    'neutral': (
+        "Hi,\n\n"
+        "Do you have a load right now that I can quote?\n"
+        "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Does any hazmat, LTL, Mexico, Canada or high-value freight come up on your side? "
+        "We run those too.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Which lanes do you ship most often? Send me a couple and I will check them "
+        "against my trucks.\n"
+        "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
+    ),
+    # They sent us a load: lead with that load and ask about the next one.
+    'warm': (
+        "Hi,\n\n"
+        "You sent me {route} before.\n"
+        "Do you have another load like it coming up? How often do loads like that come up for you?\n\n"
+        + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Are there any other loads open on your side right now?\n"
+        "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Do you have any hazmat, LTL, Mexico, Canada or high-value loads?\n"
+        "We run all of those, not only {route}.\n\n" + _SIGNATURE,
+    ),
+    # More than one load: a working relationship, so ask for volume and the next load.
+    'hot': (
+        "Hi,\n\n"
+        "The last load you sent me was {route}.\n"
+        "What do you have open this week?\n"
+        "How many loads a week do you usually have?\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Which other lanes are you moving right now?\n"
+        "We have trucks sitting in {origin}.\n"
+        "If {route} comes up again, send it over and I will quote it.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Do you ever have hazmat, LTL, Mexico, Canada or high-value loads? "
+        "We run those too, along with the lanes you already send me.\n\n" + _SIGNATURE,
+    ),
+}
+
+
 def _normalize_fu_template_level(value):
     raw = (value or '').strip()
     if not raw:
@@ -7057,6 +7132,78 @@ def _get_fu_templates_for_user(uid):
     return Template.query.filter_by(user_id=uid, type='followup', is_active=True)\
         .order_by(Template.sort_order, Template.created_at).all()
 
+def _is_rung_level(level):
+    """True for a template level that names a ladder rung (COLD/NEUTRAL/WARM/HOT, any case)."""
+    return (level or '').strip().lower() in DEFAULT_RUNG_TEMPLATES
+
+
+def _rung_template_vars(fc):
+    """Values for the lane/rate variables of a ladder body. Unknown values are ''."""
+    route = (fc.current_route or '').strip()
+    parts = [p.strip() for p in re.split(r'\s*(?:\u2192|->)\s*', route, maxsplit=1)] if route else []
+    quote = None
+    if fc.contact_email:
+        from app.models import RateQuote
+        quote = RateQuote.query.filter(
+            RateQuote.user_id == fc.user_id,
+            db.func.lower(RateQuote.contact_email) == fc.contact_email.lower(),
+            RateQuote.hidden == False,
+            RateQuote.rate.isnot(None),
+        ).order_by(RateQuote.created_at.desc()).first()
+    return {
+        'route': route,
+        'origin': parts[0] if len(parts) == 2 else '',
+        'destination': parts[1] if len(parts) == 2 else '',
+        'last_rate': f'${quote.rate:,}' if quote else '',
+    }
+
+
+def _render_rung_body(body, fc):
+    """Fill the lane/rate variables of a ladder body, leaving {name} {company}
+    {phone} for the sender. A line that needs a value the contact does not have is
+    dropped rather than sent with a hole in it."""
+    values = _rung_template_vars(fc)
+    kept = []
+    for line in (body or '').split('\n'):
+        if any(values.get(n) == '' for n in _TMPL_FIELD_RE.findall(line)):
+            continue
+        kept.append(line)
+    text = re.sub(r'\n{3,}', '\n\n', '\n'.join(kept))
+    return _safe_render(text, values).strip()
+
+
+def _template_for_rung(uid, rung, fc):
+    """The body for this contact's next ladder touch, or None when there is genuinely
+    nothing to send (the scheduler then asks a human).
+
+    Order: the user's own Template(level=<RUNG>) -> the code default for the rung ->
+    the user's general pool -> None. Where a source holds several bodies the attempt
+    number picks one, so touch N+1 does not repeat touch N. A source that renders to
+    nothing falls through to the next, so a send is never blank and never blocked by a
+    missing variable."""
+    from app.models import Template
+    rows = Template.query.filter_by(user_id=uid, type='followup', is_active=True)\
+        .order_by(Template.sort_order, Template.created_at).all()
+    rows = [r for r in rows if (r.body or '').strip()]
+    key = (rung or '').strip().lower()
+    attempt = fc.touch_attempt or 0
+    own = [r.body for r in rows if (r.level or '').strip().lower() == key] if key in DEFAULT_RUNG_TEMPLATES else []
+    defaults = list(DEFAULT_RUNG_TEMPLATES.get(key, ()))
+    general = [r.body for r in rows
+               if _normalize_fu_template_level(r.level) not in DEFAULT_FU_TEMPLATES
+               and not _is_rung_level(r.level)]
+    for pool in (own, defaults):
+        if pool:
+            text = _render_rung_body(pool[attempt % len(pool)], fc)
+            if text:
+                return text
+    if general:
+        text = _render_rung_body(random.choice(general), fc)
+        if text:
+            return text
+    return None
+
+
 def _get_random_fu_template(uid, stage=None, include_general=True):
     """Pick a random active FU template for a stage, optionally including general pool entries."""
     from app.models import Template
@@ -7069,7 +7216,7 @@ def _get_random_fu_template(uid, stage=None, include_general=True):
         level = _normalize_fu_template_level(row.level)
         if template_key and level == template_key:
             stage_rows.append(row)
-        elif level not in DEFAULT_FU_TEMPLATES:
+        elif level not in DEFAULT_FU_TEMPLATES and not _is_rung_level(level):
             general_rows.append(row)
     pool = []
     if stage_rows:
@@ -7326,7 +7473,7 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
                 if _ladder_flag(fc, now, 'ladder_blocked', 'no email account connected: cannot send'):
                     db.session.commit()
                 continue
-            template_text = _get_random_fu_template(fc.user_id)
+            template_text = _template_for_rung(fc.user_id, fc.rung, fc)
             if not template_text:
                 if _ladder_flag(fc, now, 'ladder_blocked', 'no follow-up template: cannot send'):
                     db.session.commit()

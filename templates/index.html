@@ -2629,7 +2629,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 .fu-cv-fill { height: 100%; border-radius: 4px; background: var(--rg); opacity: .85; }
 .fu-cv-pct { flex: 1 1 130px; font-size: 12px; color: var(--text2); }
 .fu-cv-pct b { color: var(--text); font-variant-numeric: tabular-nums; }
-.fu-cv-lost { flex: 1 1 150px; font-size: 12px; color: var(--text2); }
+.fu-cv-lost { flex: 1 1 120px; font-size: 12px; color: var(--text2); }
 .fu-cv-lost b { color: var(--text); font-variant-numeric: tabular-nums; }
 .fu-cv-lost.none { color: var(--text3); }
 .fu-cv-caret { flex: 0 0 auto; margin-left: auto; font-size: 13px; color: var(--text3); transition: transform var(--dur-fast) var(--ease); }
@@ -8539,6 +8539,14 @@ function renderFuConversion(data) {
     const lost = r.lost
       ? `<span class="fu-cv-lost"><b>${r.lost}</b> dropped out here</span>`
       : '<span class="fu-cv-lost none">no one dropped out here</span>';
+    // went on + dropped out + still here = reached, so each row shows all three
+    const still = r.still_here
+      ? `<span class="fu-cv-lost"><b>${r.still_here}</b> still here</span>`
+      : '<span class="fu-cv-lost none">no one still here</span>';
+    // the payload names the people who reached and who dropped out; "still here" is what is left
+    const gone = new Set((next ? next.reached_contacts || [] : []).map(c => c.id));
+    (r.lost_reasons || []).forEach(lr => (lr.contacts || []).forEach(c => gone.add(c.id)));
+    const stillPeople = (r.reached_contacts || []).filter(c => !gone.has(c.id));
     const moved = r.reached - r.lost - r.still_here;
     const counts = `<b>${r.reached}</b> reached ${esc(r.rung.toUpperCase())} · <b>${r.still_here}</b> still here` +
       (next ? ` · <b>${moved}</b> went on to ${esc(next.rung.toUpperCase())}` : '') + ` · <b>${r.lost}</b> dropped out`;
@@ -8547,10 +8555,12 @@ function renderFuConversion(data) {
     return `<details class="fu-cv fu-rg-${esc(r.rung)}"><summary>` +
         `<span class="fu-cv-name">${fuRungPill(r.rung)}</span>` +
         `<span class="fu-cv-bar"><span class="fu-cv-n">${r.reached}</span><span class="fu-cv-track"><span class="fu-cv-fill" style="display:block;width:${Math.min(100, r.reached / entered * 100)}%"></span></span></span>` +
-        `<span class="fu-cv-pct">${ofPrev}</span>${lost}` +
+        `<span class="fu-cv-pct">${ofPrev}</span>${lost}${still}` +
         '<i class="fu-cv-caret ph-bold ph-caret-down" aria-hidden="true"></i></summary>' +
       '<div class="fu-cv-body"><div class="fu-cv-counts">' + counts + '</div>' +
         (reasons ? '<div><div class="fu-cv-gl">Dropped out here, and why</div>' + reasons + '</div>' : '') +
+        (stillPeople.length && stillPeople.length === r.still_here
+          ? `<div><div class="fu-cv-gl">Still here, not yet moved on or dropped (${r.still_here})</div>${fuPeopleHtml(stillPeople)}</div>` : '') +
         (r.reached ? `<div><div class="fu-cv-gl">Everyone who reached ${esc(r.rung.toUpperCase())}</div>${fuPeopleHtml(r.reached_contacts)}</div>` : '') +
       '</div></details>';
   }).join('');
@@ -8572,7 +8582,7 @@ function renderFuActivity(a, sw) {
   if (!sw.ladder_auto_enabled) why.push('The warmth ladder has not been switched on yet.');
   if (!sw.auto_send_enabled) why.push('The auto-send master switch is off.');
   const off = why.length
-    ? '<div class="fu-act-off"><b>Automatic sending is off for the ladder.</b> No one on it is emailed unless you send it yourself. ' + esc(why.join(' ')) + '</div>'
+    ? '<div class="fu-act-off"><b>Automatic sending is off for the ladder.</b> The ladder will not email anyone on its own. ' + esc(why.join(' ')) + '</div>'
     : '';
   if (!(sent || raised || quieted || stopped)) {
     // a switched-off engine is never reported as a quiet day

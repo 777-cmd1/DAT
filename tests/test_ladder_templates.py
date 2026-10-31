@@ -179,9 +179,77 @@ def test_missing_variable_does_not_crash_the_send(app, db):
     fc = _contact(db, rung='warm')
     _tmpl(db, fc, 'WARM', 'Hi,\n\nLast rate was {last_rate}.\nAny loads?\n\n{name}')
     body = _body(fc)
-    assert '{last_rate}' not in body
-    assert 'Any loads?' in body and '{name}' in body
-    assert 'Last rate' not in body                            # the line that needed it is dropped
+    assert '{last_rate}' not in body and 'Last rate' not in body
+    assert body == _app._render_rung_body(_app.DEFAULT_RUNG_TEMPLATES['warm'][0], fc)
+
+
+def test_a_user_template_is_never_cut_down_to_a_greeting_and_a_signature(app, db):
+    """Its only content line needs a lane the contact lacks: our copy goes instead."""
+    fc = _contact(db, rung='warm')
+    _tmpl(db, fc, 'WARM', 'Hi,\n\nAny loads from {origin}?\n\n{name}\n{company} | {phone}')
+    body = _body(fc)
+    assert body == _app._render_rung_body(_app.DEFAULT_RUNG_TEMPLATES['warm'][0], fc)
+    assert 'Any loads from' not in body
+
+
+def test_a_user_template_is_sent_whole_when_every_value_is_there(app, db):
+    fc = _contact(db, rung='warm', current_route=ROUTE)
+    _tmpl(db, fc, 'WARM', 'Hi,\n\nAny loads from {origin}?\n\n{name}')
+    assert _body(fc) == 'Hi,\n\nAny loads from Laredo, TX?\n\n{name}'
+
+
+def test_a_general_template_that_needs_a_missing_value_is_not_trimmed(app, db):
+    fc = _contact(db, rung='client')
+    _tmpl(db, fc, 'General', 'Hi,\n\nAny loads from {origin}?\n\n{name}')
+    assert _body(fc) is None
+
+
+@pytest.mark.parametrize('route', ['Laredo, TX →', '→ Dallas, TX', 'Laredo, TX ->',
+                                   'None → Dallas, TX', 'Laredo, TX → None',
+                                   'None → None', ' → ', 'Laredo to Dallas'])
+def test_a_half_lane_is_not_a_route(app, db, route):
+    fc = _contact(db, rung='warm', current_route=route)
+    assert _app._rung_template_vars(fc, set())['route'] == ''
+    for i in range(len(_app.DEFAULT_RUNG_TEMPLATES['warm'])):
+        fc.touch_attempt = i
+        body = _body(fc)
+        assert '→' not in body and '->' not in body and 'None' not in body
+
+
+def test_each_side_of_a_half_lane_still_stands_alone(app, db):
+    fc = _contact(db, rung='warm', current_route='Laredo, TX →')
+    assert _app._rung_template_vars(fc, set()) == {'route': '', 'origin': 'Laredo, TX', 'destination': ''}
+    fc.current_route = 'None → Dallas, TX'
+    assert _app._rung_template_vars(fc, set()) == {'route': '', 'origin': '', 'destination': 'Dallas, TX'}
+
+
+def test_the_first_warm_body_is_a_self_standing_question_without_a_route(app, db):
+    """The first warm body must still be a complete, self-standing question."""
+    fc = _contact(db, rung='warm', current_route=None, touch_attempt=0)
+    body = _body(fc)
+    assert 'Do you have another load coming up?' in body
+    assert 'like it' not in body and 'like that' not in body and 'that lane' not in body
+
+
+def test_the_route_query_only_runs_when_a_body_asks_for_the_rate(app, db):
+    from sqlalchemy import event
+    fc = _contact(db, rung='warm', current_route=ROUTE)
+    seen = []
+
+    def spy(conn, cursor, statement, *a):
+        if 'rate_quotes' in statement:
+            seen.append(statement)
+    event.listen(db.engine, 'before_cursor_execute', spy)
+    try:
+        for i in range(len(_app.DEFAULT_RUNG_TEMPLATES['warm'])):
+            fc.touch_attempt = i
+            _body(fc)
+        assert seen == []
+        _tmpl(db, fc, 'WARM', 'Rate was {last_rate}.\nAgain?')
+        _body(fc)
+        assert len(seen) == 1
+    finally:
+        event.remove(db.engine, 'before_cursor_execute', spy)
 
 
 def _quote(db, fc, rate, hidden=False):
@@ -205,7 +273,7 @@ def test_a_hidden_quote_is_not_used(app, db):
     fc = _contact(db, rung='warm')
     _quote(db, fc, 900, hidden=True)
     _tmpl(db, fc, 'WARM', 'You said {last_rate}.\nAgain?')
-    assert _body(fc) == 'Again?'
+    assert _body(fc) == _app._render_rung_body(_app.DEFAULT_RUNG_TEMPLATES['warm'][0], fc)
 
 
 # ── The copy itself ──────────────────────────────────────────────────────────
@@ -225,7 +293,38 @@ def test_defaults_cover_every_sendable_rung_and_nothing_else(app):
 @pytest.mark.parametrize('rung', SENDABLE)
 def test_each_attempt_of_a_rung_reads_differently(app, rung):
     bodies = _app.DEFAULT_RUNG_TEMPLATES[rung]
-    assert len(bodies) >= 2 and len(set(bodies)) == len(bodies)
+    assert len(set(bodies)) == len(bodies)
+    # one distinct body per attempt in the rung's budget
+    assert len(bodies) >= _app._ladder.budget_for(rung, _app._ladder.LADDER_DEFAULTS)
+
+
+def _walk(db, fc, rung, load_count, attempts, bodies):
+    """Send `attempts` touches on `rung` with the counters the scheduler would have."""
+    fc.rung, fc.load_count = rung, load_count
+    for attempt in range(attempts):
+        fc.touch_attempt = attempt
+        bodies.append(_body(fc))
+
+
+def test_no_two_sends_share_a_body_across_a_budget_and_a_new_load(app, db):
+    """A contact goes through a full budget, sends a load, and goes through the next:
+    the same text never reaches the same broker twice."""
+    cfg = _app._ladder.LADDER_DEFAULTS
+    fc = _contact(db, rung='warm', current_route=ROUTE)
+    sent = []
+    _walk(db, fc, 'warm', 1, _app._ladder.budget_for('warm', cfg), sent)     # first load
+    _walk(db, fc, 'hot', 2, _app._ladder.budget_for('hot', cfg), sent)       # second load
+    assert len(sent) == 10 and len(set(sent)) == 10
+
+
+def test_a_new_load_does_not_restart_at_the_first_body(app, db):
+    cfg = _app._ladder.LADDER_DEFAULTS
+    budget = _app._ladder.budget_for('hot', cfg)
+    fc = _contact(db, rung='hot', current_route=ROUTE)
+    second, third = [], []
+    _walk(db, fc, 'hot', 2, budget, second)
+    _walk(db, fc, 'hot', 3, budget, third)
+    assert third[0] not in (second[0], second[-1])
 
 
 def test_every_default_asks_something_a_dispatcher_can_answer(app, db):

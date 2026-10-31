@@ -27,12 +27,12 @@ def _contact(db, rung='cold', **kw):
     return fc
 
 
-def _reply(db, fc, category, body, thread=None, msg_id=None):
+def _reply(db, fc, category, body, thread=None, msg_id=None, subject='Re: Laredo to Dallas', **kw):
     """Store an inbound Reply and run it through the reply hook; returns the Reply."""
     from app.models import Reply
     r = Reply(user_id=fc.user_id, msg_id=msg_id or f'<{uuid.uuid4().hex}@mail>',
-              thread_id=thread, from_email=fc.contact_email, subject='Re: Laredo to Dallas',
-              body=body, triage_category=category)
+              thread_id=thread, from_email=fc.contact_email, subject=subject,
+              body=body, triage_category=category, **kw)
     db.session.add(r); db.session.commit()
     _app._check_reply_stops_followup(fc.contact_email, fc.user_id, r)
     db.session.commit(); db.session.refresh(fc)
@@ -321,3 +321,72 @@ def test_reply_rows_lookup_logs_and_rolls_back_when_the_query_fails(app, db, cap
         rows = _app._reply_rows_by_msg_id(fc.user_id, [{'msg_id': '<x@mail>'}])
     assert rows == {} and rolled_back
     assert 'db is down' in caplog.text
+
+
+# ── A load reply points the contact at the lane it answers ───────────────────
+
+def _send(db, fc, origin, destination, email=None, hours_ago=5, status='sent'):
+    from app.models import Send
+    db.session.add(Send(user_id=fc.user_id, recipient_email=email or fc.contact_email,
+                        origin=origin, destination=destination, status=status,
+                        sent_at=_app._utcnow() - timedelta(hours=hours_ago)))
+    db.session.commit()
+
+
+def test_a_load_reply_refreshes_the_route_from_the_only_lane_we_sent(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX \u2192 Elsewhere, TX')
+    _send(db, fc, 'Houston, TX', 'Miami, FL')
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1', subject='Re: your load')
+    assert fc.current_route == 'Houston, TX \u2192 Miami, FL'
+
+
+def test_with_several_lanes_the_one_named_in_the_subject_wins(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX \u2192 Elsewhere, TX')
+    _send(db, fc, 'Laredo, TX', 'Dallas, TX', hours_ago=9)
+    _send(db, fc, 'Houston, TX', 'Miami, FL', hours_ago=2)
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1',
+           subject='Re: Laredo, TX to Dallas, TX, 1/5, Van')
+    assert fc.current_route == 'Laredo, TX \u2192 Dallas, TX'
+
+
+def test_with_several_lanes_and_no_match_the_route_is_left_alone(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX \u2192 Elsewhere, TX')
+    _send(db, fc, 'Laredo, TX', 'Dallas, TX', hours_ago=9)
+    _send(db, fc, 'Houston, TX', 'Miami, FL', hours_ago=2)
+    _reply(db, fc, category='gave_info', body='we have a load Tampa to Atlanta', thread='t1',
+           subject='Re: your load')
+    assert fc.current_route == 'Old, TX \u2192 Elsewhere, TX'
+
+
+def test_no_sends_means_no_change_and_the_lane_is_not_read_from_the_text(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX \u2192 Elsewhere, TX')
+    _reply(db, fc, category='gave_info', body='we have a load Tampa, FL to Atlanta, GA',
+           thread='t1', subject='Re: your load')
+    assert fc.current_route == 'Old, TX \u2192 Elsewhere, TX'
+
+
+def test_a_send_with_half_a_lane_or_a_failed_send_is_not_a_lane(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX \u2192 Elsewhere, TX')
+    _send(db, fc, 'Houston, TX', '')
+    _send(db, fc, 'Houston, TX', 'None')
+    _send(db, fc, 'Laredo, TX', 'Dallas, TX', status='error')
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1', subject='Re: your load')
+    assert fc.current_route == 'Old, TX \u2192 Elsewhere, TX'
+
+
+def test_a_colleagues_reply_is_matched_through_the_address_we_wrote_to(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX \u2192 Elsewhere, TX')
+    fc.contact_email = 'dispatch@abc.com'
+    db.session.commit()
+    _send(db, fc, 'Houston, TX', 'Miami, FL', email='Dispatch@abc.com')
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1', subject='Re: your load',
+           matched_recipient='dispatch@abc.com')
+    assert fc.current_route == 'Houston, TX \u2192 Miami, FL'
+
+
+def test_a_reply_that_is_not_a_load_leaves_the_route_alone(app, db):
+    fc = _contact(db, rung='neutral', current_route='Old, TX \u2192 Elsewhere, TX')
+    _send(db, fc, 'Houston, TX', 'Miami, FL')
+    _reply(db, fc, category='rate_request', body='what is your rate?', thread='t1',
+           subject='Re: your load')
+    assert fc.current_route == 'Old, TX \u2192 Elsewhere, TX'

@@ -5082,6 +5082,7 @@ DEFAULT_FU_TEMPLATES = {
 # every email keeps at least one question on a line of its own. {name} {company}
 # {phone} are the sender's and are filled in by send_followup_email.
 _SIGNATURE = "{name}\n{company} | {phone}"
+_RUNG_FIRST_LOAD = {'warm': 1, 'hot': 2}      # the load count that lands a contact on the rung
 DEFAULT_RUNG_TEMPLATES = {
     # No reply yet: nothing to recall, so ask what is moving, offer the lanes out of
     # their city and the services they may not know we run.
@@ -5101,7 +5102,7 @@ DEFAULT_RUNG_TEMPLATES = {
     # They answered but have not sent a load yet.
     'neutral': (
         "Hi,\n\n"
-        "Do you have a load right now that I can quote?\n"
+        "Do you have a load right now that we can quote?\n"
         "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
@@ -5109,16 +5110,16 @@ DEFAULT_RUNG_TEMPLATES = {
         "We run those too.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Which lanes do you ship most often? Send me a couple and I will check them "
-        "against my trucks.\n"
+        "Which lanes do you ship most often? Send us a couple and we will check them "
+        "against our trucks.\n"
         "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
     ),
-    # They sent us a load: lead with that load and ask about the next one.
+    # They sent load information. {route} is the lane of our first outreach to them (the
+    # data does not say which lane they later sent), so the copy only claims we talked about it.
     'warm': (
         "Hi,\n\n"
-        "You sent me {route} before.\n"
-        "Do you have another load like it coming up? How often do loads like that come up for you?\n\n"
-        + _SIGNATURE,
+        "Last time we talked about {route}. How often does that lane come up for you?\n"
+        "Do you have another load coming up?\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
         "Are there any other loads open on your side right now?\n"
@@ -5127,22 +5128,38 @@ DEFAULT_RUNG_TEMPLATES = {
         "Hi,\n\n"
         "Do you have any hazmat, LTL, Mexico, Canada or high-value loads?\n"
         "We run all of those, not only {route}.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Is anything moving next week?\n"
+        "If {route} is back on your board, send it over and we will quote it.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Are you covered on everything you have open right now?\n"
+        "If not, send us the lane and we will see what we can do.\n\n" + _SIGNATURE,
     ),
     # More than one load: a working relationship, so ask for volume and the next load.
     'hot': (
         "Hi,\n\n"
-        "The last load you sent me was {route}.\n"
+        "Last time we talked about {route}.\n"
         "What do you have open this week?\n"
         "How many loads a week do you usually have?\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
         "Which other lanes are you moving right now?\n"
         "We have trucks sitting in {origin}.\n"
-        "If {route} comes up again, send it over and I will quote it.\n\n" + _SIGNATURE,
+        "If {route} comes up again, send it over and we will quote it.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
         "Do you ever have hazmat, LTL, Mexico, Canada or high-value loads? "
-        "We run those too, along with the lanes you already send me.\n\n" + _SIGNATURE,
+        "We run those too, along with the lanes you already send us.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Is there anything you need covered this week?\n"
+        "Send over the lane and the pickup date and we will quote it.\n\n" + _SIGNATURE,
+
+        "Hi,\n\n"
+        "Which lanes are busiest for you right now?\n"
+        "If anything leaves from {origin}, we have trucks sitting there.\n\n" + _SIGNATURE,
     ),
 }
 
@@ -7015,6 +7032,38 @@ def _ladder_raise_rung(fc):
         fc.rung = derived
 
 
+def _ladder_refresh_route(fc, reply, now):
+    """Point current_route at the lane this reply answers, when that can be told.
+
+    current_route is the lane of our first outreach and nothing else updates it, so a
+    contact that has since talked to us about other lanes would keep the first one. The
+    answered Send is looked up by the address we wrote to (the matched recipient when a
+    colleague replied) among sends made before the reply: if they all share one lane that
+    is it, otherwise the newest whose lane appears in the reply's subject. Anything less
+    certain leaves the route alone; a lane is never read out of the reply text."""
+    from app.models import Send
+    recipient = (reply.matched_recipient or fc.contact_email or '').strip().lower()
+    if not recipient:
+        return
+    sends = Send.query.filter(
+        Send.user_id == fc.user_id, Send.status == 'sent',
+        db.func.lower(Send.recipient_email) == recipient,
+        Send.sent_at <= (reply.received_at or now),
+    ).order_by(Send.sent_at.desc()).all()
+    lanes = {}                                     # newest first
+    for s in sends:
+        o, d = _lane_part(s.origin), _lane_part(s.destination)
+        if o and d:
+            lanes.setdefault((o, d), None)
+    if len(lanes) == 1:
+        chosen = next(iter(lanes))
+    else:
+        subject = (reply.subject or '').lower()
+        chosen = next(((o, d) for o, d in lanes if o.lower() in subject and d.lower() in subject), None)
+    if chosen:
+        fc.current_route = f'{chosen[0]} \u2192 {chosen[1]}'
+
+
 def _apply_reply_to_ladder(fc, reply, ws, now):
     """Move a contact on the warmth ladder because of an inbound reply.
 
@@ -7054,6 +7103,7 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
             return None
         fc.load_count = (fc.load_count or 0) + 1
         fc.last_load_at = now
+        _ladder_refresh_route(fc, reply, now)
         _ladder_raise_rung(fc)
         fc.exit_reason = None
         fc.touch_attempt = 0
@@ -7137,35 +7187,53 @@ def _is_rung_level(level):
     return (level or '').strip().lower() in DEFAULT_RUNG_TEMPLATES
 
 
-def _rung_template_vars(fc):
-    """Values for the lane/rate variables of a ladder body. Unknown values are ''."""
-    route = (fc.current_route or '').strip()
-    parts = [p.strip() for p in re.split(r'\s*(?:\u2192|->)\s*', route, maxsplit=1)] if route else []
-    quote = None
-    if fc.contact_email:
-        from app.models import RateQuote
-        quote = RateQuote.query.filter(
-            RateQuote.user_id == fc.user_id,
-            db.func.lower(RateQuote.contact_email) == fc.contact_email.lower(),
-            RateQuote.hidden == False,
-            RateQuote.rate.isnot(None),
-        ).order_by(RateQuote.created_at.desc()).first()
-    return {
-        'route': route,
-        'origin': parts[0] if len(parts) == 2 else '',
-        'destination': parts[1] if len(parts) == 2 else '',
-        'last_rate': f'${quote.rate:,}' if quote else '',
+def _lane_part(value):
+    """One side of a lane, or '' when it is missing. A NULL column reaches us as the
+    literal string 'None' wherever a route is built with an f-string."""
+    text = (value or '').strip()
+    return '' if text.lower() == 'none' else text
+
+
+def _rung_template_vars(fc, names):
+    """Values for the lane/rate variables a ladder body asks for. Unknown values are ''.
+    {route} needs both ends of the lane; {origin} and {destination} stand on their own."""
+    raw = (fc.current_route or '').strip()
+    parts = re.split(r'\s*(?:\u2192|->)\s*', raw, maxsplit=1) if raw else []
+    origin = _lane_part(parts[0]) if len(parts) == 2 else ''
+    destination = _lane_part(parts[1]) if len(parts) == 2 else ''
+    values = {
+        'route': raw if origin and destination else '',
+        'origin': origin,
+        'destination': destination,
     }
+    if 'last_rate' in names:                       # only query when a body asks for it
+        quote = None
+        if fc.contact_email:
+            from app.models import RateQuote
+            quote = RateQuote.query.filter(
+                RateQuote.user_id == fc.user_id,
+                db.func.lower(RateQuote.contact_email) == fc.contact_email.lower(),
+                RateQuote.hidden == False,
+                RateQuote.rate.isnot(None),
+            ).order_by(RateQuote.created_at.desc()).first()
+        values['last_rate'] = f'${quote.rate:,}' if quote else ''
+    return values
 
 
-def _render_rung_body(body, fc):
+def _render_rung_body(body, fc, strict=False):
     """Fill the lane/rate variables of a ladder body, leaving {name} {company}
     {phone} for the sender. A line that needs a value the contact does not have is
-    dropped rather than sent with a hole in it."""
-    values = _rung_template_vars(fc)
+    dropped rather than sent with a hole in it. With strict=True (a body the user
+    wrote) nothing is dropped: the whole body counts as blank, so the caller falls
+    through to the next source instead of silently cutting a line the owner composed.
+    Returns '' for a blank result."""
+    body = body or ''
+    values = _rung_template_vars(fc, set(_TMPL_FIELD_RE.findall(body)))
     kept = []
-    for line in (body or '').split('\n'):
+    for line in body.split('\n'):
         if any(values.get(n) == '' for n in _TMPL_FIELD_RE.findall(line)):
+            if strict:
+                return ''
             continue
         kept.append(line)
     text = re.sub(r'\n{3,}', '\n\n', '\n'.join(kept))
@@ -7178,27 +7246,34 @@ def _template_for_rung(uid, rung, fc):
 
     Order: the user's own Template(level=<RUNG>) -> the code default for the rung ->
     the user's general pool -> None. Where a source holds several bodies the attempt
-    number picks one, so touch N+1 does not repeat touch N. A source that renders to
-    nothing falls through to the next, so a send is never blank and never blocked by a
+    number plus the load count picks one: touch N+1 does not repeat touch N, and a
+    new load (which resets the attempts) does not restart at the first body. A source
+    that renders to nothing, or whose user-written body needs a value the contact
+    lacks, falls through to the next, so a send is never blank and never blocked by a
     missing variable."""
     from app.models import Template
     rows = Template.query.filter_by(user_id=uid, type='followup', is_active=True)\
         .order_by(Template.sort_order, Template.created_at).all()
     rows = [r for r in rows if (r.body or '').strip()]
     key = (rung or '').strip().lower()
-    attempt = fc.touch_attempt or 0
+    # a contact's first touch on a rung opens with that rung's lead body; every further
+    # load on the same rung shifts the start, so a refilled budget is not a replay
+    step = (fc.touch_attempt or 0) + max(0, (fc.load_count or 0) - _RUNG_FIRST_LOAD.get(key, 0))
     own = [r.body for r in rows if (r.level or '').strip().lower() == key] if key in DEFAULT_RUNG_TEMPLATES else []
     defaults = list(DEFAULT_RUNG_TEMPLATES.get(key, ()))
     general = [r.body for r in rows
                if _normalize_fu_template_level(r.level) not in DEFAULT_FU_TEMPLATES
                and not _is_rung_level(r.level)]
-    for pool in (own, defaults):
-        if pool:
-            text = _render_rung_body(pool[attempt % len(pool)], fc)
-            if text:
-                return text
+    if own:
+        text = _render_rung_body(own[step % len(own)], fc, strict=True)
+        if text:
+            return text
+    if defaults:
+        text = _render_rung_body(defaults[step % len(defaults)], fc)
+        if text:
+            return text
     if general:
-        text = _render_rung_body(random.choice(general), fc)
+        text = _render_rung_body(random.choice(general), fc, strict=True)
         if text:
             return text
     return None

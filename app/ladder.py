@@ -243,7 +243,11 @@ _CLAUSE_END = re.compile(r'[.!?;,\u2013\u2014]|\s-+\s|\b(?:but|however)\b')
 # "No problem, I'll send you a load" is a yes, not a no.
 _NO_PROBLEM = re.compile(r'\bno (?:problem|worries|issue)s?\b')
 # A condition tacked on after the phrase: "I can send you a load if you need one".
-_CONDITION_AFTER = re.compile(r'\bif you\b')
+# Where the promise's own clause stops going forward: a clause end, or an "and" that
+# starts a new thought ("a load and if you need more just ask").
+_AFTER_END = re.compile(_CLAUSE_END.pattern + r'|\band\b')
+# Only the offer forms: "if you can cover it" or "if you have a truck" is a real commitment.
+_CONDITION_AFTER = re.compile(r"\bif you(?:'d| would)? (?:need|want|like)\b")
 _LOOKBACK = 40
 
 
@@ -256,7 +260,7 @@ def _promised(t: str, phrases) -> bool:
             if ends:
                 before = before[ends[-1].end():]
             after = t[start + len(phrase):start + len(phrase) + _LOOKBACK]
-            nxt = _CLAUSE_END.search(after)
+            nxt = _AFTER_END.search(after)
             if nxt:
                 after = after[:nxt.start()]
             if (not _NOT_A_PROMISE.search(_NO_PROBLEM.sub(' ', before))

@@ -104,6 +104,13 @@ def _ids(people):
     "We can send you a load on Friday",
     "Sure, I can send you a load",
     "yes I can get you a load",
+    "We can send you loads next week",
+    "I'll send you a load Monday if you can cover it",       # a condition of circumstance, not an offer
+    "We'll send you a load if you have a truck in Laredo",
+    "I'll send you a load tomorrow if you are available",
+    "We will send you a load if you send me your MC",
+    "I'll send you a load Monday if you're free",
+    "I'll send you a load and if you need more just ask",
 ])
 def test_a_load_promise_is_recognised(text):
     assert ladder.promise_kind(text) == 'load'

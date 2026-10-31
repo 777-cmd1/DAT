@@ -713,10 +713,25 @@ def test_the_scheduler_never_sends_to_a_paused_contact_on_any_engine(app, db, cl
 
 def test_the_scheduler_never_sends_to_an_excluded_contact_on_any_engine(app, db, client, me, sent_log):
     _arm_scheduler(db, me)
-    drip = _fc(db, me, 'excluded', stage='fu1_scheduled', is_followup_enabled=True, next_followup_at=_due())
-    once = _fc(db, me, 'excluded', scheduled_once=True, next_followup_at=_due())
-    rec = _fc(db, me, 'excluded', recurring_enabled=True, recurring_days='0,1,2,3,4,5,6',
+    drip = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True, next_followup_at=_due())
+    once = _fc(db, me, 'cold', scheduled_once=True, next_followup_at=_due())
+    rec = _fc(db, me, 'cold', recurring_enabled=True, recurring_days='0,1,2,3,4,5,6',
               recurring_time='10:00', next_followup_at=_due())
+    # control: before the exclusion every engine does send to these contacts
+    assert _run_drip() >= 1
+    assert {drip.contact_email, once.contact_email, rec.contact_email} <= set(sent_log)
+
+    sent_log.clear()
+    db.session.expire_all()
+    for fc in (drip, once, rec):             # excluded, with every engine re-armed and due again
+        fc.rung = 'excluded'
+        fc.state = 'active'
+        fc.stage = 'fu1_scheduled'
+        fc.next_followup_at = _due()
+    drip.is_followup_enabled = True
+    once.scheduled_once = True
+    rec.recurring_enabled = True
+    db.session.commit()
     _run_drip()
     assert sent_log == []
 
@@ -882,3 +897,17 @@ def test_the_deferral_lookup_skips_contacts_whose_reason_cannot_be_one(app, db, 
     finally:
         event.remove(db.engine, 'before_cursor_execute', listener)
     assert not [s for s in statements if 'followup_events' in s and 'GROUP BY' in s]
+
+
+def test_unexclude_keeps_the_stop_list_entry_of_a_contact_that_was_blocked_meanwhile(app, db, client, me):
+    # Block finds the address already listed (reason 'excluded') and changes nothing, so the
+    # entry is now the block's too: unexclude must not lift it
+    fc = _fc(db, me, 'warm')
+    _act(client, fc, 'exclude')
+    assert _act(client, fc, 'block').status_code == 200
+    body = _act(client, fc, 'unexclude').get_json()
+    assert body['stop_list_removed'] is False
+    entry, = _stop_entries(me[0].id)
+    assert entry.value == fc.contact_email
+    assert _app.is_blocked(fc.contact_email, *_app.load_stop_list(uid=me[0].id)) is True
+    assert _reload(db, fc).state == 'blocked'

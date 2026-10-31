@@ -7683,7 +7683,9 @@ def _ladder_manual_action(fc, action, data, uid):
         if old != 'excluded':
             return False, 'Contact is not excluded', {}
         target = _ladder.rung_for(fc.load_count or 0, bool(fc.last_reply_at))
-        removed = _remove_excluded_stop_entry(uid, fc.contact_email)
+        # a Block made while excluded found the address already listed and left this entry's
+        # reason alone: it is the block's entry too, so a blocked contact keeps it
+        removed = False if fc.state == 'blocked' else _remove_excluded_stop_entry(uid, fc.contact_email)
         fc.rung = target
         fc.exit_reason = None
         fc.touch_attempt = 0

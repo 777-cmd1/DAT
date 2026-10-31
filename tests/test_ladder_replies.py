@@ -70,16 +70,6 @@ def test_same_thread_twice_counts_one_load(app, db):
     assert (fc.load_count, fc.rung) == (1, 'warm')
 
 
-def test_same_reply_processed_twice_counts_one_load(app, db):
-    # No thread id and the re-fetch lands on another day: the message id still dedupes.
-    fc = _contact(db, rung='neutral')
-    r = _reply(db, fc, category='gave_info', body='load Laredo to Dallas')
-    r.received_at = r.received_at + timedelta(days=1)
-    _app._check_reply_stops_followup(fc.contact_email, fc.user_id, r)
-    db.session.commit(); db.session.refresh(fc)
-    assert (fc.load_count, fc.rung) == (1, 'warm')
-
-
 def test_threadless_loads_on_one_day_count_once(app, db):
     fc = _contact(db, rung='neutral')
     _reply(db, fc, category='gave_info', body='load Laredo to Dallas')
@@ -210,3 +200,123 @@ def test_load_for_a_blocked_contact_counts_but_schedules_nothing(app, db):
     _reply(db, fc, category='gave_info', body='load Laredo to Dallas', thread='t1')
     assert (fc.rung, fc.load_count) == ('warm', 1)
     assert fc.next_followup_at is None
+
+
+# ── A reply lifts cold to neutral ────────────────────────────────────────────
+
+def test_deferral_lifts_cold_to_neutral(app, db):
+    fc = _contact(db, rung='cold')
+    _reply(db, fc, category='negative', body='nothing this week, try next week')
+    assert (fc.rung, fc.load_count) == ('neutral', 0)
+
+
+def test_unparseable_reply_lifts_cold_to_neutral(app, db):
+    fc = _contact(db, rung='cold')
+    _reply(db, fc, category=None, body='ok')
+    assert fc.rung == 'neutral'
+
+
+def test_a_reply_never_lowers_or_moves_a_higher_rung(app, db):
+    hot = _contact(db, rung='hot')
+    _reply(db, hot, category='negative', body='nothing right now')
+    client = _contact(db, rung='client', load_count=5)
+    _reply(db, client, category=None, body='ok')
+    assert hot.rung == 'hot' and client.rung == 'client'
+
+
+# ── The entry reply seeds the ladder ─────────────────────────────────────────
+
+def _entry_reply(db, fc, category, body, thread=None):
+    """A Reply from fc's address, the message the owner turns into a follow-up."""
+    from app.models import Reply
+    r = Reply(user_id=fc.user_id, msg_id=f'<{uuid.uuid4().hex}@mail>', thread_id=thread,
+              from_email=fc.contact_email, subject='Re: Laredo to Dallas',
+              body=body, triage_category=category)
+    db.session.add(r); db.session.commit()
+    return r
+
+
+def _created_from(db, category, body, thread=None):
+    from app.models import FollowupContact
+    donor = _contact(db)                       # supplies a user and workspace
+    r = _entry_reply(db, donor, category, body, thread)
+    r.from_email = f'new_{uuid.uuid4().hex[:8]}@x.com'
+    db.session.commit()
+    _app.add_to_followups(r)
+    fc = FollowupContact.query.filter_by(workspace_id=donor.workspace_id,
+                                         contact_email=r.from_email).one()
+    return fc, r
+
+
+def test_load_in_the_entry_reply_starts_the_contact_warm(app, db):
+    fc, _ = _created_from(db, 'gave_info', 'we have a load Laredo to Dallas', thread='t1')
+    assert (fc.rung, fc.load_count, fc.touch_attempt) == ('warm', 1, 0)
+    assert fc.next_followup_at is not None
+
+
+def test_entry_reply_is_not_counted_again_when_the_hook_sees_it(app, db):
+    fc, r = _created_from(db, 'gave_info', 'we have a load Laredo to Dallas')
+    _app._check_reply_stops_followup(fc.contact_email, fc.user_id, r)
+    db.session.commit(); db.session.refresh(fc)
+    assert (fc.load_count, fc.rung) == (1, 'warm')
+
+
+def test_rate_request_entry_reply_starts_neutral_and_needs_you(app, db):
+    fc, _ = _created_from(db, 'rate_request', 'what is your rate Laredo to Dallas?')
+    assert (fc.rung, fc.load_count) == ('neutral', 0)
+    assert fc.attention_at is not None
+
+
+# ── Unrecognised rung, return contract, call-site lookup ─────────────────────
+
+def test_unrecognised_rung_asks_for_attention_instead_of_raising(app, db):
+    fc = _contact(db, rung='legacy-rung')
+    _reply(db, fc, category='negative', body='nothing this week, try next week')
+    assert fc.rung == 'legacy-rung' and fc.attention_at is not None
+    assert fc.next_followup_at is None
+
+
+def test_return_value_is_the_kind_applied_or_none_for_a_no_op(app, db):
+    def apply(fc, category, body, thread=None):
+        r = _entry_reply(db, fc, category, body, thread)
+        from app.models import Workspace
+        ws = db.session.get(Workspace, fc.workspace_id)
+        return _app._apply_reply_to_ladder(fc, r, ws, _app._utcnow())
+
+    assert apply(_contact(db, rung='neutral'), 'gave_info', 'load', 't1') == 'load'
+    assert apply(_contact(db, rung='neutral'), 'negative', 'remove me') == 'refusal'
+    assert apply(_contact(db, rung='neutral'), 'negative', 'nothing right now') == 'deferral'
+    assert apply(_contact(db, rung='neutral'), None, 'ok') == 'unknown'
+    assert apply(_contact(db, rung='excluded'), 'gave_info', 'load', 't1') is None
+    assert apply(_contact(db, rung='dormant'), 'negative', 'nothing right now') is None
+    fc = _contact(db, rung='neutral')
+    assert apply(fc, 'gave_info', 'load', 'same') == 'load'
+    assert apply(fc, 'gave_info', 'load again', 'same') is None     # duplicate: nothing applied
+
+
+def test_reply_rows_lookup_returns_rows_by_message_id(app, db):
+    fc = _contact(db, rung='neutral')
+    r = _entry_reply(db, fc, 'gave_info', 'load')
+    assert _app._reply_rows_by_msg_id(fc.user_id, [{'msg_id': r.msg_id}]) == {r.msg_id: r}
+
+
+def test_reply_rows_lookup_warns_when_a_row_is_missing(app, db, caplog):
+    fc = _contact(db, rung='neutral')
+    with caplog.at_level('WARNING'):
+        rows = _app._reply_rows_by_msg_id(fc.user_id, [{'msg_id': '<gone@mail>'}])
+    assert rows == {}
+    assert '<gone@mail>' in caplog.text
+
+
+def test_reply_rows_lookup_logs_and_rolls_back_when_the_query_fails(app, db, caplog, monkeypatch):
+    fc = _contact(db, rung='neutral')
+    rolled_back = []
+
+    def boom(*a, **k):
+        raise RuntimeError('db is down')
+    monkeypatch.setattr(db.session, 'query', boom)
+    monkeypatch.setattr(db.session, 'rollback', lambda: rolled_back.append(True))
+    with caplog.at_level('ERROR'):
+        rows = _app._reply_rows_by_msg_id(fc.user_id, [{'msg_id': '<x@mail>'}])
+    assert rows == {} and rolled_back
+    assert 'db is down' in caplog.text

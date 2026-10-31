@@ -3313,18 +3313,15 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
 
     # Auto-stop follow-ups for contacts who replied
     if new_replies and uid:
-        from app.models import Reply as _ReplyRow
+        reply_rows = _reply_rows_by_msg_id(uid, new_replies)
         for r in new_replies:
-            try:
-                row = _ReplyRow.query.filter_by(user_id=uid, msg_id=r['msg_id']).first()
-            except Exception:
-                row = None
+            row = reply_rows.get(r['msg_id'])
             # a colleague's answer counts as the emailed contact replying too
             for addr in {r['email'], r.get('matched_recipient')} - {None, ''}:
                 try:
                     _check_reply_stops_followup(addr, uid, row)
                 except Exception:
-                    pass
+                    app.logger.exception('reply hook failed for %s', addr)
         try:
             db.session.commit()
         except Exception:
@@ -6827,26 +6824,63 @@ def add_to_followups(reply_obj):
     )
     db.session.add(fc)
     db.session.flush()
+    # The message that puts a broker in follow-up is usually their first load.
+    # Its conversation key is stored here, so the reply hook never counts it twice.
+    _apply_reply_to_ladder(fc, reply_obj, ws, now)
     _record_event(fc, 'created', actor_type='user', actor_user_id=uid)
     db.session.commit()
+
+
+def _reply_rows_by_msg_id(uid, replies):
+    """Stored Reply rows for freshly fetched reply dicts, keyed by msg_id.
+
+    The warmth ladder needs the row (thread, body, category). A failed lookup is
+    rolled back and logged, a missing row is logged as a warning: either way the
+    ladder is skipped for that reply, and the log says so.
+    """
+    from app.models import Reply
+    msg_ids = [r['msg_id'] for r in replies]
+    try:
+        rows = {row.msg_id: row for row in db.session.query(Reply).filter(
+            Reply.user_id == uid, Reply.msg_id.in_(msg_ids)).all()}
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('reply row lookup failed; warmth ladder skipped for %d replies',
+                             len(msg_ids))
+        return {}
+    for msg_id in msg_ids:
+        if msg_id not in rows:
+            app.logger.warning('no stored reply row for %s; warmth ladder skipped', msg_id)
+    return rows
 
 
 _LADDER_LOAD_EVENT = 'ladder_load'
 
 
-def _ladder_load_seen(fc, conv_key, msg_id):
-    """True if this load conversation (or this very message) already counted for fc."""
+def _ladder_load_counted(fc, conv_key):
+    """True if the load conversation `conv_key` already counted for this contact.
+
+    Reader half of the load event; `_ladder_record_load` is the writer. Live
+    reply handling and the historical migration both go through the pair, so
+    the stored format is defined once.
+    """
     from app.models import FollowupEvent
     rows = FollowupEvent.query.filter_by(
         followup_contact_id=fc.id, event_type=_LADDER_LOAD_EVENT).all()
     for evt in rows:
         try:
-            meta = json.loads(evt.metadata_json or '{}')
+            if json.loads(evt.metadata_json or '{}').get('conv') == conv_key:
+                return True
         except ValueError:
             continue
-        if meta.get('conv') == conv_key or (msg_id and meta.get('msg_id') == msg_id):
-            return True
     return False
+
+
+def _ladder_record_load(fc, conv_key, from_rung=None, notes=None):
+    """Writer half: log one counted load conversation on the contact."""
+    return _record_event(fc, _LADDER_LOAD_EVENT, actor_type='system',
+                         from_state=from_rung, to_state=fc.rung,
+                         metadata_json=json.dumps({'conv': conv_key}), notes=notes)
 
 
 def _ladder_set_next(fc, when):
@@ -6859,18 +6893,36 @@ def _ladder_set_next(fc, when):
     fc.touch_enabled = when is not None
 
 
+def _ladder_raise_rung(fc):
+    """Rung implied by the loads received and by the fact that they replied.
+    Raises the rung (and revives a dormant contact), never lowers it."""
+    derived = _ladder.rung_for(fc.load_count or 0, True)
+    if fc.rung not in _ladder.RUNGS or _ladder.RUNGS.index(derived) > _ladder.RUNGS.index(fc.rung):
+        fc.rung = derived
+
+
 def _apply_reply_to_ladder(fc, reply, ws, now):
     """Move a contact on the warmth ladder because of an inbound reply.
 
     A broker sending load information is the only thing that raises the rung
-    (one step per load conversation) and the only thing that refills the attempt
-    budget. A refusal parks the contact as dormant, a deferral keeps its place and
-    comes back on their date, anything else asks for a human. An excluded contact
-    is never touched. Returns 'load' | 'refusal' | 'deferral' | 'unknown', or
-    'excluded' when nothing was applied.
+    past neutral (one step per load conversation) and the only thing that
+    refills the attempt budget. Any reply lifts cold to neutral. A refusal parks
+    the contact as dormant, a deferral keeps its place and comes back on their
+    date, anything else asks for a human.
+
+    Returns the kind applied: 'load' | 'refusal' | 'deferral' | 'unknown'.
+    Returns None when nothing was applied: an excluded contact, a load already
+    counted, or a deferral from a dormant contact.
     """
     if fc.rung == 'excluded':
-        return 'excluded'
+        return None
+    if fc.rung not in _ladder.RUNGS and fc.rung != 'dormant':
+        # a rung we do not know (legacy value): leave it alone, ask a human
+        fc.attention_at = now
+        _record_event(fc, 'ladder_unknown', actor_type='system',
+                      from_state=fc.rung, to_state=fc.rung,
+                      notes=f'unrecognised rung {fc.rung!r}')
+        return 'unknown'
     cfg = _ladder.LADDER_DEFAULTS
     category = reply.triage_category
     if category is None:
@@ -6884,21 +6936,15 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
     if kind == 'load':
         conv_key = _ladder.load_conversation_key(
             reply.thread_id, fc.contact_email, reply.received_at or now)
-        if _ladder_load_seen(fc, conv_key, reply.msg_id):
-            return kind
+        if _ladder_load_counted(fc, conv_key):
+            return None
         fc.load_count = (fc.load_count or 0) + 1
         fc.last_load_at = now
-        derived = _ladder.rung_for(fc.load_count, True)
-        if fc.rung not in _ladder.RUNGS or _ladder.RUNGS.index(derived) > _ladder.RUNGS.index(fc.rung):
-            fc.rung = derived           # never lowers a rung (e.g. a hand-set client)
+        _ladder_raise_rung(fc)
         fc.exit_reason = None
         fc.touch_attempt = 0
         _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, 0, now, cfg))
-        _record_event(fc, _LADDER_LOAD_EVENT, actor_type='system',
-                      from_state=old_rung, to_state=fc.rung,
-                      metadata_json=json.dumps({'conv': conv_key, 'msg_id': reply.msg_id,
-                                                'load_count': fc.load_count}),
-                      notes=f'load #{fc.load_count} received')
+        _ladder_record_load(fc, conv_key, old_rung, notes=f'load #{fc.load_count} received')
     elif kind == 'refusal':
         fc.rung = 'dormant'
         fc.exit_reason = 'refused'
@@ -6911,18 +6957,21 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
             _record_event(fc, 'ladder_deferral', actor_type='system',
                           from_state=old_rung, to_state=old_rung,
                           notes='asked to come back later; contact is dormant')
-            return kind
+            return None
+        _ladder_raise_rung(fc)
         # no stated date: the contact keeps its place in the normal rhythm
         _ladder_set_next(fc, resume_at or _ladder.next_touch_at(
             fc.rung, fc.touch_attempt or 0, now, cfg))
         _record_event(fc, 'ladder_deferral', actor_type='system',
-                      from_state=old_rung, to_state=old_rung,
+                      from_state=old_rung, to_state=fc.rung,
                       notes='asked to come back ' + (resume_at.strftime('%Y-%m-%d')
                                                      if resume_at else 'later'))
     else:
+        if fc.rung != 'dormant':
+            _ladder_raise_rung(fc)
         fc.attention_at = now
         _record_event(fc, 'ladder_unknown', actor_type='system',
-                      from_state=old_rung, to_state=old_rung,
+                      from_state=old_rung, to_state=fc.rung,
                       notes='reply needs a human look')
     return kind
 

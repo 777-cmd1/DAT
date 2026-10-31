@@ -1150,6 +1150,11 @@ def _schedule_touch(fc, ws=None, force=False, stagger=False):
         _ladder_set_next(fc, _ladder.next_touch_at(
             fc.rung, fc.touch_attempt or 0, _utcnow(), _ladder.LADDER_DEFAULTS), ws)
         return fc.next_followup_at is not None
+    if fc.auto_paused:
+        # the owner stopped automation for this contact: no stage date either
+        # (the ladder branch above is already held by _ladder_set_next)
+        _ladder_set_next(fc, None)
+        return False
     ws = ws or (db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None)
     cad = _cadence_for_stage(ws, fc.pipeline_stage or 1)
     if cad.get('mode') == 'off' or not cad.get('days'):
@@ -5245,7 +5250,12 @@ def api_followups_list():
     stage_f = request.args.get('stage')
     special = request.args.get('filter')
     search  = request.args.get('q', '').strip().lower()
+    rung_f  = request.args.get('rung', '').strip()
 
+    if rung_f:
+        if rung_f not in _LADDER_RUNG_VALUES:
+            return jsonify(error=f'Unknown rung: {rung_f}'), 400
+        q = q.filter_by(rung=rung_f)
     if state_f and state_f in VALID_STATES:
         q = q.filter_by(state=state_f)
     if stage_f:
@@ -5293,9 +5303,10 @@ def api_followups_list():
         'touches': count_q.touches,
     }
     rmap = _latest_reply_filter_map(uid, {(c.contact_email or '').lower() for c in contacts})
+    deferred = _ladder_deferred_ids(uid)
     contacts_out = []
     for c in contacts:
-        d = c.to_dict()
+        d = _fu_row(c, c.id in deferred)
         d['last_reply_filter'] = rmap.get((c.contact_email or '').lower(), '')
         contacts_out.append(d)
     return jsonify(contacts=contacts_out, counts=counts)
@@ -5312,6 +5323,11 @@ def api_followups_ids():
     stage_f = request.args.get('stage')
     special = request.args.get('filter')
     search  = request.args.get('q', '').strip().lower()
+    rung_f  = request.args.get('rung', '').strip()
+    if rung_f:
+        if rung_f not in _LADDER_RUNG_VALUES:
+            return jsonify(error=f'Unknown rung: {rung_f}'), 400
+        q = q.filter_by(rung=rung_f)
     if state_f and state_f in VALID_STATES:
         q = q.filter_by(state=state_f)
     if stage_f:
@@ -5462,7 +5478,7 @@ def api_followups_action():
         if status == 'error':
             code = 500 if detail.startswith('Send failed') else 400
             return jsonify(error=detail), code
-        return jsonify(ok=True, contact=fc.to_dict())
+        return jsonify(ok=True, contact=_fu_row_one(fc))
 
     elif action == 'free-send':
         if fc.state in ('blocked', 'closed'):
@@ -5497,7 +5513,7 @@ def api_followups_action():
         _record_event(fc, 'free_send', actor_user_id=uid,
                       from_stage=fc.stage, to_stage=fc.stage)
         db.session.commit()
-        return jsonify(ok=True, contact=fc.to_dict())
+        return jsonify(ok=True, contact=_fu_row_one(fc))
 
     elif action == 'schedule-once':
         if fc.state in ('blocked', 'closed'):
@@ -5517,7 +5533,7 @@ def api_followups_action():
         _record_event(fc, 'scheduled_once', actor_user_id=uid,
                       notes=f'Scheduled for {scheduled_at.strftime("%Y-%m-%d %H:%M")} UTC')
         db.session.commit()
-        return jsonify(ok=True, contact=fc.to_dict())
+        return jsonify(ok=True, contact=_fu_row_one(fc))
 
     elif action == 'set-recurring':
         if fc.state in ('blocked', 'closed'):
@@ -5544,7 +5560,7 @@ def api_followups_action():
         _record_event(fc, 'recurring_set', actor_user_id=uid,
                       notes=f'Recurring days={r_days} time={r_time} UTC')
         db.session.commit()
-        return jsonify(ok=True, contact=fc.to_dict())
+        return jsonify(ok=True, contact=_fu_row_one(fc))
 
     elif action == 'stop-recurring':
         fc.recurring_enabled = False
@@ -5553,14 +5569,14 @@ def api_followups_action():
         _restore_contact_schedule(fc)
         _record_event(fc, 'recurring_stopped', actor_user_id=uid)
         db.session.commit()
-        return jsonify(ok=True, contact=fc.to_dict())
+        return jsonify(ok=True, contact=_fu_row_one(fc))
 
     elif action == 'cancel-schedule':
         fc.scheduled_once = False
         _restore_contact_schedule(fc)
         _record_event(fc, 'schedule_cancelled', actor_user_id=uid)
         db.session.commit()
-        return jsonify(ok=True, contact=fc.to_dict())
+        return jsonify(ok=True, contact=_fu_row_one(fc))
 
     elif action == 'pause':
         ok, err = _transition_state(fc, 'paused', reason=reason, actor_user_id=uid)
@@ -5584,13 +5600,15 @@ def api_followups_action():
     elif action == 'set-pipeline-stage':
         ok, err = _apply_pipeline_stage(fc, data.get('pipeline_stage'),
                                         actor_user_id=uid, reason=reason or 'manual')
+    elif action in _LADDER_MANUAL_ACTIONS:
+        ok, err = _ladder_manual_action(fc, action, data, uid)
     else:
         return jsonify(error=f'Unknown action: {action}'), 400
 
     if not ok:
         return jsonify(error=err), 400
     db.session.commit()
-    return jsonify(ok=True, contact=fc.to_dict())
+    return jsonify(ok=True, contact=_fu_row_one(fc))
 
 
 @app.route('/api/followups/bulk-action', methods=['POST'])
@@ -5667,6 +5685,8 @@ def api_followups_bulk_action():
                 fc.is_followup_enabled = False
                 fc.last_followup_sent_at = now_dt
                 fc.last_activity_at = now_dt
+                fc.attention_at = None              # same bookkeeping as the single free-send
+                _schedule_touch(fc, force=True)     # else it stays overdue and is sent again at once
                 _record_event(fc, 'free_send', actor_user_id=uid,
                               from_stage=fc.stage, to_stage=fc.stage)
                 results.append({'id': cid, 'ok': True})
@@ -5715,6 +5735,10 @@ def api_followups_bulk_action():
         elif action == 'set-pipeline-stage':
             ok, err = _apply_pipeline_stage(fc, data.get('pipeline_stage'),
                                             actor_user_id=uid, reason=reason or 'manual')
+            results.append({'id': cid, 'ok': ok, 'error': err})
+
+        elif action in _LADDER_MANUAL_ACTIONS:
+            ok, err = _ladder_manual_action(fc, action, data, uid)
             results.append({'id': cid, 'ok': ok, 'error': err})
 
         elif action == 'stop-recurring':
@@ -7297,6 +7321,13 @@ def _ladder_raise_rung(fc):
         fc.rung = derived
 
 
+def _ladder_lift_cold(fc):
+    """Any reply lifts a cold contact to neutral. Nothing but a load goes higher, so a
+    reply that is not a load never undoes a rung the owner chose by hand."""
+    if fc.rung == 'cold':
+        fc.rung = 'neutral'
+
+
 def _subject_opens_with_lane(subject, origin, destination):
     """True when `subject` (minus any Re:/Fwd: prefixes) is "<origin> to <destination>"
     followed by a comma or the end, matching whole names, case-insensitively."""
@@ -7404,7 +7435,7 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
                           from_state=old_rung, to_state=old_rung,
                           notes='asked to come back later; contact is dormant')
             return None
-        _ladder_raise_rung(fc)
+        _ladder_lift_cold(fc)
         # no stated date: the contact keeps its place in the normal rhythm
         _ladder_set_next(fc, resume_at or _ladder.next_touch_at(
             fc.rung, fc.touch_attempt or 0, now, cfg), ws)
@@ -7414,12 +7445,202 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
                                                      if resume_at else 'later'))
     else:
         if fc.rung != 'dormant':
-            _ladder_raise_rung(fc)
+            _ladder_lift_cold(fc)
         fc.attention_at = now
         _record_event(fc, 'ladder_unknown', actor_type='system',
                       from_state=old_rung, to_state=fc.rung,
                       notes='reply needs a human look')
     return kind
+
+
+# ── Tier list rows and the owner's manual overrides ──────────────────────────
+# The owner can see who is where, stop anyone and move them out by hand. Whatever the
+# machine decides he can override; these actions never send, they only move a contact
+# and its date. Each writes one `manual_*` event with actor_type 'user' (no `ladder_`
+# prefix: the activity and funnel read that prefix as what the ladder itself did).
+
+_LADDER_RUNG_VALUES = _ladder.RUNGS + _ladder.OFF_LADDER
+_LADDER_MANUAL_ACTIONS = ('pause-auto', 'resume-auto', 'set-rung', 'exclude')
+# Events that (re)set a contact's date. A deferral is only "why the date is what it is"
+# while none of these has come after it.
+_RESCHEDULING_EVENTS = ('touch_sent', 'free_send', 'manual_send', 'touch_snoozed', 'touch_skipped',
+                        'ladder_load', 'ladder_parked', 'ladder_exhausted', 'scheduled_once',
+                        'recurring_set', 'manual_set_rung', 'manual_resume_auto', 'manual_pause_auto')
+
+
+def _ladder_budget(rung):
+    """Attempts the contact's rung allows; 0 for a rung the ladder does not know."""
+    try:
+        return _ladder.budget_for(rung, _ladder.LADDER_DEFAULTS)
+    except ValueError:
+        return 0
+
+
+def _ladder_deferred_ids(uid, only=None):
+    """Ids of the user's contacts whose next date is the one a broker asked for: the newest
+    `ladder_deferral` event is newer than anything else that sets the date."""
+    from app.models import FollowupContact as FC, FollowupEvent as FE
+    from sqlalchemy import func, case
+    q = db.session.query(
+        FE.followup_contact_id,
+        func.max(case((FE.event_type == 'ladder_deferral', FE.event_at))),
+        func.max(case((FE.event_type.in_(_RESCHEDULING_EVENTS), FE.event_at))),
+    ).join(FC, FE.followup_contact_id == FC.id).filter(
+        FC.user_id == uid, FE.event_type.in_(('ladder_deferral',) + _RESCHEDULING_EVENTS))
+    if only is not None:
+        q = q.filter(FE.followup_contact_id == only)
+    return {cid for cid, asked, since in q.group_by(FE.followup_contact_id)
+            if asked is not None and (since is None or asked > since)}
+
+
+def _ladder_next_reason(fc, deferred=False):
+    """One line saying why the contact's next touch is (or is not) what it is."""
+    rung = fc.rung or 'cold'
+    if rung == 'excluded':
+        return 'excluded: never contact again'
+    if rung == 'dormant':
+        why = {'refused': 'they asked us to stop', 'exhausted': 'attempts used up, waits for a load',
+               'manual': 'moved by you'}.get(fc.exit_reason)
+        return 'dormant: ' + why if why else 'dormant'
+    if rung == 'client':
+        return 'client: no automatic touches'
+    if rung not in _ladder.RUNGS:
+        return 'unrecognised rung'
+    if fc.state != 'active':
+        return f'{fc.state}: no automatic touches'
+    if fc.auto_paused:
+        return ('auto paused: sending failed repeatedly' if fc.exit_reason == 'send_failed'
+                else 'auto paused by you')
+    if fc.next_followup_at is None:
+        return 'nothing scheduled'
+    if fc.recurring_enabled:
+        return 'recurring schedule you set'
+    if fc.scheduled_once:
+        return 'one-time send you scheduled'
+    if fc.is_followup_enabled:
+        return 'first follow-up sequence'
+    if fc.send_fail_count:
+        return 'retrying after a failed send'
+    if deferred:
+        return 'they asked us to come back later'
+    if not _ladder_owns_schedule(fc):
+        return 'follow-up cadence of its stage'
+    budget = _ladder_budget(rung)
+    if (fc.touch_attempt or 0) >= budget:
+        return 'attempts used up'
+    return f'touch {(fc.touch_attempt or 0) + 1} of {budget}'
+
+
+def _fu_row(fc, deferred=False):
+    """A contact as the Follow-up table shows it: its fields plus the ladder's budget
+    and the reason for its next touch."""
+    row = fc.to_dict()
+    row['budget'] = _ladder_budget(fc.rung)
+    row['next_touch_reason'] = _ladder_next_reason(fc, deferred)
+    return row
+
+
+def _fu_row_one(fc):
+    return _fu_row(fc, fc.id in _ladder_deferred_ids(fc.user_id, only=fc.id))
+
+
+def _ladder_stop_all(fc):
+    """Switch off every engine that could email this contact and clear its date."""
+    fc.is_followup_enabled = False
+    fc.scheduled_once = False
+    fc.recurring_enabled = False
+    fc.recurring_days = None
+    fc.recurring_time = None
+    _ladder_set_next(fc, None)
+
+
+def _ladder_redate(fc, ws, now):
+    """Give the contact the date its rung implies. A drip, one-time or recurring send the
+    owner scheduled keeps its own date; if that date is gone (paused) it is restored."""
+    if fc.scheduled_once and fc.next_followup_at is None:
+        fc.scheduled_once = False         # a paused one-time date cannot be recovered: the rung takes over
+    if fc.is_followup_enabled or fc.scheduled_once or fc.recurring_enabled:
+        if fc.next_followup_at is None:
+            _restore_contact_schedule(fc, now)
+        return
+    _ladder_set_next(fc, _ladder.next_touch_at(
+        fc.rung, fc.touch_attempt or 0, now, _ladder.LADDER_DEFAULTS), ws)
+
+
+def _ladder_manual_action(fc, action, data, uid):
+    """Apply pause-auto / resume-auto / set-rung / exclude to a contact the caller has
+    already verified belongs to `uid`. Returns (ok, error); nothing is changed on an error.
+
+    Attempts: set-rung starts a fresh run on a ladder rung (touch_attempt 0), the others
+    leave the count alone. A manual send never spends one (see free-send)."""
+    from app.models import Workspace
+    now = _utcnow()
+    old = fc.rung
+    if old == 'excluded':
+        # the owner's permanent decision: nothing here undoes it
+        return (True, None) if action == 'exclude' else (False, 'Excluded contacts are never contacted again')
+    ws = db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None
+
+    if action == 'exclude':
+        _ladder_stop_all(fc)
+        fc.rung = 'excluded'
+        fc.exit_reason = 'excluded'
+        fc.attention_at = None
+        _record_event(fc, 'manual_exclude', actor_user_id=uid, from_state=old, to_state='excluded',
+                      notes='excluded by you: never contact again')
+
+    elif action == 'pause-auto':
+        if fc.auto_paused:
+            return True, None
+        fc.auto_paused = True
+        _ladder_set_next(fc, None, ws)
+        _record_event(fc, 'manual_pause_auto', actor_user_id=uid, from_state=old, to_state=old,
+                      notes='automation paused by you')
+
+    elif action == 'resume-auto':
+        if old not in _LADDER_SENDABLE:
+            return False, f'A {old} contact is not on the automatic schedule: move it to a rung first'
+        if fc.state != 'active':
+            return False, f'Contact is {fc.state}: resume it first'
+        if not fc.auto_paused:
+            return True, None
+        # a contact parked after failed sends carries all three; clear them together or the
+        # next failure would back off for 72 hours and give up again at once
+        fc.auto_paused = False
+        if fc.exit_reason == 'send_failed':
+            fc.exit_reason = None
+        fc.send_fail_count = 0
+        _ladder_redate(fc, ws, now)
+        _record_event(fc, 'manual_resume_auto', actor_user_id=uid, from_state=old, to_state=old,
+                      notes='automation resumed by you')
+
+    elif action == 'set-rung':
+        raw = data.get('rung')
+        target = raw.strip() if isinstance(raw, str) else ''
+        if target == 'excluded':
+            return False, 'Use exclude: it is permanent'
+        if target not in _ladder.RUNGS and target != 'dormant':
+            return False, f'Unknown rung: {target or raw}'
+        if target == old:
+            return True, None
+        spent = fc.touch_attempt or 0
+        fc.rung = target
+        if target in _ladder.RUNGS and target != 'client':
+            # a fresh run on the new rung: attempts spent on the old one must not park the
+            # contact again on the next tick and undo the move
+            fc.touch_attempt = 0
+            if fc.exit_reason != 'send_failed':      # that one belongs to the pause
+                fc.exit_reason = None
+            _ladder_redate(fc, ws, now)
+        else:
+            _ladder_stop_all(fc)
+            fc.exit_reason = 'manual' if target == 'dormant' else None
+        _record_event(fc, 'manual_set_rung', actor_user_id=uid, from_state=old, to_state=target,
+                      metadata_json=json.dumps({'from': old, 'to': target, 'attempts_reset_from': spent}),
+                      notes=f'moved from {old} to {target} by you')
+
+    fc.updated_at = now
+    return True, None
 
 
 def _check_reply_stops_followup(reply_email, user_id, reply=None):

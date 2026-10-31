@@ -515,6 +515,14 @@ class FollowupContact(db.Model):
     # Consecutive scheduler send failures — drives the retry backoff so a dead
     # Gmail token can't make the scheduler hammer the same contact every tick.
     send_fail_count = db.Column(db.Integer, default=0, nullable=False, server_default='0')
+    # Warmth ladder (app/ladder.py is the authority on legal rung values).
+    # rung: cold|neutral|warm|hot|client, or off-ladder dormant|excluded.
+    rung          = db.Column(db.String(20), default='cold', nullable=False, server_default='cold')
+    load_count    = db.Column(db.Integer, default=0, nullable=False, server_default='0')
+    touch_attempt = db.Column(db.Integer, default=0, nullable=False, server_default='0')
+    auto_paused   = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
+    last_load_at  = db.Column(db.DateTime, nullable=True)
+    exit_reason   = db.Column(db.String(40), nullable=True)
     last_followup_sent_at = db.Column(db.DateTime)
     last_reply_at = db.Column(db.DateTime)
     last_activity_at = db.Column(db.DateTime)
@@ -583,6 +591,12 @@ class FollowupContact(db.Model):
             'is_followup_enabled': self.is_followup_enabled,
             'touch_enabled': bool(self.touch_enabled),
             'attention_at': fmt(self.attention_at),
+            'rung': self.rung or 'cold',
+            'load_count': self.load_count or 0,
+            'touch_attempt': self.touch_attempt or 0,
+            'auto_paused': bool(self.auto_paused),
+            'last_load_at': fmt(self.last_load_at),
+            'exit_reason': self.exit_reason,
             'next_followup_at': fmt(self.next_followup_at),
             'last_followup_sent_at': fmt(self.last_followup_sent_at),
             'last_reply_at': fmt(self.last_reply_at),

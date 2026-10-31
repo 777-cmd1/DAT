@@ -7497,6 +7497,14 @@ with app.app_context():
         ('followup_contacts', 'touch_enabled',       'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('followup_contacts', 'attention_at',        'TIMESTAMP'),
         ('followup_contacts', 'send_fail_count',     'INTEGER NOT NULL DEFAULT 0'),
+        # Warmth ladder position. Inline delivery is REQUIRED (Alembic does not
+        # migrate the live DB); server defaults keep existing rows valid at once.
+        ('followup_contacts', 'rung',                "VARCHAR(20) NOT NULL DEFAULT 'cold'"),
+        ('followup_contacts', 'load_count',          'INTEGER NOT NULL DEFAULT 0'),
+        ('followup_contacts', 'touch_attempt',       'INTEGER NOT NULL DEFAULT 0'),
+        ('followup_contacts', 'auto_paused',         'BOOLEAN NOT NULL DEFAULT FALSE'),
+        ('followup_contacts', 'last_load_at',        'TIMESTAMP'),
+        ('followup_contacts', 'exit_reason',         'VARCHAR(40)'),
         ('users',             'session_version',     'INTEGER NOT NULL DEFAULT 0'),
         ('replies',           'matched_recipient',   'VARCHAR(255)'),
         ('replies',           'date_checked',        'BOOLEAN NOT NULL DEFAULT FALSE'),

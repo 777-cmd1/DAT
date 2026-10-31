@@ -54,6 +54,7 @@ if os.environ.get('DATABASE_URL'):   # production only (Railway has DATABASE_URL
 
 # ── DB extensions (models imported after app is created) ──────────────────
 from app.extensions import db, migrate as flask_migrate
+from app import ladder as _ladder
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -3312,11 +3313,16 @@ def fetch_replies_from_gmail(uid=None, rate_limit=True):
 
     # Auto-stop follow-ups for contacts who replied
     if new_replies and uid:
+        from app.models import Reply as _ReplyRow
         for r in new_replies:
+            try:
+                row = _ReplyRow.query.filter_by(user_id=uid, msg_id=r['msg_id']).first()
+            except Exception:
+                row = None
             # a colleague's answer counts as the emailed contact replying too
             for addr in {r['email'], r.get('matched_recipient')} - {None, ''}:
                 try:
-                    _check_reply_stops_followup(addr, uid)
+                    _check_reply_stops_followup(addr, uid, row)
                 except Exception:
                     pass
         try:
@@ -6825,10 +6831,108 @@ def add_to_followups(reply_obj):
     db.session.commit()
 
 
-def _check_reply_stops_followup(reply_email, user_id):
+_LADDER_LOAD_EVENT = 'ladder_load'
+
+
+def _ladder_load_seen(fc, conv_key, msg_id):
+    """True if this load conversation (or this very message) already counted for fc."""
+    from app.models import FollowupEvent
+    rows = FollowupEvent.query.filter_by(
+        followup_contact_id=fc.id, event_type=_LADDER_LOAD_EVENT).all()
+    for evt in rows:
+        try:
+            meta = json.loads(evt.metadata_json or '{}')
+        except ValueError:
+            continue
+        if meta.get('conv') == conv_key or (msg_id and meta.get('msg_id') == msg_id):
+            return True
+    return False
+
+
+def _ladder_set_next(fc, when):
+    """Set (or clear) the next touch. Only an active, unpaused contact on a
+    scheduled rung (not client/dormant/excluded) is ever given a date."""
+    if (when is not None and (fc.state != 'active' or fc.auto_paused
+                              or fc.rung not in _ladder.RUNGS or fc.rung == 'client')):
+        when = None
+    fc.next_followup_at = when
+    fc.touch_enabled = when is not None
+
+
+def _apply_reply_to_ladder(fc, reply, ws, now):
+    """Move a contact on the warmth ladder because of an inbound reply.
+
+    A broker sending load information is the only thing that raises the rung
+    (one step per load conversation) and the only thing that refills the attempt
+    budget. A refusal parks the contact as dormant, a deferral keeps its place and
+    comes back on their date, anything else asks for a human. An excluded contact
+    is never touched. Returns 'load' | 'refusal' | 'deferral' | 'unknown', or
+    'excluded' when nothing was applied.
+    """
+    if fc.rung == 'excluded':
+        return 'excluded'
+    cfg = _ladder.LADDER_DEFAULTS
+    category = reply.triage_category
+    if category is None:
+        # At ingest the hook runs before triage has stored a category on the row.
+        res = classify_reply_text(reply.subject, reply.body,
+                                  ws.get_reply_filters(), ws.get_filter_keywords())
+        category = res['category'] if res else None
+    kind, resume_at = _ladder.interpret_reply(category, _strip_quoted(reply.body), now)
+    old_rung = fc.rung
+
+    if kind == 'load':
+        conv_key = _ladder.load_conversation_key(
+            reply.thread_id, fc.contact_email, reply.received_at or now)
+        if _ladder_load_seen(fc, conv_key, reply.msg_id):
+            return kind
+        fc.load_count = (fc.load_count or 0) + 1
+        fc.last_load_at = now
+        derived = _ladder.rung_for(fc.load_count, True)
+        if fc.rung not in _ladder.RUNGS or _ladder.RUNGS.index(derived) > _ladder.RUNGS.index(fc.rung):
+            fc.rung = derived           # never lowers a rung (e.g. a hand-set client)
+        fc.exit_reason = None
+        fc.touch_attempt = 0
+        _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, 0, now, cfg))
+        _record_event(fc, _LADDER_LOAD_EVENT, actor_type='system',
+                      from_state=old_rung, to_state=fc.rung,
+                      metadata_json=json.dumps({'conv': conv_key, 'msg_id': reply.msg_id,
+                                                'load_count': fc.load_count}),
+                      notes=f'load #{fc.load_count} received')
+    elif kind == 'refusal':
+        fc.rung = 'dormant'
+        fc.exit_reason = 'refused'
+        _ladder_set_next(fc, None)
+        _record_event(fc, 'ladder_refusal', actor_type='system',
+                      from_state=old_rung, to_state='dormant', notes='refused')
+    elif kind == 'deferral':
+        if fc.rung == 'dormant':
+            # attempts are spent and only a load refills them: nothing to schedule
+            _record_event(fc, 'ladder_deferral', actor_type='system',
+                          from_state=old_rung, to_state=old_rung,
+                          notes='asked to come back later; contact is dormant')
+            return kind
+        # no stated date: the contact keeps its place in the normal rhythm
+        _ladder_set_next(fc, resume_at or _ladder.next_touch_at(
+            fc.rung, fc.touch_attempt or 0, now, cfg))
+        _record_event(fc, 'ladder_deferral', actor_type='system',
+                      from_state=old_rung, to_state=old_rung,
+                      notes='asked to come back ' + (resume_at.strftime('%Y-%m-%d')
+                                                     if resume_at else 'later'))
+    else:
+        fc.attention_at = now
+        _record_event(fc, 'ladder_unknown', actor_type='system',
+                      from_state=old_rung, to_state=old_rung,
+                      notes='reply needs a human look')
+    return kind
+
+
+def _check_reply_stops_followup(reply_email, user_id, reply=None):
     """A reply from a pipeline contact: stop the FU drip (per settings), flag warm
     contacts for a human answer (🔥), and — iron rule — schedule the next
-    stage-cadence touch instead of leaving the contact with no next step."""
+    stage-cadence touch instead of leaving the contact with no next step.
+    With the Reply row, the warmth ladder then reads it (load / refusal /
+    deferral) and sets the contact's rung and next touch."""
     from app.models import FollowupContact, Workspace
     ws = Workspace.query.filter_by(owner_id=user_id).first()
     if not ws:
@@ -6841,6 +6945,8 @@ def _check_reply_stops_followup(reply_email, user_id):
     now = _utcnow()
     fc.last_reply_at = now
     fc.last_activity_at = now
+    if fc.rung == 'excluded':
+        return                         # the owner's permanent decision: a reply changes nothing
     if (fc.pipeline_stage or 1) >= 2:
         fc.attention_at = now          # warm contact replied — answer today
 
@@ -6852,6 +6958,9 @@ def _check_reply_stops_followup(reply_email, user_id):
         _record_event(fc, 'reply_detected', actor_type='system', notes=f'Reply from {email}')
     elif fc.touch_enabled and fc.state == 'active':
         _schedule_touch(fc, ws, force=True)
+
+    if reply is not None:
+        _apply_reply_to_ladder(fc, reply, ws, now)   # last: its schedule wins
 
 
 def _get_fu_templates_for_user(uid):

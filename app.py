@@ -902,10 +902,18 @@ def _ooo_pause_contact(ws, reply, days=7):
         return False
     target = _utcnow() + timedelta(days=days)
     fc.attention_at = None
-    if fc.next_followup_at is None or fc.next_followup_at < target:
-        fc.next_followup_at = target
-        if not fc.is_followup_enabled:
-            fc.touch_enabled = True
+    old = fc.next_followup_at
+    if old is None or old < target:
+        if fc.is_followup_enabled:
+            fc.next_followup_at = target      # the FU drip keeps its own clock
+        else:
+            # through the ladder's choke point: client/dormant/excluded/paused are
+            # never given a date, and the touch lands at the usual hour
+            _ladder_set_next(fc, target, ws)
+            if fc.next_followup_at is None:
+                return False
+            if old is not None and fc.next_followup_at < old:
+                fc.next_followup_at = old     # never pull a touch closer
         _record_event(fc, 'ooo_pause', actor_type='system',
                       notes=f'auto-reply detected — next touch pushed +{days}d')
         return True
@@ -6064,8 +6072,8 @@ def api_followups_pipeline_config_save():
         # so a large stage doesn't dump every touch on one day).
         from app.models import FollowupContact as _FC
         for fc in _FC.query.filter_by(workspace_id=ws.id, state='active').all():
-            if not fc.is_followup_enabled:
-                _schedule_touch(fc, ws, force=True, stagger=True)
+            if not fc.is_followup_enabled and not _ladder_owns_schedule(fc):
+                _schedule_touch(fc, ws, force=True, stagger=True)   # the ladder dates its own
         db.session.commit()
 
     return jsonify(ok=True, stages=ws.get_stages(),
@@ -7115,9 +7123,11 @@ def _would_auto_send(fc, ws):
 
 def _auto_send_preview(ws, hours=24):
     """How many contacts the scheduler would email on its own in the next
-    `hours` (overdue included), split by path. Counted as if both the master
-    switch and the FU1–FU3 switch were on, so the Settings banner can update
-    live while the user flips them."""
+    `hours` (overdue included), split by path. Drip and scheduled sends are
+    counted as if the master switch and the FU1–FU3 switch were on, so the
+    Settings banner can update live while the user flips them; ladder touches
+    are counted only when the scheduler really would send them (both ladder
+    gates on, a sendable rung, not paused, budget left)."""
     from app.models import FollowupContact
     out = {'drip': 0, 'touches': 0, 'scheduled': 0}
     if not ws:
@@ -7135,7 +7145,7 @@ def _auto_send_preview(ws, hours=24):
         elif fc.is_followup_enabled:
             if fc.stage in ('fu1_scheduled', 'fu2_scheduled', 'fu3_scheduled'):
                 out['drip'] += 1
-        elif fc.touch_enabled and _cadence_for_stage(ws, fc.pipeline_stage or 1).get('mode') == 'auto':
+        elif fc.touch_enabled and _ladder_would_send(fc, ws):
             out['touches'] += 1
     return out
 
@@ -7216,8 +7226,35 @@ _LADDER_SENDABLE = ('cold', 'neutral', 'warm', 'hot')   # client/dormant/exclude
 
 
 def _ladder_would_send(fc, ws):
-    """True if the ladder scheduler would email this due contact without a click."""
-    return bool(ws and ws.fu_auto_enabled and fc.rung in _LADDER_SENDABLE and not fc.auto_paused)
+    """True if the ladder scheduler would email this contact once it is due, with
+    nobody clicking: both gates on, a sendable rung, not paused, budget left."""
+    return bool(ws and ws.fu_auto_enabled and ws.ladder_auto_enabled
+                and fc.rung in _LADDER_SENDABLE and not fc.auto_paused
+                and (fc.touch_attempt or 0) < _ladder.budget_for(fc.rung, _ladder.LADDER_DEFAULTS))
+
+
+def _ladder_flag(fc, now, event_type, notes):
+    """Ask a human to look at this contact: attention plus one event. Written only
+    while attention is empty, so a row that stays due cannot flood the events table."""
+    if fc.attention_at is None:
+        fc.attention_at = now
+        _record_event(fc, event_type, actor_type='scheduler',
+                      from_state=fc.rung, to_state=fc.rung, notes=notes)
+        return True
+    return False
+
+
+def _ladder_send_failed(fc, err, now, ws=None):
+    """A ladder send did not go through: the shared backoff, then park the contact
+    once auto-sending has been given up on, so a dead token cannot retry for ever.
+    Parked = paused with a reason: rung and attempts are kept for a deliberate resume."""
+    if _record_send_failure(fc, 'touch_sent', err, now):
+        fc.auto_paused = True
+        fc.exit_reason = 'send_failed'
+        _ladder_set_next(fc, None, ws)
+        _record_event(fc, 'ladder_parked', actor_type='scheduler',
+                      from_state=fc.rung, to_state=fc.rung,
+                      notes=f'auto-send given up after {fc.send_fail_count} failed sends')
 
 
 def _ladder_exhaust(fc, now, ws=None):
@@ -7234,8 +7271,8 @@ def _ladder_exhaust(fc, now, ws=None):
 def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
     """Send the warmth ladder's due touches; returns how many went out.
 
-    Behind the workspace kill switch (fu_auto_enabled) and the auto-send master
-    switch. One attempt is spent per successful send; a failed send goes through
+    Behind the workspace kill switch (fu_auto_enabled), the ladder's own consent
+    flag (ladder_auto_enabled, default off) and the auto-send master switch. One attempt is spent per successful send; a failed send goes through
     _record_send_failure's backoff and spends nothing. `hold_uids` are users whose
     pre-send reply check failed; `skip_ids` are contacts another path already sent.
     """
@@ -7248,6 +7285,7 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
             Workspace, Workspace.id == FollowupContact.workspace_id
         ).filter(
             Workspace.fu_auto_enabled == True,
+            Workspace.ladder_auto_enabled == True,
             FollowupContact.state == 'active',
             FollowupContact.auto_paused == False,
             FollowupContact.touch_enabled == True,
@@ -7268,16 +7306,13 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
 
     sent = 0
     for fc in contacts:
-        if fc.id in skip_ids or fc.user_id in hold_uids or not _auto_send_on(fc.workspace_id, gate):
+        fc_id, fc_email = fc.id, fc.contact_email      # still readable after a rollback
+        if fc_id in skip_ids or fc.user_id in hold_uids or not _auto_send_on(fc.workspace_id, gate):
             continue
         try:
             if fc.rung not in _LADDER_SENDABLE:
                 # a legacy or unmigrated rung: never guess, ask a human (once)
-                if fc.attention_at is None:
-                    fc.attention_at = now
-                    _record_event(fc, 'ladder_unknown', actor_type='scheduler',
-                                  from_state=fc.rung, to_state=fc.rung,
-                                  notes=f'unrecognised rung {fc.rung!r}')
+                if _ladder_flag(fc, now, 'ladder_unknown', f'unrecognised rung {fc.rung!r}'):
                     db.session.commit()
                 continue
             ws = db.session.get(Workspace, fc.workspace_id)
@@ -7288,9 +7323,13 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
 
             acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
             if not acct:
+                if _ladder_flag(fc, now, 'ladder_blocked', 'no email account connected: cannot send'):
+                    db.session.commit()
                 continue
             template_text = _get_random_fu_template(fc.user_id)
             if not template_text:
+                if _ladder_flag(fc, now, 'ladder_blocked', 'no follow-up template: cannot send'):
+                    db.session.commit()
                 continue
             send_cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                         'phone': acct.your_phone or '', 'route': fc.current_route or '',
@@ -7314,11 +7353,22 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
                     _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, fc.touch_attempt, now, cfg), ws)
                 sent += 1
             else:
-                _record_send_failure(fc, 'touch_sent', err, now)
+                _ladder_send_failed(fc, err, now, ws)
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f'FU ladder error for {fc.contact_email}: {e}')
+            app.logger.error(f'FU ladder error for {fc_email}: {e}')
+            # The send may already have gone out, with its bookkeeping now rolled
+            # back: the contact would stay due and be emailed again on every tick.
+            # Push it out through the shared backoff in a fresh transaction.
+            try:
+                fresh = db.session.get(FollowupContact, fc_id)
+                if fresh is not None:
+                    _ladder_send_failed(fresh, f'unexpected error: {e}', now)
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception(f'FU ladder could not back off {fc_email}')
     if sent:
         app.logger.info(f'FU scheduler: sent {sent} ladder touches')
     return sent
@@ -7750,6 +7800,8 @@ with app.app_context():
         ('followup_contacts', 'auto_paused',         'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('followup_contacts', 'last_load_at',        'TIMESTAMP'),
         ('followup_contacts', 'exit_reason',         'VARCHAR(40)'),
+        # Ladder consent flag: default OFF so a deploy cannot start auto-sending.
+        ('workspaces',        'ladder_auto_enabled', 'BOOLEAN NOT NULL DEFAULT FALSE'),
         ('users',             'session_version',     'INTEGER NOT NULL DEFAULT 0'),
         ('replies',           'matched_recipient',   'VARCHAR(255)'),
         ('replies',           'date_checked',        'BOOLEAN NOT NULL DEFAULT FALSE'),

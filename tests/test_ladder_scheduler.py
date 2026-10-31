@@ -12,13 +12,14 @@ def past(hours=2):
     return _app._utcnow() - timedelta(hours=hours)
 
 
-def _workspace(db, fu_auto=True, cfg=None, oauth=False):
+def _workspace(db, fu_auto=True, cfg=None, oauth=False, ladder=True):
     import bcrypt as _bcrypt
     from app.models import EmailAccount, User, Workspace
     pw = _bcrypt.hashpw(b'pass', _bcrypt.gensalt()).decode()
     user = User(email=f'ls_{uuid.uuid4().hex[:8]}@test.com', name='L', password=pw, role='user')
     db.session.add(user); db.session.flush()
-    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto, pipeline_config=cfg or {})
+    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto,
+                   ladder_auto_enabled=ladder, pipeline_config=cfg or {})
     db.session.add(ws); db.session.flush()
     db.session.add(EmailAccount(user_id=user.id, workspace_id=ws.id, gmail_address='me@test.com',
                                 your_name='Me', google_refresh_token='tok' if oauth else None))
@@ -85,15 +86,41 @@ def test_due_contact_is_sent_and_the_attempt_is_spent(app, db, sent):
     assert len(_events(fc, 'touch_sent')) == 1
 
 
-def test_the_rhythm_is_one_day_then_three_then_weekly(app, db, sent):
-    fc = _contact(db, rung='warm', touch_attempt=0)
+def _days_out(fc):
+    """Whole calendar days between today and the contact's next touch."""
+    return (fc.next_followup_at.date() - _app._utcnow().date()).days
+
+
+def test_the_rhythm_after_each_touch_is_three_days_then_weekly(app, db, sent):
+    user, ws = _workspace(db, cfg={'touch_hour': 15})
+    fc = _contact(db, user, ws, rung='warm', touch_attempt=0)
     assert _run() == 1                       # warm gets a budget of 5
-    first_gap = fc.next_followup_at - _app._utcnow()
-    assert fc.touch_attempt == 1 and timedelta(days=2) < first_gap < timedelta(days=4)
-    fc.next_followup_at = past(); _app.db.session.commit()
+    assert fc.touch_attempt == 1 and _days_out(fc) == 3 and fc.next_followup_at.hour == 15
+    fc.next_followup_at = past(); db.session.commit()
     assert _run() == 1
-    second_gap = fc.next_followup_at - _app._utcnow()
-    assert fc.touch_attempt == 2 and timedelta(days=6) < second_gap < timedelta(days=8)
+    assert fc.touch_attempt == 2 and _days_out(fc) == 7
+    fc.next_followup_at = past(); db.session.commit()
+    assert _run() == 1
+    assert fc.touch_attempt == 3 and _days_out(fc) == 7      # weekly from the third touch on
+
+
+def test_hot_is_weekly_from_the_first_touch(app, db, sent):
+    user, ws = _workspace(db, cfg={'touch_hour': 15})
+    fc = _contact(db, user, ws, rung='hot', touch_attempt=0)
+    assert _run() == 1
+    assert fc.touch_attempt == 1 and _days_out(fc) == 7
+
+
+def test_the_first_touch_is_due_the_day_after_a_load(app, db):
+    from app.models import Reply
+    user, ws = _workspace(db, cfg={'touch_hour': 15})
+    fc = _contact(db, user, ws, rung='neutral', next_followup_at=None)
+    r = Reply(user_id=user.id, msg_id='<f1@m>', thread_id='tf1', from_email=fc.contact_email,
+              subject='Re: lane', body='load Laredo to Dallas', triage_category='gave_info')
+    db.session.add(r); db.session.commit()
+    _app._check_reply_stops_followup(fc.contact_email, user.id, r)
+    db.session.commit(); db.session.refresh(fc)
+    assert fc.touch_attempt == 0 and _days_out(fc) == 1 and fc.next_followup_at.hour == 15
 
 
 def test_budget_exhaustion_goes_dormant_with_a_reason(app, db, sent):
@@ -210,6 +237,37 @@ def test_auto_send_master_switch_blocks_the_ladder(app, db, sent):
     assert fc.touch_attempt == 0
 
 
+def test_the_ladder_needs_its_own_consent_flag_which_defaults_off(app, db, sent):
+    from app.models import Workspace
+    user, ws = _workspace(db, fu_auto=True, ladder=False)
+    fc = _contact(db, user, ws, rung='warm', touch_attempt=4)    # would send and exhaust
+    before = fc.next_followup_at
+    assert _run() == 0 and sent == []
+    assert (fc.rung, fc.touch_attempt, fc.next_followup_at) == ('warm', 4, before)
+    assert fc.exit_reason is None and _events(fc, 'touch_sent') == []
+    # a workspace created without saying anything about the ladder is off
+    bare = Workspace(owner_id=user.id, name='bare')
+    db.session.add(bare); db.session.commit()
+    assert bare.ladder_auto_enabled is False
+
+
+def test_every_stage_on_manual_does_not_make_the_ladder_mail_the_book(app, db, sent, monkeypatch):
+    # the situation a default workspace is in: manual stages, dated contacts, drip toggle on
+    monkeypatch.setattr(_app, 'fetch_replies_from_gmail', lambda uid=None, rate_limit=True: {})
+    user, ws = _workspace(db, fu_auto=True, ladder=False,
+                          cfg={'cadence': {str(i): {'days': 3, 'mode': 'manual'} for i in range(1, 6)}})
+    for _ in range(5):
+        _contact(db, user, ws, rung='cold', pipeline_stage=2)
+    _app._run_scheduled_followups()
+    assert sent == []
+
+
+def test_the_consent_flag_alone_is_not_enough_without_the_kill_switch(app, db, sent):
+    user, ws = _workspace(db, fu_auto=False, ladder=True)
+    _contact(db, user, ws, rung='warm')
+    assert _run() == 0 and sent == []
+
+
 def test_the_scheduler_entry_point_sends_ladder_touches_only_when_the_switch_is_on(app, db, sent, monkeypatch):
     monkeypatch.setattr(_app, 'fetch_replies_from_gmail', lambda uid=None, rate_limit=True: {})
     on_user, on_ws = _workspace(db, fu_auto=True)
@@ -263,20 +321,25 @@ def test_send_failure_uses_the_existing_backoff(app, db, monkeypatch):
     assert fc.touch_attempt == 1 and fc.rung == 'neutral'      # a failed send spends nothing
 
 
-def test_repeated_failures_back_off_further_and_write_two_events_at_most(app, db, monkeypatch):
+def test_repeated_failures_back_off_further_then_park_the_contact(app, db, monkeypatch):
     monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **k: (False, 'invalid_grant'))
     fc = _contact(db, rung='warm', touch_attempt=0)
     gaps = []
-    for _ in range(_app.SEND_FAIL_GIVE_UP_AFTER + 3):
+    for _ in range(_app.SEND_FAIL_GIVE_UP_AFTER):
         fc.next_followup_at = past(); db.session.commit()
         before = _app._utcnow()
         _run()
-        gaps.append((fc.next_followup_at - before).total_seconds() / 3600)
-    assert fc.send_fail_count == _app.SEND_FAIL_GIVE_UP_AFTER + 3
-    assert fc.touch_attempt == 0                               # the budget is never burned by failures
+        gaps.append((fc.next_followup_at - before).total_seconds() / 3600 if fc.next_followup_at else None)
     assert gaps[0] < gaps[1] < gaps[2] and gaps[2] >= 71
+    assert fc.send_fail_count == _app.SEND_FAIL_GIVE_UP_AFTER and fc.touch_attempt == 0
     assert fc.attention_at is not None                         # given up: a human is asked
+    # parked with a reason instead of retrying a dead token for ever
+    assert fc.auto_paused is True and fc.exit_reason == 'send_failed'
+    assert fc.next_followup_at is None and fc.touch_enabled is False and fc.rung == 'warm'
     assert len(_events(fc, 'touch_sent')) == 2                 # first failure + give-up
+    assert len(_events(fc, 'ladder_parked')) == 1
+    fc.next_followup_at = past(); fc.touch_enabled = True; db.session.commit()
+    assert _run() == 0 and fc.send_fail_count == _app.SEND_FAIL_GIVE_UP_AFTER   # not even tried
 
 
 def test_a_success_after_failures_resets_the_counter(app, db, monkeypatch):
@@ -317,6 +380,64 @@ def test_an_exception_on_one_contact_does_not_stop_the_others(app, db, monkeypat
     assert _run() == 1
     assert out == [second.contact_email]
     assert first.touch_attempt == 0 and second.touch_attempt == 1
+    # the failed contact is backed off, not left due to blow up on every tick
+    assert first.next_followup_at > _app._utcnow() and first.send_fail_count == 1
+
+
+def test_bookkeeping_that_fails_after_a_send_backs_the_contact_off(app, db, monkeypatch):
+    # the email went out but recording it raised: without a backoff the contact
+    # stays due and the same email goes out on every tick, for ever
+    fc = _contact(db, rung='warm')
+    out = []
+    monkeypatch.setattr(_app, 'send_followup_email',
+                        lambda fu, tpl, cfg, uid=None: (out.append(fu['contact_email']), (True, None))[1])
+    real = _app._ladder_set_next
+
+    def broken(*a, **k):
+        raise RuntimeError('db went away')
+    monkeypatch.setattr(_app, '_ladder_set_next', broken)
+    assert _run() == 0
+    monkeypatch.setattr(_app, '_ladder_set_next', real)
+    assert out == [fc.contact_email]
+    assert fc.send_fail_count == 1 and fc.next_followup_at > _app._utcnow() + timedelta(hours=5)
+    assert _run() == 0 and out == [fc.contact_email]            # nothing is sent again now
+
+
+def test_a_failure_while_backing_off_cannot_escape(app, db, monkeypatch):
+    user, ws = _workspace(db)
+    first = _contact(db, user, ws, rung='warm', next_followup_at=past(5))
+    second = _contact(db, user, ws, rung='warm', next_followup_at=past(1))
+    out = []
+
+    def send(fu, tpl, cfg, uid=None):
+        if fu['contact_email'] == first.contact_email:
+            raise RuntimeError('boom')
+        out.append(fu['contact_email'])
+        return True, None
+    monkeypatch.setattr(_app, 'send_followup_email', send)
+    monkeypatch.setattr(_app, '_record_send_failure',
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError('still down')))
+    assert _run() == 1 and out == [second.contact_email]
+
+
+def test_a_missing_account_asks_for_attention_once(app, db, sent):
+    from app.models import EmailAccount
+    user, ws = _workspace(db)
+    EmailAccount.query.filter_by(user_id=user.id).delete(); db.session.commit()
+    fc = _contact(db, user, ws, rung='warm')
+    assert _run() == 0 and sent == []
+    assert fc.attention_at is not None and fc.touch_attempt == 0
+    assert _run() == 0
+    assert len(_events(fc, 'ladder_blocked')) == 1
+
+
+def test_a_missing_template_asks_for_attention_once(app, db, sent, monkeypatch):
+    monkeypatch.setattr(_app, '_get_random_fu_template', lambda uid, **k: '')
+    fc = _contact(db, rung='warm')
+    assert _run() == 0 and sent == []
+    assert fc.attention_at is not None
+    _run()
+    assert len(_events(fc, 'ladder_blocked')) == 1
 
 
 # ── The hour of day ──────────────────────────────────────────────────────────
@@ -410,6 +531,43 @@ def test_the_old_stage_cadence_is_still_used_for_a_fresh_cold_contact(app, db):
     assert fc.touch_enabled and fc.next_followup_at is not None
 
 
+def test_saving_the_cadence_config_leaves_ladder_dates_alone(app, db, client):
+    user, ws = _workspace(db)
+    with client.session_transaction() as sess:
+        sess['user_email'] = user.email
+        sess['csrf_token'] = 'x'
+    warm = _contact(db, user, ws, rung='warm', next_followup_at=_app._utcnow() + timedelta(days=2))
+    parked = _contact(db, user, ws, rung='client', next_followup_at=None)
+    when = warm.next_followup_at
+    res = client.put('/api/followups/pipeline-config',
+                     json={'cadence': {'2': {'days': 2, 'mode': 'auto'}}})
+    assert res.status_code == 200
+    db.session.expire_all()
+    assert warm.next_followup_at == when
+    assert parked.next_followup_at is None and not parked.touch_enabled
+
+
+@pytest.mark.parametrize('rung', ['client', 'dormant', 'excluded'])
+def test_an_out_of_office_never_schedules_a_parked_contact(app, db, rung):
+    from app.models import Reply
+    user, ws = _workspace(db)
+    fc = _contact(db, user, ws, rung=rung, next_followup_at=None)
+    reply = Reply(user_id=user.id, msg_id='<o1@m>', from_email=fc.contact_email,
+                  subject='Automatic reply: out of office', body='I am away')
+    assert _app._ooo_pause_contact(ws, reply) is False
+    assert fc.next_followup_at is None and fc.touch_enabled is False
+
+
+def test_an_out_of_office_pushes_a_live_contact_a_week_at_the_touch_hour(app, db):
+    from app.models import Reply
+    user, ws = _workspace(db, cfg={'touch_hour': 15})
+    fc = _contact(db, user, ws, rung='warm', next_followup_at=_app._utcnow() + timedelta(days=1))
+    reply = Reply(user_id=user.id, msg_id='<o2@m>', from_email=fc.contact_email,
+                  subject='Automatic reply', body='I am away')
+    assert _app._ooo_pause_contact(ws, reply) is True
+    assert _days_out(fc) == 7 and fc.next_followup_at.hour == 15 and fc.touch_enabled
+
+
 # ── The pre-send reply check knows about the ladder ──────────────────────────
 
 def test_would_auto_send_follows_the_ladder_rules(app, db):
@@ -419,3 +577,17 @@ def test_would_auto_send_follows_the_ladder_rules(app, db):
     assert _app._would_auto_send(_contact(db, user, ws, rung='client'), ws) is False
     ws.fu_auto_enabled = False
     assert _app._would_auto_send(_contact(db, user, ws, rung='warm'), ws) is False
+
+
+def test_would_auto_send_needs_the_consent_flag_and_budget(app, db):
+    user, ws = _workspace(db)
+    assert _app._would_auto_send(_contact(db, user, ws, rung='neutral', touch_attempt=3), ws) is False
+    ws.ladder_auto_enabled = False
+    assert _app._would_auto_send(_contact(db, user, ws, rung='warm'), ws) is False
+
+
+def test_the_consent_flag_ships_through_the_inline_migrations_default_off():
+    # prod schema changes only apply from the _migrations list in app.py
+    import re
+    src = open(_app.__file__).read()
+    assert re.search(r"\('workspaces',\s+'ladder_auto_enabled',\s+'BOOLEAN NOT NULL DEFAULT FALSE'\)", src)

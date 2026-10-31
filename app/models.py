@@ -174,6 +174,9 @@ class Workspace(db.Model):
     owner_id         = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     plan             = db.Column(db.String(20), default='free')  # 'free' | 'starter' | 'pro'
     fu_auto_enabled  = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    # Consent for the warmth-ladder scheduler (on top of fu_auto_enabled). Off until
+    # the owner turns it on: the ladder must never start mailing on deploy.
+    ladder_auto_enabled = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     pipeline_config  = db.Column(db.JSON, nullable=True)   # {stages: [...], reply_filters: [...]}
     created_at       = db.Column(db.DateTime, default=_utcnow)
 

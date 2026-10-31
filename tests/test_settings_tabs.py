@@ -7,14 +7,15 @@ from datetime import timedelta
 _app = sys.modules['_dat_mailer_app']
 
 
-def _mk(db, client=None, fu_auto=True, cfg=None):
+def _mk(db, client=None, fu_auto=True, cfg=None, ladder=True):
     import bcrypt as _bcrypt
     from app.models import User, Workspace
     email = f'tabs_{uuid.uuid4().hex[:8]}@test.com'
     user = User(email=email, name='T', role='user',
                 password=_bcrypt.hashpw(b'pass', _bcrypt.gensalt()).decode())
     db.session.add(user); db.session.flush()
-    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto, pipeline_config=cfg or {})
+    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto,
+                   ladder_auto_enabled=ladder, pipeline_config=cfg or {})
     db.session.add(ws); db.session.commit()
     if client is not None:
         with client.session_transaction() as sess:
@@ -49,8 +50,43 @@ def test_preview_counts_each_auto_path_within_24h(app, db):
     _fc(db, user, ws, in_hours=3, is_followup_enabled=False, touch_enabled=True,
         stage='completed_fu3', pipeline_stage=1)                     # auto touch
     _fc(db, user, ws, in_hours=3, is_followup_enabled=False, touch_enabled=True,
-        stage='completed_fu3', pipeline_stage=2)                     # manual touch → not auto
-    assert _app._auto_send_preview(ws) == {'drip': 2, 'touches': 1, 'scheduled': 2}
+        stage='completed_fu3', pipeline_stage=2)                     # "manual" stage: the ladder sends it too
+    assert _app._auto_send_preview(ws) == {'drip': 2, 'touches': 2, 'scheduled': 2}
+
+
+def _touch(db, user, ws, **kw):
+    return _fc(db, user, ws, in_hours=3, is_followup_enabled=False, touch_enabled=True,
+               stage='completed_fu3', **kw)
+
+
+def test_preview_counts_ladder_touches_in_a_default_workspace(app, db):
+    # default cadence: every stage "off" or "manual" -- the ladder still sends these
+    user, ws = _mk(db)
+    for stage in (1, 2, 3, 4):
+        _touch(db, user, ws, pipeline_stage=stage)
+    assert _app._auto_send_preview(ws)['touches'] == 4
+
+
+def test_preview_counts_only_what_the_ladder_would_send(app, db):
+    user, ws = _mk(db)
+    _touch(db, user, ws, rung='warm')
+    _touch(db, user, ws, rung='warm', auto_paused=True)       # paused
+    _touch(db, user, ws, rung='client')
+    _touch(db, user, ws, rung='dormant')
+    _touch(db, user, ws, rung='excluded')
+    _touch(db, user, ws, rung='neutral', touch_attempt=3)     # budget spent
+    _touch(db, user, ws, rung='neutral', touch_attempt=2)     # last attempt still goes out
+    assert _app._auto_send_preview(ws)['touches'] == 2
+
+
+def test_preview_shows_no_touches_while_either_ladder_gate_is_off(app, db):
+    user, ws = _mk(db, ladder=False)
+    _touch(db, user, ws)
+    assert _app._auto_send_preview(ws)['touches'] == 0        # consent flag off
+    ws.ladder_auto_enabled = True
+    assert _app._auto_send_preview(ws)['touches'] == 1
+    ws.fu_auto_enabled = False
+    assert _app._auto_send_preview(ws)['touches'] == 0        # kill switch off
 
 
 def test_preview_ignores_switch_positions_and_other_workspaces(app, db):

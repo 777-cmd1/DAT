@@ -231,12 +231,17 @@ _OTHER_PROMISE_PHRASES = (
     'get back to you with',
 )
 # What precedes a phrase, within its own clause, and makes it something other
-# than a promise: a refusal ("can't send you a load") or an offer / question
-# ("want me to send you the rates?").
+# than a promise: a refusal ("can't send you a load"), an offer or question
+# ("want me to send you the rates?"), a condition ("let you know if I have a
+# load for you") or a hedge ("I wish I could", "hopefully we can").
 _NOT_A_PROMISE = re.compile(
     r"\b(?:not|never|no|cannot|unable)\b|n't\b|"
-    r"\b(?:want me to|would you like|do you|should i|shall i|can i|may i|if you)\b")
-_CLAUSE_END = re.compile(r'[.!?;,]|\b(?:but|however)\b')
+    r"\b(?:want me to|would you like|do you|should i|shall i|can i|may i|"
+    r"if you|if i|if we|let you know if|wish|would love|i'd love|hopefully|i can|we can)\b")
+# A clause ends at punctuation, a spaced or long dash, or a "but"/"however".
+_CLAUSE_END = re.compile(r'[.!?;,\u2013\u2014]|\s-+\s|\b(?:but|however)\b')
+# "No problem, I'll send you a load" is a yes, not a no.
+_NO_PROBLEM = re.compile(r'\bno (?:problem|worries|issue)s?\b')
 _LOOKBACK = 40
 
 
@@ -248,7 +253,7 @@ def _promised(t: str, phrases) -> bool:
             ends = list(_CLAUSE_END.finditer(before))
             if ends:
                 before = before[ends[-1].end():]
-            if not _NOT_A_PROMISE.search(before):
+            if not _NOT_A_PROMISE.search(_NO_PROBLEM.sub(' ', before)):
                 return True
             start = t.find(phrase, start + 1)
     return False

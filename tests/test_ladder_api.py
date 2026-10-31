@@ -83,6 +83,11 @@ def _row(data, rung):
     return next(r for r in data['conversion'] if r['rung'] == rung)
 
 
+def _ids(people):
+    """Ids of a list of {id, email, name} people."""
+    return [p['id'] for p in people]
+
+
 # ── ladder.py: promise phrases and the silence threshold ─────────────────────
 
 @pytest.mark.parametrize('text', [
@@ -92,6 +97,9 @@ def _row(data, rung):
     'I’ll send you something soon',          # curly apostrophe
     "Not now, thanks. I'll send you a load next week",   # the 'not' belongs to another sentence
     "No loads this week, but I'll send you a load next week",   # ...or to an earlier clause
+    "No problem I'll send you a load",                          # "no problem" is a yes
+    "Sorry, no loads right now - will send you a load when we do",   # a dash ends the clause
+    "Sorry, no loads right now \u2013 will send you a load when we do",
 ])
 def test_a_load_promise_is_recognised(text):
     assert ladder.promise_kind(text) == 'load'
@@ -114,6 +122,18 @@ def test_a_non_load_promise_is_recognised(text):
     None,
 ])
 def test_a_refusal_or_offer_is_not_a_promise(text):
+    assert ladder.promise_kind(text) is None
+
+
+@pytest.mark.parametrize('text', [
+    "I'll let you know if I have a load for you",
+    'We will keep you in mind if we have something for you',
+    'I wish I could send you a load',
+    "I'd love to send you a load",
+    'Hopefully we can send you a load soon',
+    'I can send you a load if you need one',
+])
+def test_a_hedge_or_a_condition_is_not_a_promise(text):
     assert ladder.promise_kind(text) is None
 
 
@@ -163,8 +183,8 @@ def test_conversion_counts_a_contact_at_every_rung_it_reached(app, db, client, m
     data = _get(client, '/api/followups/funnel')
     assert [(r['rung'], r['reached']) for r in data['conversion']] == [
         ('cold', 2), ('neutral', 1), ('warm', 1), ('hot', 1), ('client', 0)]
-    assert _row(data, 'hot')['reached_ids'] == [mover.id]
-    assert _row(data, 'cold')['reached_ids'] == sorted([mover.id, stayed.id])
+    assert _ids(_row(data, 'hot')['reached_contacts']) == [mover.id]
+    assert _ids(_row(data, 'cold')['reached_contacts']) == sorted([mover.id, stayed.id])
 
 
 def test_conversion_percentages_are_of_the_previous_step(app, db, client, me):
@@ -189,10 +209,12 @@ def test_a_contact_that_left_is_lost_at_the_rung_it_reached(app, db, client, me)
     data = _get(client, '/api/followups/funnel')
     warm = _row(data, 'warm')
     assert (warm['reached'], warm['lost'], warm['still_here']) == (1, 1, 0)
-    assert warm['lost_reasons'] == [{'reason': 'refused', 'count': 1, 'ids': [gone.id]}]
+    assert [(r['reason'], r['count'], _ids(r['contacts'])) for r in warm['lost_reasons']] == [
+        ('refused', 1, [gone.id])]
     neutral = _row(data, 'neutral')
     assert (neutral['reached'], neutral['lost']) == (2, 1)
-    assert neutral['lost_reasons'] == [{'reason': 'exhausted', 'count': 1, 'ids': [tired.id]}]
+    assert [(r['reason'], r['count'], _ids(r['contacts'])) for r in neutral['lost_reasons']] == [
+        ('exhausted', 1, [tired.id])]
     # the cold row counts everyone who entered, and nobody left from cold
     assert (_row(data, 'cold')['reached'], _row(data, 'cold')['lost']) == (2, 0)
     assert data['totals']['lost'] == 2
@@ -217,8 +239,8 @@ def test_a_lost_contact_without_a_recorded_reason_is_still_listed(app, db, clien
     parked = _fc(db, me, rung='dormant')
     data = _get(client, '/api/followups/funnel')
     reasons = {r['reason']: r for r in _row(data, 'cold')['lost_reasons']}
-    assert reasons['excluded']['ids'] == [owner_cut.id]
-    assert reasons['unspecified']['ids'] == [parked.id]
+    assert _ids(reasons['excluded']['contacts']) == [owner_cut.id]
+    assert _ids(reasons['unspecified']['contacts']) == [parked.id]
 
 
 def test_loads_alone_place_a_contact_when_there_are_no_events(app, db, client, me):
@@ -226,7 +248,7 @@ def test_loads_alone_place_a_contact_when_there_are_no_events(app, db, client, m
     fc = _fc(db, me, rung='dormant', load_count=2, exit_reason='exhausted')
     data = _get(client, '/api/followups/funnel')
     assert (_row(data, 'hot')['reached'], _row(data, 'hot')['lost']) == (1, 1)
-    assert _row(data, 'hot')['lost_reasons'][0]['ids'] == [fc.id]
+    assert _ids(_row(data, 'hot')['lost_reasons'][0]['contacts']) == [fc.id]
 
 
 def test_only_ladder_events_place_a_contact(app, db, client, me):
@@ -236,15 +258,47 @@ def test_only_ladder_events_place_a_contact(app, db, client, me):
     assert _row(_get(client, '/api/followups/funnel'), 'warm')['reached'] == 0
 
 
-def test_conversion_covers_contacts_that_entered_in_the_last_30_local_days(app, db, client, me):
+def test_conversion_covers_contacts_in_play_during_the_last_30_local_days(app, db, client, me):
     _fc(db, me, rung='cold', created_days_ago=5)
-    _fc(db, me, rung='cold', created_days_ago=60)
+    _fc(db, me, rung='cold', created_days_ago=60)          # old and silent: not in play
     data = _get(client, '/api/followups/funnel')
     assert _row(data, 'cold')['reached'] == 1
     assert data['totals']['entered'] == 1
     assert data['window']['days'] == 30
+    assert 'in play' in data['window']['cohort']
     # the rung strip is the whole base today, not the cohort
     assert data['rungs']['cold'] == 2
+
+
+def test_an_old_contact_with_ladder_activity_in_the_window_is_in_play(app, db, client, me):
+    # a base migrated months ago: created long before the window, but it did something in it
+    active = _fc(db, me, rung='hot', load_count=2, created_days_ago=200)
+    _event(db, active, 'ladder_load', ago=timedelta(days=50), from_state='neutral', to_state='warm')
+    _event(db, active, 'ladder_load', ago=timedelta(days=3), from_state='warm', to_state='hot')
+    quiet = _fc(db, me, rung='warm', load_count=1, created_days_ago=200)
+    _event(db, quiet, 'ladder_load', ago=timedelta(days=50), from_state='neutral', to_state='warm')
+    data = _get(client, '/api/followups/funnel')
+    assert data['totals']['entered'] == 1
+    assert _ids(_row(data, 'cold')['reached_contacts']) == [active.id]
+    # the peak is still read from its whole history, not only the window
+    assert _ids(_row(data, 'warm')['reached_contacts']) == [active.id]
+    assert _ids(_row(data, 'hot')['reached_contacts']) == [active.id]
+
+
+def test_a_contact_that_left_inside_the_window_counts_as_lost(app, db, client, me):
+    gone = _fc(db, me, rung='dormant', exit_reason='exhausted', created_days_ago=120)
+    _event(db, gone, 'ladder_exhausted', ago=timedelta(days=4), from_state='neutral', to_state='dormant')
+    data = _get(client, '/api/followups/funnel')
+    assert (data['totals']['entered'], data['totals']['lost']) == (1, 1)
+    assert _row(data, 'neutral')['lost'] == 1
+
+
+def test_who_is_in_every_count(app, db, client, me):
+    fc = _fc(db, me, rung='dormant', exit_reason='refused', name='Sam Ray')
+    data = _get(client, '/api/followups/funnel')
+    person = {'id': fc.id, 'email': fc.contact_email, 'name': 'Sam Ray'}
+    assert _row(data, 'cold')['reached_contacts'] == [person]
+    assert _row(data, 'cold')['lost_reasons'] == [{'reason': 'refused', 'count': 1, 'contacts': [person]}]
 
 
 def test_the_30_day_window_is_30_local_days_not_720_hours(app, db, client, monkeypatch):
@@ -262,8 +316,8 @@ def test_the_30_day_window_is_30_local_days_not_720_hours(app, db, client, monke
     too_early = at(datetime(2026, 10, 2, 5, 0))     # 29d 7h ago, but local 2 Oct: day 31
     inside = at(datetime(2026, 10, 2, 12, 0))       # local 3 Oct 01:00: day 30
     data = _get(client, '/api/followups/funnel')
-    assert _row(data, 'cold')['reached_ids'] == [inside.id]
-    assert too_early.id not in _row(data, 'cold')['reached_ids']
+    assert _ids(_row(data, 'cold')['reached_contacts']) == [inside.id]
+    assert too_early.id not in _ids(_row(data, 'cold')['reached_contacts'])
     assert data['window']['since'] == '2026-10-02T11:00:00Z'
 
 
@@ -277,6 +331,7 @@ def test_totals_entered_lost_and_end_to_end(app, db, client, me):
     totals = _get(client, '/api/followups/funnel')['totals']
     assert (totals['entered'], totals['lost']) == (4, 1)
     assert totals['end_to_end_pct'] == 25.0           # 1 of 4 reached client
+    assert (totals['warm_or_better'], totals['warm_or_better_pct']) == (2, 50.0)   # client + hot
     assert totals['avg_days_between_loads'] is None
     assert totals['loads_this_month'] == 0
 
@@ -284,6 +339,7 @@ def test_totals_entered_lost_and_end_to_end(app, db, client, me):
 def test_totals_with_nobody_entered_have_no_percentage(app, db, client, me):
     totals = _get(client, '/api/followups/funnel')['totals']
     assert totals == {'entered': 0, 'lost': 0, 'end_to_end_pct': None,
+                      'warm_or_better': 0, 'warm_or_better_pct': None,
                       'avg_days_between_loads': None, 'loads_this_month': 0}
 
 
@@ -317,6 +373,11 @@ def test_loads_this_month_is_the_local_calendar_month(app, db, client, monkeypat
 def test_needs_you_is_empty_on_a_quiet_day(app, db, client, me):
     _fc(db, me, rung='warm', load_count=1)
     assert _get(client, '/api/followups/needs-you')['items'] == []
+
+
+def test_needs_you_states_the_promise_window_it_applies(app, db, client, me):
+    data = _get(client, '/api/followups/needs-you')
+    assert (data['promise_grace_days'], data['promise_horizon_days']) == (2, 30)
 
 
 def test_needs_you_lists_an_unparsed_reply(app, db, client, me):
@@ -544,7 +605,7 @@ def test_endpoints_are_scoped_to_the_signed_in_user(app, db, client, me):
     assert funnel['rungs']['client'] == 0 and funnel['rungs']['warm'] == 1
     assert funnel['totals']['entered'] == 1
     assert funnel['totals']['loads_this_month'] == 0
-    assert all(stranger.id not in r['reached_ids'] for r in funnel['conversion'])
+    assert all(stranger.id not in _ids(r['reached_contacts']) for r in funnel['conversion'])
     assert _get(client, '/api/followups/needs-you')['items'] == []
     assert _get(client, '/api/followups/activity') == {
         'hours': 24, 'sent': 0, 'raised': 0, 'quieted': 0, 'stopped': 0}

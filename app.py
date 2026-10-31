@@ -6754,13 +6754,17 @@ def _ladder_funnel(uid, now):
         if rung in rungs:
             rungs[rung] = n
 
-    # The cohort: contacts that entered follow-up inside the window.
-    cohort = FC.query.filter(FC.user_id == uid, FC.created_at >= since).order_by(FC.id).all()
-    named = {}                          # contact id -> rungs its ladder events mention
+    # The cohort: every contact in play during the window, i.e. one that entered
+    # follow-up in it or one that has any ladder event in it (so a base migrated long
+    # ago still shows what it did this month).
+    active_in_window = db.select(FE.followup_contact_id).where(
+        FE.event_type.startswith('ladder_', autoescape=True), FE.event_at >= since)
+    in_play = db.or_(FC.created_at >= since, FC.id.in_(active_in_window))
+    cohort = FC.query.filter(FC.user_id == uid, in_play).order_by(FC.id).all()
+    named = {}                          # contact id -> rungs its ladder events (ever) mention
     for cid, frm, to in db.session.query(FE.followup_contact_id, FE.from_state, FE.to_state).join(
             FC, FE.followup_contact_id == FC.id).filter(
-            FC.user_id == uid, FC.created_at >= since,
-            FE.event_type.startswith('ladder_', autoescape=True)):
+            FC.user_id == uid, in_play, FE.event_type.startswith('ladder_', autoescape=True)):
         named.setdefault(cid, set()).update((frm, to))
 
     def top(fc):
@@ -6768,6 +6772,7 @@ def _ladder_funnel(uid, now):
         seen = [_ladder.rung_for(fc.load_count or 0, False), fc.rung, *named.get(fc.id, ())]
         return max(_ladder.RUNGS.index(r) for r in seen if r in _ladder.RUNGS)
 
+    person = lambda fc: {'id': fc.id, 'email': fc.contact_email, 'name': fc.display_name}
     peak = {fc.id: top(fc) for fc in cohort}
     rows, prev = [], None
     for i, rung in enumerate(_ladder.RUNGS):
@@ -6777,16 +6782,16 @@ def _ladder_funnel(uid, now):
         by_reason = {}
         for fc in lost:
             reason = fc.exit_reason or ('excluded' if fc.rung == 'excluded' else 'unspecified')
-            by_reason.setdefault(reason, []).append(fc.id)
+            by_reason.setdefault(reason, []).append(person(fc))
         rows.append({
             'rung': rung,
             'reached': len(reached),
             'pct_of_previous': (round(100 * len(reached) / prev, 1) if prev else None),
             'lost': len(lost),
-            'lost_reasons': [{'reason': r, 'count': len(ids), 'ids': ids}
-                             for r, ids in sorted(by_reason.items(), key=lambda kv: (-len(kv[1]), kv[0]))],
+            'lost_reasons': [{'reason': r, 'count': len(people), 'contacts': people}
+                             for r, people in sorted(by_reason.items(), key=lambda kv: (-len(kv[1]), kv[0]))],
             'still_here': len(here) - len(lost),
-            'reached_ids': [fc.id for fc in reached],
+            'reached_contacts': [person(fc) for fc in reached],
         })
         prev = len(reached)
 
@@ -6806,10 +6811,14 @@ def _ladder_funnel(uid, now):
             'entered': entered,
             'lost': sum(1 for fc in cohort if fc.rung in _ladder.OFF_LADDER),
             'end_to_end_pct': round(100 * rows[-1]['reached'] / entered, 1) if entered else None,
+            'warm_or_better': rows[2]['reached'],       # sent at least one load
+            'warm_or_better_pct': round(100 * rows[2]['reached'] / entered, 1) if entered else None,
             'avg_days_between_loads': round(sum(gaps) / len(gaps), 1) if gaps else None,
             'loads_this_month': sum(1 for times in by_contact.values() for t in times if t >= month_start),
         },
-        'window': {'days': _FUNNEL_DAYS, 'since': _z(since)},
+        'window': {'days': _FUNNEL_DAYS, 'since': _z(since),
+                   'cohort': (f'Contacts in play over the last {_FUNNEL_DAYS} days: '
+                              'entered follow-up in that time, or had ladder activity in it')},
     }
 
 
@@ -6817,8 +6826,9 @@ def _ladder_funnel(uid, now):
 @login_required
 def api_followups_funnel():
     """The scoreboard numbers. `rungs` is today's whole base; `conversion` follows the
-    contacts that entered in the last 30 local days, one row per rung (cold to client),
-    each with whole-contact counts and the ids behind them; `totals` rolls them up."""
+    contacts in play in the last 30 local days (entered, or any ladder event), one row per
+    rung (cold to client), each with whole-contact counts and the people behind them;
+    `totals` rolls them up."""
     return jsonify(_ladder_funnel(_current_user_id(), _utcnow()))
 
 
@@ -6936,7 +6946,9 @@ def _ladder_needs_you(uid, now):
 def api_followups_needs_you():
     """The short list that needs the owner: an unhandled reply, a promise not kept
     (a load, or something else) or a client gone unusually quiet. One row per contact."""
-    return jsonify(items=_ladder_needs_you(_current_user_id(), _utcnow()))
+    return jsonify(items=_ladder_needs_you(_current_user_id(), _utcnow()),
+                   promise_grace_days=_ladder.PROMISE_GRACE_DAYS,
+                   promise_horizon_days=_ladder.PROMISE_HORIZON_DAYS)
 
 
 @app.route('/api/followups/activity')

@@ -378,6 +378,17 @@ def test_set_rung_keeps_a_pause(app, db, client, me):
     assert fc.rung == 'hot' and fc.auto_paused and fc.next_followup_at is None
 
 
+def test_set_rung_cannot_re_arm_a_paused_drip(app, db, client, me):
+    # the pause clears the drip's date; moving the rung must not hand it a new one
+    fc = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True,
+             next_followup_at=_app._utcnow() + timedelta(days=1))
+    _act(client, fc, 'pause-auto')
+    assert _act(client, fc, 'set-rung', rung='warm').status_code == 200
+    fc = _reload(db, fc)
+    assert fc.rung == 'warm' and fc.auto_paused and fc.next_followup_at is None
+    assert _row(client, fc)['next_touch_reason'] == 'auto paused by you'
+
+
 def test_set_rung_to_the_same_rung_is_a_no_op(app, db, client, me):
     due = _app._utcnow() + timedelta(days=4)
     fc = _fc(db, me, 'warm', touch_attempt=3, next_followup_at=due)
@@ -581,3 +592,293 @@ def test_send_now_is_recorded_as_a_manual_touch(app, db, client, me, monkeypatch
     assert fc.touch_attempt == 0
     evt, = _events(fc, 'manual_send')
     assert evt.actor_type == 'user'
+
+
+# ══ fix round 1 ══════════════════════════════════════════════════════════════
+# excluded must stop every sender, a pause must hold against every engine
+
+@pytest.fixture
+def sent_log(monkeypatch):
+    """Capture every follow-up send; each one succeeds."""
+    out = []
+    monkeypatch.setattr(_app, 'send_followup_email',
+                        lambda fu, *a, **k: (out.append(fu['contact_email']), (True, None))[1])
+    return out
+
+
+def _stop_entries(uid):
+    from app.models import StopListEntry
+    return StopListEntry.query.filter_by(user_id=uid).all()
+
+
+def _soon_iso():
+    return (_app._utcnow() + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def test_exclude_puts_the_address_on_the_stop_list(app, db, client, me):
+    fc = _fc(db, me, 'warm')
+    resp = _act(client, fc, 'exclude')
+    assert resp.status_code == 200
+    entry, = _stop_entries(me[0].id)
+    assert (entry.type, entry.value, entry.reason) == ('email', fc.contact_email, 'excluded')
+    # the real sender refuses it: this is what stops the Send page, the drip, one-time,
+    # recurring and the ladder, none of which look at the rung
+    blocked, domains = _app.load_stop_list(uid=me[0].id)
+    assert _app.is_blocked(fc.contact_email, blocked, domains)
+    ok, err = _app.send_followup_email({'contact_email': fc.contact_email}, 'Hi', {}, uid=me[0].id)
+    assert (ok, err) == (False, 'blocked by stop list')
+
+
+def test_exclude_does_not_rewrite_a_block_the_owner_made(app, db, client, me):
+    from app.models import StopListEntry
+    fc = _fc(db, me, 'warm')
+    db.session.add(StopListEntry(user_id=me[0].id, type='email', value=fc.contact_email,
+                                 reason='blocked from Follow-up'))
+    db.session.commit()
+    assert _act(client, fc, 'exclude').status_code == 200
+    entry, = _stop_entries(me[0].id)
+    assert entry.reason == 'blocked from Follow-up'
+
+
+@pytest.mark.parametrize('action, extra', [
+    ('free-send', {}), ('send-now', {}), ('restart-fu1', {}),
+    ('schedule-once', {'scheduled_at': '__soon__'}),
+    ('set-recurring', {'recurring_days': '1,3', 'recurring_time': '10:00'}),
+])
+def test_an_excluded_contact_is_refused_by_every_send_and_schedule_action(
+        app, db, client, me, sent_log, action, extra):
+    # the exact contact the old code let through: excluded, but still on its drip stage
+    fc = _fc(db, me, 'warm', stage='fu1_scheduled', next_followup_at=None)
+    _act(client, fc, 'exclude')
+    extra = {k: (_soon_iso() if v == '__soon__' else v) for k, v in extra.items()}
+
+    resp = _act(client, fc, action, **extra)
+    assert resp.status_code in (400, 409) and 'never contacted' in resp.get_json()['error']
+    bulk = _bulk(client, [fc.id], action, **extra).get_json()['results'][0]
+    assert bulk['ok'] is False and 'never contacted' in bulk['error']
+
+    fc = _reload(db, fc)
+    assert sent_log == []
+    assert fc.rung == 'excluded' and fc.next_followup_at is None
+    assert not (fc.is_followup_enabled or fc.scheduled_once or fc.recurring_enabled)
+
+
+def test_the_background_bulk_job_core_refuses_an_excluded_contact(app, db, client, me, sent_log):
+    fc = _fc(db, me, 'warm', stage='fu1_scheduled', next_followup_at=None)
+    _act(client, fc, 'exclude')
+    fc = _reload(db, fc)
+    assert _app._followup_send_now_core(fc, me[0].id) == ('skip', _app._EXCLUDED_MSG)
+    assert sent_log == []
+
+
+def _run_drip():
+    n = _app._run_scheduled_followups()
+    _app.db.session.expire_all()
+    return n
+
+
+def _arm_scheduler(db, me):
+    me[1].fu_auto_enabled = True
+    db.session.commit()
+
+
+def _due(): return _app._utcnow() - timedelta(hours=2)
+
+
+def test_the_scheduler_never_sends_to_a_paused_contact_on_any_engine(app, db, client, me, sent_log):
+    _arm_scheduler(db, me)
+    drip = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True, next_followup_at=_due())
+    once = _fc(db, me, 'cold', scheduled_once=True, next_followup_at=_due())
+    rec = _fc(db, me, 'cold', recurring_enabled=True, recurring_days='0,1,2,3,4,5,6',
+              recurring_time='10:00', next_followup_at=_due())
+    # control: unpaused, every engine does send
+    assert _run_drip() >= 1
+    assert drip.contact_email in sent_log and once.contact_email in sent_log \
+        and rec.contact_email in sent_log
+
+    sent_log.clear()
+    db.session.expire_all()
+    for fc in (drip, once, rec):                   # make them all due again, then pause by data
+        fc.auto_paused = True
+        fc.next_followup_at = _due()
+        fc.stage = 'fu1_scheduled'
+        fc.state = 'active'
+    drip.is_followup_enabled = True       # the control run spent each engine's state: re-arm it
+    once.scheduled_once = True
+    rec.recurring_enabled = True
+    db.session.commit()
+    _run_drip()
+    assert sent_log == []
+
+
+def test_the_scheduler_never_sends_to_an_excluded_contact_on_any_engine(app, db, client, me, sent_log):
+    _arm_scheduler(db, me)
+    drip = _fc(db, me, 'excluded', stage='fu1_scheduled', is_followup_enabled=True, next_followup_at=_due())
+    once = _fc(db, me, 'excluded', scheduled_once=True, next_followup_at=_due())
+    rec = _fc(db, me, 'excluded', recurring_enabled=True, recurring_days='0,1,2,3,4,5,6',
+              recurring_time='10:00', next_followup_at=_due())
+    _run_drip()
+    assert sent_log == []
+
+
+# ── unexclude ────────────────────────────────────────────────────────────────
+
+def test_unexclude_restores_the_rung_from_the_loads_and_lifts_the_stop_list_entry(app, db, client, me):
+    fc = _fc(db, me, 'hot', load_count=2, last_reply_at=_app._utcnow())
+    _act(client, fc, 'exclude')
+    assert _stop_entries(me[0].id)
+    resp = _act(client, fc, 'unexclude')
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['contact']['rung'] == 'hot' and body['stop_list_removed'] is True
+    fc = _reload(db, fc)
+    assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('hot', None, 0)
+    assert fc.next_followup_at is not None and fc.touch_enabled
+    assert not _stop_entries(me[0].id)
+    evt, = _events(fc, 'manual_unexclude')
+    assert evt.actor_type == 'user' and (evt.from_state, evt.to_state) == ('excluded', 'hot')
+    # and the contact can be sent to again
+    assert _app.is_blocked(fc.contact_email, *_app.load_stop_list(uid=me[0].id)) is False
+
+
+@pytest.mark.parametrize('loads, replied, rung', [(0, False, 'cold'), (0, True, 'neutral'),
+                                                  (1, True, 'warm'), (3, True, 'hot')])
+def test_unexclude_derives_the_rung_from_load_count(app, db, client, me, loads, replied, rung):
+    fc = _fc(db, me, 'warm', load_count=loads, last_reply_at=_app._utcnow() if replied else None)
+    _act(client, fc, 'exclude')
+    _act(client, fc, 'unexclude')
+    assert _reload(db, fc).rung == rung
+
+
+def test_unexclude_leaves_a_block_the_owner_made_for_another_reason(app, db, client, me):
+    from app.models import StopListEntry
+    fc = _fc(db, me, 'warm')
+    db.session.add(StopListEntry(user_id=me[0].id, type='email', value=fc.contact_email,
+                                 reason='blocked from Follow-up'))
+    db.session.commit()
+    _act(client, fc, 'exclude')
+    body = _act(client, fc, 'unexclude').get_json()
+    assert body['stop_list_removed'] is False
+    entry, = _stop_entries(me[0].id)
+    assert entry.reason == 'blocked from Follow-up'
+
+
+def test_unexclude_is_refused_for_a_contact_that_is_not_excluded(app, db, client, me):
+    fc = _fc(db, me, 'warm')
+    resp = _act(client, fc, 'unexclude')
+    assert resp.status_code == 400
+    assert _reload(db, fc).rung == 'warm' and not _events(fc, 'manual_unexclude')
+
+
+def test_unexclude_is_never_available_in_bulk(app, db, client, me):
+    fc = _fc(db, me, 'warm')
+    _act(client, fc, 'exclude')
+    resp = _bulk(client, [fc.id], 'unexclude')
+    assert resp.status_code == 400
+    assert _reload(db, fc).rung == 'excluded'
+
+
+def test_unexclude_checks_ownership(app, db, client, me):
+    other = _user(db)
+    stranger = _fc(db, other, 'excluded', exit_reason='excluded')
+    assert _act(client, stranger, 'unexclude').status_code == 404
+    assert _reload(db, stranger).rung == 'excluded'
+
+
+# ── a pause holds against every engine that dates a contact ──────────────────
+
+def test_a_paused_contact_is_not_re_dated_by_cancel_stop_or_resume(app, db, client, me):
+    sched = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True, scheduled_once=True,
+                next_followup_at=_app._utcnow() + timedelta(days=2))
+    rec = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True, recurring_enabled=True,
+              recurring_days='1', recurring_time='10:00',
+              next_followup_at=_app._utcnow() + timedelta(days=2))
+    state = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True, state='paused',
+                next_followup_at=None)
+    for fc in (sched, rec, state):
+        fc.auto_paused = True
+        fc.next_followup_at = None
+    db.session.commit()
+    assert _act(client, sched, 'cancel-schedule').status_code == 200
+    assert _act(client, rec, 'stop-recurring').status_code == 200
+    assert _act(client, state, 'resume').status_code == 200
+    for name, fc in (('cancel-schedule', sched), ('stop-recurring', rec), ('resume', state)):
+        assert _reload(db, fc).next_followup_at is None, name
+
+
+def test_restoring_a_schedule_gives_no_date_to_a_dormant_contact(app, db, client, me):
+    fc = _fc(db, me, 'dormant', stage='fu1_scheduled', is_followup_enabled=True, next_followup_at=None)
+    _app._restore_contact_schedule(fc)
+    assert fc.next_followup_at is None
+
+
+# ── counts, bulk validation, discarded sends ─────────────────────────────────
+
+def test_counts_tell_the_state_warm_from_the_rung_warm(app, db, client, me):
+    _fc(db, me, 'warm')
+    _fc(db, me, 'warm')
+    _fc(db, me, 'hot')
+    _fc(db, me, 'cold', state='warm', next_followup_at=None)      # the legacy contact state
+    got = client.get('/api/followups?rung=hot').get_json()
+    assert got['counts']['state_warm'] == got['counts']['warm'] == 1
+    assert got['rung_counts'] == {'cold': 1, 'neutral': 0, 'warm': 2, 'hot': 1, 'client': 0,
+                                  'dormant': 0, 'excluded': 0}      # the whole base, not the filter
+    assert [c['rung'] for c in got['contacts']] == ['hot']
+
+
+def test_bulk_set_rung_with_a_bad_rung_is_one_400_and_changes_nothing(app, db, client, me):
+    a, b = _fc(db, me, 'cold'), _fc(db, me, 'cold')
+    for bad in ('lukewarm', 'excluded', None):
+        resp = _bulk(client, [a.id, b.id], 'set-rung', rung=bad)
+        assert resp.status_code == 400 and resp.get_json()['error']
+    assert _reload(db, a).rung == 'cold' and _reload(db, b).rung == 'cold'
+    assert not _events(a) and not _events(b)
+
+
+def test_pause_says_when_it_discards_a_one_time_send_the_owner_scheduled(app, db, client, me):
+    when = _app._utcnow() + timedelta(days=2)
+    fc = _fc(db, me, 'warm', scheduled_once=True, next_followup_at=when)
+    body = _act(client, fc, 'pause-auto').get_json()
+    assert body['discarded_scheduled_at'] == when.strftime('%Y-%m-%dT%H:%M:%SZ')
+    evt, = _events(fc, 'manual_pause_auto')
+    assert 'one-time send' in evt.notes and 'discarded' in evt.notes
+    # nothing to report when nothing was discarded
+    plain = _fc(db, me, 'warm')
+    assert 'discarded_scheduled_at' not in _act(client, plain, 'pause-auto').get_json()
+
+
+def test_bulk_results_carry_what_was_discarded(app, db, client, me):
+    when = _app._utcnow() + timedelta(days=2)
+    fc = _fc(db, me, 'warm', scheduled_once=True, next_followup_at=when)
+    rec = _fc(db, me, 'warm', recurring_enabled=True, recurring_days='1', recurring_time='10:00')
+    res = _bulk(client, [fc.id, rec.id], 'set-rung', rung='dormant').get_json()['results']
+    assert res[0]['discarded_scheduled_at'] == when.strftime('%Y-%m-%dT%H:%M:%SZ')
+    assert res[1]['discarded_recurring'] is True
+
+
+# ── the deferral lookup follows the rows on screen ───────────────────────────
+
+def test_the_deferral_lookup_is_limited_to_the_rows_returned(app, db, client, me, monkeypatch):
+    asked = []
+    real = _app._ladder_deferred_ids
+    monkeypatch.setattr(_app, '_ladder_deferred_ids',
+                        lambda uid, contacts: (asked.append([c.id for c in contacts]), real(uid, contacts))[1])
+    warm = _fc(db, me, 'warm')
+    _fc(db, me, 'hot')
+    client.get('/api/followups?rung=warm')
+    assert asked == [[warm.id]]
+
+
+def test_the_deferral_lookup_skips_contacts_whose_reason_cannot_be_one(app, db, client, me):
+    from sqlalchemy import event
+    statements = []
+    listener = lambda conn, cur, stmt, *a: statements.append(stmt)
+    event.listen(db.engine, 'before_cursor_execute', listener)
+    try:
+        _fc(db, me, 'dormant')
+        _fc(db, me, 'excluded')
+        _fc(db, me, 'warm', auto_paused=True, next_followup_at=None)
+        client.get('/api/followups')
+    finally:
+        event.remove(db.engine, 'before_cursor_execute', listener)
+    assert not [s for s in statements if 'followup_events' in s and 'GROUP BY' in s]

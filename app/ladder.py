@@ -200,3 +200,80 @@ def interpret_reply(category, text: str, now: datetime):
     if category == 'gave_info':
         return 'load', None
     return 'unknown', None
+
+
+# ── "Needs you": promises that were not kept, and a client gone quiet ────────
+# A promise only becomes a worry once it is overdue; one older than the horizon
+# stops being listed so the list cannot grow without bound.
+PROMISE_GRACE_DAYS = 2
+PROMISE_HORIZON_DAYS = 30
+# A client is silent when it has been quiet for twice its own usual gap, but never
+# before this many days.
+SILENCE_FLOOR_DAYS = 14
+SILENCE_FACTOR = 2
+
+# "I'll send you a load": the broker commits to freight, not merely to reply.
+_LOAD_PROMISE_PHRASES = (
+    'send you a load', 'send you loads', 'send you some loads', 'send you a few loads',
+    'send you more loads', 'send you some freight', 'send you freight', 'send you something',
+    'send a load your way', 'send loads your way', 'send some loads your way',
+    'have a load for you', 'have loads for you', 'have something for you',
+    'load coming your way', 'loads coming your way',
+    'give you a load', 'give you some loads', 'get you a load', 'get you some loads',
+)
+# A commitment to hand over something concrete other than freight.
+_OTHER_PROMISE_PHRASES = (
+    'send you the rate', 'send you a rate', 'send you rates', 'send you our rate',
+    'send you the quote', 'send you a quote', 'send you the details', 'send you details',
+    'send you the info', 'send you more info', 'send you the lane', 'send you our lanes',
+    'send over the rate', 'send over the details', 'send over the info',
+    'get you a rate', 'get you the rate', 'get you a quote', 'get you the details',
+    'get back to you with',
+)
+# What precedes a phrase, within its own clause, and makes it something other
+# than a promise: a refusal ("can't send you a load") or an offer / question
+# ("want me to send you the rates?").
+_NOT_A_PROMISE = re.compile(
+    r"\b(?:not|never|no|cannot|unable)\b|n't\b|"
+    r"\b(?:want me to|would you like|do you|should i|shall i|can i|may i|if you)\b")
+_CLAUSE_END = re.compile(r'[.!?;,]|\b(?:but|however)\b')
+_LOOKBACK = 40
+
+
+def _promised(t: str, phrases) -> bool:
+    for phrase in phrases:
+        start = t.find(phrase)
+        while start != -1:
+            before = t[max(0, start - _LOOKBACK):start]
+            ends = list(_CLAUSE_END.finditer(before))
+            if ends:
+                before = before[ends[-1].end():]
+            if not _NOT_A_PROMISE.search(before):
+                return True
+            start = t.find(phrase, start + 1)
+    return False
+
+
+def promise_kind(text):
+    """What the broker promised in this reply: 'load', 'other', or None.
+
+    'load' wins when both appear. `text` should be the reply's own words, with
+    quoted mail already cut off.
+    """
+    t = _norm(text)
+    if _promised(t, _LOAD_PROMISE_PHRASES):
+        return 'load'
+    if _promised(t, _OTHER_PROMISE_PHRASES):
+        return 'other'
+    return None
+
+
+def silence_threshold_days(gaps) -> float:
+    """Days of silence after which a client is unusually quiet, given the days
+    between its past replies: twice their median, never less than the floor."""
+    ordered = sorted(gaps)
+    if not ordered:
+        return SILENCE_FLOOR_DAYS
+    mid = len(ordered) // 2
+    median = ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+    return max(SILENCE_FLOOR_DAYS, SILENCE_FACTOR * median)

@@ -6713,6 +6713,259 @@ def api_followups_analytics():
     )
 
 
+# ─── Warmth-ladder scoreboard: funnel, "Needs you", last-day activity ─────────
+# Read-only. Nothing here sends mail or schedules anything.
+
+_FUNNEL_DAYS = 30
+# Rank used to tell a rise from a fall in an event: dormant sits below cold, so a
+# load that wakes a dormant contact counts as a raise.
+_RUNG_RANK = {'dormant': -1, **{r: i for i, r in enumerate(_ladder.RUNGS)}}
+_NEEDS_YOU_ORDER = ('unparsed_reply', 'promised_load_vanished',
+                    'promised_not_delivered', 'client_silent')
+# A ladder event of these kinds means the ladder (or the setup) dealt with the
+# message that raised attention; a human is not needed for a broker's reply.
+_LADDER_HANDLED = ('ladder_load', 'ladder_refusal', 'ladder_deferral',
+                   'ladder_blocked', 'ladder_parked')
+
+
+def _z(dt):
+    return dt.strftime('%Y-%m-%dT%H:%M:%SZ') if dt else None
+
+
+def _snippet(text, limit=140):
+    text = ' '.join((text or '').split())
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + '…'
+
+
+def _local_month_start(tz, now):
+    """Naive-UTC moment of local midnight on the 1st of the user's current month."""
+    d = _local_date(now, tz)
+    return datetime(d.year, d.month, 1, tzinfo=tz).astimezone(UTC).replace(tzinfo=None)
+
+
+def _ladder_funnel(uid, now):
+    from app.models import FollowupContact as FC, FollowupEvent as FE
+    from sqlalchemy import func
+    tz = _user_tz(uid)
+    since = _local_day_start(tz, _FUNNEL_DAYS - 1, now)    # today + 29 local days back
+
+    rungs = {r: 0 for r in _ladder.RUNGS + _ladder.OFF_LADDER}
+    for rung, n in db.session.query(FC.rung, func.count()).filter(FC.user_id == uid).group_by(FC.rung):
+        if rung in rungs:
+            rungs[rung] = n
+
+    # The cohort: contacts that entered follow-up inside the window.
+    cohort = FC.query.filter(FC.user_id == uid, FC.created_at >= since).order_by(FC.id).all()
+    named = {}                          # contact id -> rungs its ladder events mention
+    for cid, frm, to in db.session.query(FE.followup_contact_id, FE.from_state, FE.to_state).join(
+            FC, FE.followup_contact_id == FC.id).filter(
+            FC.user_id == uid, FC.created_at >= since,
+            FE.event_type.startswith('ladder_', autoescape=True)):
+        named.setdefault(cid, set()).update((frm, to))
+
+    def top(fc):
+        """Index of the highest rung this contact ever stood on."""
+        seen = [_ladder.rung_for(fc.load_count or 0, False), fc.rung, *named.get(fc.id, ())]
+        return max(_ladder.RUNGS.index(r) for r in seen if r in _ladder.RUNGS)
+
+    peak = {fc.id: top(fc) for fc in cohort}
+    rows, prev = [], None
+    for i, rung in enumerate(_ladder.RUNGS):
+        reached = [fc for fc in cohort if peak[fc.id] >= i]
+        here = [fc for fc in reached if peak[fc.id] == i]
+        lost = [fc for fc in here if fc.rung in _ladder.OFF_LADDER]
+        by_reason = {}
+        for fc in lost:
+            reason = fc.exit_reason or ('excluded' if fc.rung == 'excluded' else 'unspecified')
+            by_reason.setdefault(reason, []).append(fc.id)
+        rows.append({
+            'rung': rung,
+            'reached': len(reached),
+            'pct_of_previous': (round(100 * len(reached) / prev, 1) if prev else None),
+            'lost': len(lost),
+            'lost_reasons': [{'reason': r, 'count': len(ids), 'ids': ids}
+                             for r, ids in sorted(by_reason.items(), key=lambda kv: (-len(kv[1]), kv[0]))],
+            'still_here': len(here) - len(lost),
+            'reached_ids': [fc.id for fc in reached],
+        })
+        prev = len(reached)
+
+    by_contact = {}
+    for cid, at in db.session.query(FE.followup_contact_id, FE.event_at).join(
+            FC, FE.followup_contact_id == FC.id).filter(
+            FC.user_id == uid, FE.event_type == _LADDER_LOAD_EVENT).order_by(FE.event_at):
+        by_contact.setdefault(cid, []).append(at)
+    gaps = [(b - a).total_seconds() / 86400
+            for times in by_contact.values() for a, b in zip(times, times[1:])]
+    month_start = _local_month_start(tz, now)
+    entered = len(cohort)
+    return {
+        'rungs': rungs,
+        'conversion': rows,
+        'totals': {
+            'entered': entered,
+            'lost': sum(1 for fc in cohort if fc.rung in _ladder.OFF_LADDER),
+            'end_to_end_pct': round(100 * rows[-1]['reached'] / entered, 1) if entered else None,
+            'avg_days_between_loads': round(sum(gaps) / len(gaps), 1) if gaps else None,
+            'loads_this_month': sum(1 for times in by_contact.values() for t in times if t >= month_start),
+        },
+        'window': {'days': _FUNNEL_DAYS, 'since': _z(since)},
+    }
+
+
+@app.route('/api/followups/funnel')
+@login_required
+def api_followups_funnel():
+    """The scoreboard numbers. `rungs` is today's whole base; `conversion` follows the
+    contacts that entered in the last 30 local days, one row per rung (cold to client),
+    each with whole-contact counts and the ids behind them; `totals` rolls them up."""
+    return jsonify(_ladder_funnel(_current_user_id(), _utcnow()))
+
+
+def _replies_by_contact(uid, contacts, since=None, only=False):
+    """Inbound replies grouped under the contact they concern, newest first. A
+    colleague's answer (matched_recipient) belongs to the contact we wrote to.
+    `only` narrows the query to these contacts' addresses (use it for a short list)."""
+    from app.models import Reply
+    by_email = {(fc.contact_email or '').lower(): fc for fc in contacts}
+    q = Reply.query.filter(Reply.user_id == uid)
+    if since is not None:
+        q = q.filter(Reply.received_at >= since)
+    if only:
+        q = q.filter(db.or_(db.func.lower(Reply.from_email).in_(list(by_email)),
+                            db.func.lower(Reply.matched_recipient).in_(list(by_email))))
+    out = {}
+    for r in q.order_by(Reply.received_at.desc()).all():
+        for addr in {(r.from_email or '').lower(), (r.matched_recipient or '').lower()}:
+            fc = by_email.get(addr)
+            if fc is not None:
+                out.setdefault(fc.id, []).append(r)
+    return out
+
+
+def _ladder_needs_you(uid, now):
+    from app.models import FollowupContact as FC, FollowupEvent as FE
+    tz = _user_tz(uid)
+    contacts = FC.query.filter(FC.user_id == uid, FC.state == 'active', FC.rung != 'excluded').all()
+    horizon = now - timedelta(days=_ladder.PROMISE_HORIZON_DAYS)
+    replies = _replies_by_contact(uid, contacts, since=horizon)
+    day = lambda dt: f'{_local_date(dt, tz).day} {_local_date(dt, tz):%b}'
+    found = {}                                  # contact id -> (rank, since, reason, detail, contact)
+
+    def add(fc, reason, since, detail):
+        found.setdefault(fc.id, (_NEEDS_YOU_ORDER.index(reason), since, reason, detail, fc))
+
+    # 1. A reply nobody dealt with: attention is up and the ladder did not act on it.
+    flagged = [fc for fc in contacts if fc.attention_at is not None]
+    last_ladder = {}
+    if flagged:
+        for cid, etype, at in db.session.query(FE.followup_contact_id, FE.event_type, FE.event_at).filter(
+                FE.followup_contact_id.in_([fc.id for fc in flagged]),
+                FE.event_type.startswith('ladder_', autoescape=True)).order_by(FE.event_at):
+            last_ladder[cid] = (etype, at)      # ascending, so the last write is the newest
+    for fc in flagged:
+        etype, at = last_ladder.get(fc.id, (None, None))
+        if etype in _LADDER_HANDLED and at >= fc.attention_at:
+            continue
+        latest = (replies.get(fc.id) or [None])[0]
+        if latest is None:
+            detail = 'Replied: needs your answer'
+        else:
+            own = _snippet(_strip_quoted(latest.body))
+            detail = (f'Asked for a rate: "{own}"' if latest.triage_category == 'rate_request'
+                      else f'Replied {day(latest.received_at)}: "{own}"')
+        add(fc, 'unparsed_reply', fc.attention_at, detail)
+
+    # 2. A promise made in a reply and not kept (older than the grace period).
+    pending = []
+    for fc in contacts:
+        if fc.id in found or fc.exit_reason == 'refused':
+            continue
+        rows = replies.get(fc.id) or []
+        for i, r in enumerate(rows):            # newest first
+            kind = _ladder.promise_kind(_strip_quoted(r.body))
+            if kind:
+                pending.append((fc, r, kind, rows[:i]))   # rows[:i] came after the promise
+                break
+    grace = now - timedelta(days=_ladder.PROMISE_GRACE_DAYS)
+    pending = [p for p in pending if p[1].received_at <= grace]
+    counted = {}
+    if pending:
+        for cid, at, meta in db.session.query(FE.followup_contact_id, FE.event_at, FE.metadata_json).filter(
+                FE.followup_contact_id.in_([p[0].id for p in pending]),
+                FE.event_type == _LADDER_LOAD_EVENT):
+            try:
+                conv = json.loads(meta or '{}').get('conv')
+            except ValueError:
+                conv = None
+            counted.setdefault(cid, []).append((at, conv))
+    for fc, promise, kind, later in pending:
+        if kind == 'load':
+            own_conv = _ladder.load_conversation_key(promise.thread_id, fc.contact_email, promise.received_at)
+            kept = (any(r.triage_category == 'gave_info' for r in later)
+                    or any(at > promise.received_at and conv != own_conv
+                           for at, conv in counted.get(fc.id, ())))
+        else:
+            kept = bool(later)
+        if not kept:
+            reason = 'promised_load_vanished' if kind == 'load' else 'promised_not_delivered'
+            add(fc, reason, promise.received_at,
+                f'Said on {day(promise.received_at)}: "{_snippet(_strip_quoted(promise.body))}"')
+
+    # 3. A client that has gone quiet for much longer than its own rhythm.
+    clients = [fc for fc in contacts if fc.rung == 'client' and fc.id not in found
+               and fc.last_reply_at is not None]
+    if clients:
+        history = _replies_by_contact(uid, clients, only=True)
+        for fc in clients:
+            days = sorted({_local_date(r.received_at, tz) for r in history.get(fc.id, ())})
+            threshold = _ladder.silence_threshold_days([(b - a).days for a, b in zip(days, days[1:])])
+            silent = (now - fc.last_reply_at).total_seconds() / 86400
+            if silent > threshold:
+                add(fc, 'client_silent', fc.last_reply_at,
+                    f'No reply for {int(silent)} days (flagged after {threshold:g})')
+
+    ordered = sorted(found.values(), key=lambda v: (v[0], v[1]))
+    return [{'id': fc.id, 'contact_email': fc.contact_email, 'contact_name': fc.display_name,
+             'rung': fc.rung, 'reason': reason, 'detail': detail}
+            for _, _, reason, detail, fc in ordered]
+
+
+@app.route('/api/followups/needs-you')
+@login_required
+def api_followups_needs_you():
+    """The short list that needs the owner: an unhandled reply, a promise not kept
+    (a load, or something else) or a client gone unusually quiet. One row per contact."""
+    return jsonify(items=_ladder_needs_you(_current_user_id(), _utcnow()))
+
+
+@app.route('/api/followups/activity')
+@login_required
+def api_followups_activity():
+    """What the ladder did in the last `hours` (default 24, at most 30 days):
+    touches sent and rung steps up (events), contacts quieted and stopped (people)."""
+    from app.models import FollowupContact as FC, FollowupEvent as FE
+    uid = _current_user_id()
+    hours = max(1, min(720, request.args.get('hours', default=24, type=int)))
+    cutoff = _utcnow() - timedelta(hours=hours)
+    sent = raised = 0
+    quieted, stopped = set(), set()
+    for cid, etype, frm, to, meta in db.session.query(
+            FE.followup_contact_id, FE.event_type, FE.from_state, FE.to_state, FE.metadata_json).join(
+            FC, FE.followup_contact_id == FC.id).filter(
+            FC.user_id == uid, FE.event_at >= cutoff,
+            db.or_(FE.event_type == 'touch_sent', FE.event_type.startswith('ladder_', autoescape=True))):
+        if etype == 'touch_sent':
+            sent += '"error"' not in (meta or '')           # a failed send is logged under the same type
+        elif etype == 'ladder_exhausted':
+            quieted.add(cid)
+        elif etype in ('ladder_refusal', 'ladder_parked'):
+            stopped.add(cid)
+        elif _RUNG_RANK.get(to, -2) > _RUNG_RANK.get(frm, 99):
+            raised += 1
+    return jsonify(hours=hours, sent=sent, raised=raised, quieted=len(quieted), stopped=len(stopped))
+
+
 @app.route('/api/fu-templates', methods=['GET'])
 @login_required
 def api_get_fu_templates(): return jsonify(get_fu_templates())

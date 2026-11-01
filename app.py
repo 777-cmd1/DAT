@@ -6570,7 +6570,8 @@ def api_followups_timeline():
                   # what the owner did by hand (Task 7 overrides)
                   'manual_pause_auto': 'Automation paused by you', 'manual_resume_auto': 'Automation resumed by you',
                   'manual_set_rung': 'Moved by you', 'manual_exclude': 'Excluded by you',
-                  'manual_unexclude': 'Taken off the excluded list by you'}
+                  'manual_unexclude': 'Taken off the excluded list by you',
+                  'migrated_to_ladder': 'Placed on the warmth ladder'}
     events = FollowupEvent.query.filter_by(followup_contact_id=fc.id
                                            ).order_by(FollowupEvent.event_at.desc()).limit(101).all()
     cut = cut or len(events) > 100
@@ -7614,7 +7615,8 @@ def _ladder_next_reason(fc, deferred=False):
         return 'excluded: never contact again'
     if rung == 'dormant':
         why = {'refused': 'they asked us to stop', 'exhausted': 'attempts used up, waits for a load',
-               'manual': 'moved by you'}.get(fc.exit_reason)
+               'manual': 'moved by you',
+               'stale': 'silent for months when the ladder started'}.get(fc.exit_reason)
         return 'dormant: ' + why if why else 'dormant'
     if rung == 'client':
         return 'client: no automatic touches'
@@ -8669,6 +8671,28 @@ def _migrate_reply_msg_id_per_user():
             print(f'✓ Migration: replies.msg_id now unique per user (dropped {old_constraints + old_indexes})')
 
 
+def _apply_add_column_migrations(conn, migrations):
+    """ADD COLUMN for every (table, column, type) that is not there yet.
+
+    Production schema changes ship through this list, not Alembic (an
+    Alembic-only column took the app down on 2026-10-20), and a column that is
+    already there raises — which is the normal case on every later start. So
+    each failure is swallowed, which also hides a genuinely broken entry:
+    tests/test_ladder_migration.py checks the entries against a legacy-shaped
+    table for that reason. Returns the "table.column" names actually added.
+    """
+    added = []
+    for tbl, col, typ in migrations:
+        try:
+            conn.execute(db.text(f'ALTER TABLE {tbl} ADD COLUMN {col} {typ}'))
+            conn.commit()
+            added.append(f'{tbl}.{col}')
+            print(f'✓ Migration: added {tbl}.{col}')
+        except Exception:
+            conn.rollback()  # column already exists — ignore
+    return added
+
+
 with app.app_context():
     db.create_all()   # Creates all tables if they don't exist (safe to run repeatedly)
     # Inline migrations — safe to run on every startup (idempotent ADD COLUMN IF NOT EXISTS)
@@ -8724,13 +8748,7 @@ with app.app_context():
     ]
     try:
         with db.engine.connect() as _conn:
-            for _tbl, _col, _type in _migrations:
-                try:
-                    _conn.execute(db.text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_type}'))
-                    _conn.commit()
-                    print(f'✓ Migration: added {_tbl}.{_col}')
-                except Exception:
-                    _conn.rollback()  # column already exists — ignore
+            _apply_add_column_migrations(_conn, _migrations)
     except Exception as _e:
         print(f'Migration check skipped: {_e}')
     # Recover send jobs stranded by a restart — no worker thread survives a process

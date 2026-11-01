@@ -3270,7 +3270,6 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
               <span class="fu-bulk-count" id="fuTierBulkCount">0 selected</span>
             </div>
             <div class="fu-bulk-group fu-bulk-actions">
-              <button type="button" class="btn btn-sm btn-secondary" onclick="fuTierBulk('free-send')">Send now</button>
               <button type="button" class="btn btn-sm btn-secondary" data-ladder-only onclick="fuTierBulk('pause-auto')">Pause automation</button>
               <button type="button" class="btn btn-sm btn-secondary" data-ladder-only onclick="fuTierBulk('resume-auto')">Resume automation</button>
               <select class="fu-select" id="fuTierMoveSel" onchange="fuTierBulkMove(this)" aria-label="Move the selected contacts to a rung" title="Starts a fresh run on the new rung: attempts go back to 0 and the next touch is set for tomorrow. Moving down brings the next touch sooner, not later.">
@@ -8714,14 +8713,15 @@ function renderFuActivity(a, sw) {
 // Every contact on one rung, with what the owner may need to override by hand. The list is
 // GET /api/followups?rung= (rows carry budget and next_touch_reason; rung_counts feeds the tabs and
 // is the whole base, never narrowed). Every change goes through /api/followups/action or
-// /bulk-action (pause-auto, resume-auto, set-rung, exclude, unexclude; free-send for a manual send)
+// /bulk-action (pause-auto, resume-auto, set-rung, exclude; unexclude is single only). No bulk send: a mass send
+// is the Queue's background job, not this screen
 // and the list is then read from the server again: nothing here decides what an override does.
 const FU_TIER_TABS = ['client', 'hot', 'warm', 'neutral', 'cold', 'dormant', 'excluded'];
 const FU_TIER_DESC = Object.assign({}, FU_RUNG_DESC, { dormant: 'resting, wakes when they send a load', excluded: 'never contacted again' });
 const FU_SCHEDULED = ['cold', 'neutral', 'warm', 'hot'];          // the rungs that get automatic touches
 const FU_MOVE_TARGETS = ['cold', 'neutral', 'warm', 'hot', 'client', 'dormant'];
 const FU_HIST_SHOWN = 30;
-const FU_TOUCH_TYPES = ['touch_sent', 'manual_send', 'free_send', 'recurring_sent', 'scheduled_once_sent'];
+const FU_TOUCH_TYPES = ['touch_sent', 'auto_send', 'manual_send', 'free_send', 'recurring_sent', 'scheduled_once_sent'];
 const FU_HIST_ICON = { send: 'paper-plane-tilt', reply: 'envelope-open' };
 let fuTierRung = 'warm', fuTierRows = [], fuTierCounts = {}, fuTierSw = null, fuTierFocus = '', _fuTierSeq = 0;
 const _fuTierOpen = new Set();       // contacts whose history is expanded
@@ -8862,7 +8862,11 @@ function renderFuTierRow(c) {
   const budget = c.budget || 0, spent = c.touch_attempt || 0;
   const act = (icon, label, js, cls) => `<button type="button" class="fu-t-act${cls ? ' ' + cls : ''}" onclick="${js}" title="${esc(label)}" aria-label="${esc(label)}: ${esc(name)}"><i class="ph-bold ph-${icon}"></i></button>`;
   const acts = [];
-  if (c.rung !== 'excluded' && c.state !== 'blocked' && c.state !== 'closed') acts.push(act('paper-plane-tilt', 'Send now', `fuTierSend('${id}')`));
+  // never to someone who asked us to stop. free-send is a one-off (the stage template, no attempt spent), so it says so
+  if (c.rung !== 'excluded' && c.state !== 'blocked' && c.state !== 'closed' && c.exit_reason !== 'refused') {
+    const drip = /^fu([123])_scheduled$/.exec(c.stage || '');
+    acts.push(act('paper-plane-tilt', drip ? `Send the scheduled FU${drip[1]} now` : 'Send a one-off email (not the ladder\'s scheduled touch)', `fuTierSend('${id}')`));
+  }
   if (sched && live && !c.auto_paused) acts.push(act('clock', 'Postpone', `fuTierPostpone(event,'${id}')`));
   acts.push(`<button type="button" class="fu-t-act" id="fut-hb-${id}" onclick="toggleFuHistory('${id}')" aria-expanded="${open}" title="History" aria-label="History: ${esc(name)}"><i class="ph-bold ph-clock-counter-clockwise"></i></button>`);
   if (sched && live) acts.push(c.auto_paused ? act('play', 'Resume automation', `fuTierAct('${id}','resume-auto')`)
@@ -9074,10 +9078,9 @@ async function fuTierBulk(action, rung) {
   const ids = [...selectedFuIds];
   if (!ids.length) return;
   const n = ids.length, who = fuPlural(n, 'contact', 'contacts');
-  if (action === 'set-rung' && !await showConfirm(fuMoveText(who, null, rung, n !== 1), { title: 'Move to ' + rung.toUpperCase() + '?', okText: 'Move', danger: false })) return;
+  if (action === 'set-rung' && !await showConfirm(fuMoveText(who, fuTierRung, rung, n !== 1), { title: 'Move to ' + rung.toUpperCase() + '?', okText: 'Move', danger: false })) return;
   if (action === 'exclude' && !await showConfirm(`${who} will never be contacted again: their addresses go on the Stop List, so nothing in the app emails them. An excluded contact can be restored one at a time.`,
     { title: 'Exclude ' + who + '?', okText: 'Exclude' })) return;
-  if (action === 'free-send' && !await showConfirm(`A follow-up email goes to ${who} now.`, { title: 'Send now?', okText: 'Send', danger: false })) return;
   let data;
   try {
     const res = await fetch('/api/followups/bulk-action', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -9088,7 +9091,6 @@ async function fuTierBulk(action, rung) {
   const results = data.results || [];
   const bad = results.filter(r => !r.ok), ok = n - bad.length;
   const done = {
-    'free-send': `Sent to ${fuPlural(ok, 'contact', 'contacts')}`,
     'pause-auto': `Paused automation for ${fuPlural(ok, 'contact', 'contacts')}`,
     'resume-auto': `Resumed automation for ${fuPlural(ok, 'contact', 'contacts')}`,
     'set-rung': `Moved ${fuPlural(ok, 'contact', 'contacts')} to ${String(rung).toUpperCase()}`,
@@ -9123,7 +9125,8 @@ function fuHistRowHtml(c) {
       `<span class="fu-t-hi"><i class="ph-bold ph-${FU_HIST_ICON[it.kind] || (/^manual_/.test(it.type || '') ? 'user' : 'gear')}"></i></span>` +
       `<div><b>${esc(it.title)}</b>${it.detail && it.detail.toLowerCase() !== it.title.toLowerCase() ? ' <em>' + esc(it.detail) + '</em>' : ''}</div></div>`).join('') +
       (h.items.length > shown.length ? `<button type="button" class="fu-t-hmore" onclick="fuHistAll('${c.id}')">Show all ${h.items.length}</button>` : '') +
-      (h.items.some(it => FU_TOUCH_TYPES.includes(it.type)) ? '<div class="fu-fn-note">A touch shows when it went out and which attempt it was. The text of the email is not kept here; it is in your Gmail sent folder.</div>' : '');
+      (h.truncated ? `<div class="fu-fn-note">Showing the latest ${h.items.length} entries. Older ones are not listed, so the first entry here may not be the start.</div>` : '') +
+      (h.items.some(it => FU_TOUCH_TYPES.includes(it.type) && !it.failed) ? '<div class="fu-fn-note">A touch shows when it went out and which attempt it was. The text of the email is not kept here; it is in your Gmail sent folder.</div>' : '');
   }
   return `<tr class="fu-t-hist" id="fut-hist-${c.id}"><td colspan="8"><div class="fu-t-hbox" role="region" aria-label="History of ${esc(name)}">` +
     `<div class="fu-t-hhead">History: ${esc(name)}</div>${inner}</div></td></tr>`;
@@ -9139,7 +9142,7 @@ async function fuHistLoad(id, quiet) {
     const res = await fetch('/api/followups/timeline?id=' + encodeURIComponent(id));
     const d = await res.json();
     if (!res.ok || !Array.isArray(d.items)) throw new Error(d.error || res.status);
-    _fuHist.set(id, { state: 'ok', items: d.items, all: keepAll });
+    _fuHist.set(id, { state: 'ok', items: d.items, all: keepAll, truncated: !!d.truncated });
   } catch (e) {
     if (!quiet) _fuHist.set(id, { state: 'error', items: [] });
   }

@@ -6526,20 +6526,27 @@ def api_followups_timeline():
         return jsonify(error='Not found'), 404
     email = (fc.contact_email or '').lower()
     items = []
+    cut = False          # a source had more than it shows: the screen must not read as the whole story
 
-    for s in Send.query.filter(Send.user_id == uid,
-                               db.func.lower(Send.recipient_email) == email
-                               ).order_by(Send.sent_at.desc()).limit(50).all():
+    sends = Send.query.filter(Send.user_id == uid, db.func.lower(Send.recipient_email) == email
+                              ).order_by(Send.sent_at.desc()).limit(51).all()
+    cut = cut or len(sends) > 50
+    for s in sends[:50]:
         items.append({'at': s.sent_at.isoformat() if s.sent_at else None, 'kind': 'send',
                       'title': 'Outreach sent' if s.status == 'sent' else f'Send {s.status}',
                       'detail': f'{s.origin} → {s.destination}'.strip(' →') or ''})
 
-    for r in Reply.query.filter(Reply.user_id == uid,
-                                db.func.lower(Reply.from_email) == email
-                                ).order_by(Reply.received_at.desc()).limit(50).all():
+    replies = Reply.query.filter(Reply.user_id == uid, db.func.lower(Reply.from_email) == email
+                                 ).order_by(Reply.received_at.desc()).limit(51).all()
+    cut = cut or len(replies) > 50
+    _reply_labels = {'negative': 'said no', 'gave_info': 'gave information',
+                     'rate_request': 'asked for a rate', 'auto_reply': 'automatic reply'}
+    for r in replies[:50]:
+        cat = r.triage_category
         items.append({'at': r.received_at.isoformat() if r.received_at else None, 'kind': 'reply',
-                      'title': 'Reply' + (f' · {r.triage_category}' if r.triage_category else ''),
-                      'detail': (r.body or r.subject or '')[:400]})
+                      'title': 'Reply' + (f' · {_reply_labels.get(cat, cat.replace("_", " "))}' if cat else ''),
+                      # their own words: the quoted copy of our mail below them is cut
+                      'detail': ((_strip_quoted(r.body).strip() if r.body else '') or r.subject or '')[:400]})
 
     stage_names = {}
     if fc.workspace_id:
@@ -6552,6 +6559,9 @@ def api_followups_timeline():
                   'recurring_sent': 'Recurring follow-up sent', 'scheduled_once_sent': 'Scheduled send',
                   'touch_snoozed': 'Snoozed', 'touch_skipped': 'Skipped',
                   'ooo_pause': 'Paused — out of office', 'note_added': 'Note',
+                  'auto_send': 'Drip follow-up sent', 'state_change': 'Status changed',
+                  'scheduled_once': 'One-time send scheduled', 'schedule_cancelled': 'Schedule cancelled',
+                  'recurring_set': 'Recurring send set', 'recurring_stopped': 'Recurring send stopped',
                   # what the warmth ladder did on its own
                   'ladder_load': 'Sent load information', 'ladder_refusal': 'Asked us to stop',
                   'ladder_deferral': 'Asked to come back later', 'ladder_unknown': 'Reply needs a human look',
@@ -6562,7 +6572,9 @@ def api_followups_timeline():
                   'manual_set_rung': 'Moved by you', 'manual_exclude': 'Excluded by you',
                   'manual_unexclude': 'Taken off the excluded list by you'}
     events = FollowupEvent.query.filter_by(followup_contact_id=fc.id
-                                           ).order_by(FollowupEvent.event_at.desc()).limit(100).all()
+                                           ).order_by(FollowupEvent.event_at.desc()).limit(101).all()
+    cut = cut or len(events) > 100
+    events = events[:100]
     # A contact made from a load-bearing reply records the ladder step a moment BEFORE its
     # 'created' event (same transaction). Read as a history, "added" must come first: those
     # ladder steps sort as if they happened just after it.
@@ -6576,6 +6588,11 @@ def api_followups_timeline():
         elif (e.event_type.startswith('ladder_') and e.from_state and e.to_state
               and e.from_state != e.to_state):
             detail = f"{e.from_state.upper()} → {e.to_state.upper()}" + (f' · {detail}' if detail else '')
+        elif e.event_type == 'state_change' and e.from_state and e.to_state:
+            detail = f"{e.from_state} → {e.to_state}"
+        # a failed send is logged under the type of the send it was meant to be, with the error in its
+        # metadata (the same test the stats use): it must not read as a touch that went out
+        failed = '"error"' in (e.metadata_json or '')
         key = e.event_at
         if e.event_type.startswith('ladder_') and e.event_at:
             for c_at in created_at:
@@ -6584,12 +6601,14 @@ def api_followups_timeline():
                     break
         items.append({'at': e.event_at.isoformat() if e.event_at else None, 'kind': 'event',
                       'type': e.event_type, '_k': key.isoformat() if key else '',
-                      'title': _ev_titles.get(e.event_type, e.event_type), 'detail': detail[:400]})
+                      'title': 'Send failed' if failed else _ev_titles.get(e.event_type, e.event_type),
+                      'failed': failed, 'detail': detail[:400]})
 
     items.sort(key=lambda x: x['_k'], reverse=True)
     for it in items:
         del it['_k']
-    return jsonify(contact=fc.to_dict(), items=items[:120], notes=fc.notes or '')
+    cut = cut or len(items) > 120
+    return jsonify(contact=fc.to_dict(), items=items[:120], notes=fc.notes or '', truncated=cut)
 
 
 @app.route('/api/followups/touch', methods=['POST'])

@@ -6551,16 +6551,44 @@ def api_followups_timeline():
                   'free_send': 'Touch sent', 'touch_sent': 'Auto touch sent',
                   'recurring_sent': 'Recurring follow-up sent', 'scheduled_once_sent': 'Scheduled send',
                   'touch_snoozed': 'Snoozed', 'touch_skipped': 'Skipped',
-                  'ooo_pause': 'Paused — out of office', 'note_added': 'Note'}
-    for e in FollowupEvent.query.filter_by(followup_contact_id=fc.id
-                                           ).order_by(FollowupEvent.event_at.desc()).limit(100).all():
+                  'ooo_pause': 'Paused — out of office', 'note_added': 'Note',
+                  # what the warmth ladder did on its own
+                  'ladder_load': 'Sent load information', 'ladder_refusal': 'Asked us to stop',
+                  'ladder_deferral': 'Asked to come back later', 'ladder_unknown': 'Reply needs a human look',
+                  'ladder_exhausted': 'Every attempt used', 'ladder_parked': 'Automatic sending parked',
+                  'ladder_blocked': 'Could not send',
+                  # what the owner did by hand (Task 7 overrides)
+                  'manual_pause_auto': 'Automation paused by you', 'manual_resume_auto': 'Automation resumed by you',
+                  'manual_set_rung': 'Moved by you', 'manual_exclude': 'Excluded by you',
+                  'manual_unexclude': 'Taken off the excluded list by you'}
+    events = FollowupEvent.query.filter_by(followup_contact_id=fc.id
+                                           ).order_by(FollowupEvent.event_at.desc()).limit(100).all()
+    # A contact made from a load-bearing reply records the ladder step a moment BEFORE its
+    # 'created' event (same transaction). Read as a history, "added" must come first: those
+    # ladder steps sort as if they happened just after it.
+    created_at = [e.event_at for e in events if e.event_type == 'created' and e.event_at]
+    for it in items:
+        it['_k'] = it['at'] or ''
+    for e in events:
         detail = e.notes or ''
         if e.event_type == 'pipeline_move' and e.from_stage and e.to_stage:
             detail = f"{stage_names.get(e.from_stage, e.from_stage)} → {stage_names.get(e.to_stage, e.to_stage)}"
+        elif (e.event_type.startswith('ladder_') and e.from_state and e.to_state
+              and e.from_state != e.to_state):
+            detail = f"{e.from_state.upper()} → {e.to_state.upper()}" + (f' · {detail}' if detail else '')
+        key = e.event_at
+        if e.event_type.startswith('ladder_') and e.event_at:
+            for c_at in created_at:
+                if 0 <= (c_at - e.event_at).total_seconds() <= 5:
+                    key = c_at + timedelta(microseconds=1)
+                    break
         items.append({'at': e.event_at.isoformat() if e.event_at else None, 'kind': 'event',
+                      'type': e.event_type, '_k': key.isoformat() if key else '',
                       'title': _ev_titles.get(e.event_type, e.event_type), 'detail': detail[:400]})
 
-    items.sort(key=lambda x: x['at'] or '', reverse=True)
+    items.sort(key=lambda x: x['_k'], reverse=True)
+    for it in items:
+        del it['_k']
     return jsonify(contact=fc.to_dict(), items=items[:120], notes=fc.notes or '')
 
 

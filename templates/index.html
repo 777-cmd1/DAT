@@ -2655,8 +2655,58 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 .fu-act-off { font-size: 13px; color: var(--text); line-height: 1.5; padding: 10px 12px; margin-bottom: 8px; border-radius: 12px;
   background: var(--yellow-dim); border: 1px solid color-mix(in srgb, var(--yellow) 40%, var(--border)); }
 .fu-act-off:last-child { margin-bottom: 0; }
-/* queue filtered to one rung */
-.fu-rung-filter { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); }
+/* tier drill-down: one rung, every contact on it, overridable by hand */
+.fu-tier-shell { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.fu-tier-top { display: flex; flex-direction: column; gap: 4px; }
+.fu-tier-back { align-self: flex-start; font: inherit; font-size: 13px; font-weight: 600; color: var(--accent); background: transparent;
+  border: 0; cursor: pointer; padding: 2px 0; display: inline-flex; align-items: center; gap: 6px; }
+.fu-tier-back:hover { text-decoration: underline; }
+.fu-tier-title { font-size: 18px; font-weight: 700; color: var(--text); }
+.fu-tier-tabs .fu-t-n { margin-left: 5px; opacity: .65; font-variant-numeric: tabular-nums; }
+.fu-table.fu-tier-table { min-width: 1040px; }
+.fu-table.fu-tier-table thead th.fu-t-c-who { width: auto; }
+.fu-table.fu-tier-table thead th.fu-t-c-rung { width: 100px; }
+.fu-table.fu-tier-table thead th.fu-t-c-loads { width: 62px; }
+.fu-table.fu-tier-table thead th.fu-t-c-att { width: 84px; }
+.fu-table.fu-tier-table thead th.fu-t-c-next { width: 190px; }
+.fu-table.fu-tier-table thead th.fu-t-c-lane { width: 16%; }
+.fu-table.fu-tier-table thead th.fu-t-c-act { width: 218px; text-align: right; }
+.fu-tier-table tbody tr:last-child td { border-bottom: 1px solid var(--border); }
+.fu-tier-table tbody tr.fu-t-hist:last-child td { border-bottom: 0; }
+.fu-t-row td { transition: background var(--dur-fast) var(--ease); }
+.fu-t-row.fu-t-focus td { background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.fu-t-num { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 700; }
+.fu-t-att { font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+.fu-t-att span { color: var(--text3); font-weight: 400; }
+.fu-t-chip { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
+  color: var(--yellow); background: var(--yellow-dim); white-space: nowrap; }
+.fu-t-sub { font-size: 12px; color: var(--text3); line-height: 1.4; overflow-wrap: anywhere; }
+.fu-t-acts { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.fu-t-act { width: 28px; height: 28px; display: inline-grid; place-items: center; font-size: 14px; cursor: pointer;
+  color: var(--text2); background: transparent; border: 1px solid var(--border); border-radius: 8px;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.fu-t-act:hover { background: var(--surface2); color: var(--text); border-color: var(--border-h); }
+.fu-t-act[aria-expanded="true"] { background: var(--surface2); color: var(--text); border-color: var(--border-h); }
+.fu-t-act.stop:hover { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--border)); }
+.fu-t-danger { color: var(--red); }
+#fuTierMoveSel { width: auto; min-width: 0; flex: 0 0 auto; }
+.fu-t-hist td { padding: 0; background: var(--surface2); }
+.fu-tier-wrap { container-type: inline-size; }
+/* the history stays as wide as the visible part of the table, so a narrow screen does not scroll it sideways */
+.fu-t-hbox { padding: 12px 16px 14px 52px; position: sticky; left: 0; box-sizing: border-box; width: min(100cqw, 900px); }
+.fu-t-hhead { font-size: 12px; font-weight: 700; color: var(--text3); margin-bottom: 6px; }
+.fu-t-hl { display: grid; grid-template-columns: 132px 18px minmax(0, 1fr); gap: 0 10px; padding: 5px 0; font-size: 13px; color: var(--text2); align-items: baseline; }
+.fu-t-hd { font-size: 12px; color: var(--text3); font-variant-numeric: tabular-nums; }
+.fu-t-hi { color: var(--text3); text-align: center; }
+.fu-t-hl b { color: var(--text); font-weight: 700; }
+.fu-t-hl em { font-style: normal; color: var(--text2); overflow-wrap: anywhere; }
+.fu-t-hl.reply em { display: block; max-height: 96px; overflow-y: auto; white-space: pre-wrap; margin-top: 2px; }
+.fu-t-hmore { font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: transparent; border: 0; cursor: pointer; padding: 4px 0; }
+@media (max-width: 760px) {
+  .fu-t-hbox { padding-left: 16px; }
+  .fu-t-hl { grid-template-columns: 18px minmax(0, 1fr); }
+  .fu-t-hd { grid-column: 1 / -1; }
+}
 @media (max-width: 900px) { .fu-rung-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 560px) {
   .fu-rung-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -3199,9 +3249,62 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
         </section>
       </div>
 
+      <!-- TIER DRILL-DOWN (opened from the Funnel: one rung, every contact on it) -->
+      <div id="fuTierTab" style="display:none">
+        <div class="fu-tier-shell">
+          <div class="fu-tier-top">
+            <button type="button" class="fu-tier-back" onclick="switchFuTab('funnel')"><i class="ph-bold ph-arrow-left"></i> Funnel</button>
+            <h2 class="fu-tier-title" id="fuTierTitle"></h2>
+            <div class="fu-fn-sub" id="fuTierSub"></div>
+          </div>
+          <div class="fu-segment fu-tier-tabs" id="fuTierTabs" role="group" aria-label="Rungs"></div>
+          <div id="fuTierNote"></div>
+          <div class="fu-toolbar">
+            <div class="fu-toolbar-main">
+              <input class="fu-search fu-search-wide" id="fuTierSearch" placeholder="Search company, contact, or email..." aria-label="Search this list" oninput="renderFuTier()">
+            </div>
+          </div>
+          <div class="fu-bulk-bar" id="fuTierBulk" style="display:none">
+            <div class="fu-bulk-group">
+              <button type="button" class="fu-bulk-clear" onclick="clearFuSelection()" title="Clear selection" aria-label="Clear selection">✕</button>
+              <span class="fu-bulk-count" id="fuTierBulkCount">0 selected</span>
+            </div>
+            <div class="fu-bulk-group fu-bulk-actions">
+              <button type="button" class="btn btn-sm btn-secondary" onclick="fuTierBulk('free-send')">Send now</button>
+              <button type="button" class="btn btn-sm btn-secondary" data-ladder-only onclick="fuTierBulk('pause-auto')">Pause automation</button>
+              <button type="button" class="btn btn-sm btn-secondary" data-ladder-only onclick="fuTierBulk('resume-auto')">Resume automation</button>
+              <select class="fu-select" id="fuTierMoveSel" onchange="fuTierBulkMove(this)" aria-label="Move the selected contacts to a rung" title="Starts a fresh run on the new rung: attempts go back to 0 and the next touch is set for tomorrow. Moving down brings the next touch sooner, not later.">
+                <option value="">Move to…</option>
+                <option value="cold">COLD</option><option value="neutral">NEUTRAL</option><option value="warm">WARM</option>
+                <option value="hot">HOT</option><option value="client">CLIENT</option>
+              </select>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="fuTierBulk('set-rung', 'dormant')">Move to inactive</button>
+              <button type="button" class="btn btn-sm btn-secondary fu-t-danger" onclick="fuTierBulk('exclude')">Exclude</button>
+            </div>
+          </div>
+          <div class="fu-table-wrap fu-tier-wrap" id="fuTierWrap">
+            <table class="fu-table fu-tier-table" aria-label="Contacts on this rung">
+              <thead>
+                <tr>
+                  <th class="fu-col-select"><input type="checkbox" id="fuTierMaster" aria-label="Select all contacts shown" onclick="fuTierMasterChange(this)"></th>
+                  <th class="fu-t-c-who">Contact</th>
+                  <th class="fu-t-c-rung">Rung</th>
+                  <th class="fu-t-c-loads" title="Loads this contact has sent us">Loads</th>
+                  <th class="fu-t-c-att" title="Touches already sent, out of the attempts this rung allows">Attempt</th>
+                  <th class="fu-t-c-next" title="When the next touch goes out, and why then">Next touch</th>
+                  <th class="fu-t-c-lane">Lane</th>
+                  <th class="fu-t-c-act">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="fuTierList"></tbody>
+            </table>
+          </div>
+          <div id="fuTierEmpty" class="fu-empty" style="display:none"></div>
+        </div>
+      </div>
+
       <div id="fuContactsTab" style="display:none">
         <div class="fu-queue-shell">
-          <div class="fu-rung-filter" id="fuRungFilter" style="display:none"></div>
           <div class="fu-viewbar">
             <div class="fu-view-toggle">
               <button class="fu-view-btn active" id="fuViewTable" onclick="setFuViewMode('table')" title="Table view"><i class="ph-bold ph-list"></i> Table</button>
@@ -4040,7 +4143,7 @@ function nav(page, el) {
   if (page === 'templates')     loadTemplates();
   if (page === 'settings')      loadSettings();
   if (page === 'replies')       initReplies();
-  if (page === 'followup')      { if (fuTab === 'funnel') loadFuFunnel(); else loadFollowups(); resumeFuBulkIfRunning(); }
+  if (page === 'followup')      { if (fuTab === 'funnel') loadFuFunnel(); else if (fuTab === 'tier') loadFuTier(); else loadFollowups(); resumeFuBulkIfRunning(); }
   if (page === 'pipeline')      loadPipeline();
   const titles = { send:'Send', replies:'Replies', followup:'Follow-up', stats:'Analytics',
                    intelligence:'Intelligence', templates:'Templates', stop:'Stop List',
@@ -6730,7 +6833,7 @@ async function markRStop(sid) {
 }
 
 // ── FOLLOW-UP v2 ──────────────────────────────────────────────────────────────
-let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSpecialFilter = '', fuRungFilter = '', fuTab = 'funnel';   // fuTab: 'funnel' | 'contacts' | 'analytics'
+let fuContacts = [], fuCounts = {}, fuStageFilter = '', fuStateFilter = '', fuSpecialFilter = '', fuTab = 'funnel';   // fuTab: 'funnel' | 'tier' | 'contacts' | 'analytics'
 let _fuDropdownContactId = null;
 let selectedFuIds = new Set();
 let fuSentFilter = '';            // '' | 'unsent_today' | 'today' | 'yesterday'  (client-side)
@@ -6759,7 +6862,6 @@ function buildFuFilterParams() {
   if (fuStageFilter) params.set('stage', fuStageFilter);
   if (fuStateFilter) params.set('state', fuStateFilter);
   if (fuSpecialFilter) params.set('filter', fuSpecialFilter);
-  if (fuRungFilter) params.set('rung', fuRungFilter);
   const q = (document.getElementById('fuSearch')?.value||'').trim();
   if (q) params.set('q', q);
   return params;
@@ -6860,6 +6962,7 @@ async function selectAllFilteredFu() {
 
 function clearFuSelection() {
   selectedFuIds.clear();
+  if (fuTab === 'tier') { fuTierSyncRows(); renderFuTierSelection(); return; }
   renderFuContacts();
   renderFuSelection();
 }
@@ -6917,6 +7020,7 @@ function renderFuSelection() {
 
 // ── Core load/render ──────────────────────────────────────────────────────────
 async function loadFollowups() {
+  if (fuTab === 'tier') { await loadFuTier(); return; }   // every handler that refreshes "the list" refreshes the one on screen
   if (!_fuPipelineConfigLoaded) await loadPipelineConfig();   // sets view mode + stages once
   try {
     const res = await fetch('/api/followups?' + buildFuFilterParams().toString());
@@ -6959,14 +7063,19 @@ function renderFuStatsBar() {
 }
 
 function switchFuTab(tab) {
+  const prev = fuTab;
   fuTab = tab;
-  document.getElementById('fuTabFunnel').classList.toggle('active', tab==='funnel');
+  if (prev === 'tier' || tab === 'tier') selectedFuIds.clear();     // a selection never follows you into another list
+  closeFuMenu();
+  document.getElementById('fuTabFunnel').classList.toggle('active', tab==='funnel' || tab==='tier');   // the drill-down belongs to the Funnel
   document.getElementById('fuTabContacts').classList.toggle('active', tab==='contacts');
   document.getElementById('fuTabAnalytics').classList.toggle('active', tab==='analytics');
   document.getElementById('fuFunnelTab').style.display = tab==='funnel' ? '' : 'none';
+  document.getElementById('fuTierTab').style.display = tab==='tier' ? '' : 'none';
   document.getElementById('fuContactsTab').style.display = tab==='contacts' ? '' : 'none';
   document.getElementById('fuAnalyticsTab').style.display = tab==='analytics' ? '' : 'none';
   if (tab==='funnel') loadFuFunnel();
+  if (tab==='tier') loadFuTier();
   if (tab==='contacts') loadFollowups();
   if (tab==='analytics') loadFuAnalytics();
 }
@@ -6987,7 +7096,6 @@ function setFuSpecialFilter(v) {
 }
 
 function syncFuFilterControls() {
-  renderFuRungFilter();
   document.getElementById('fuStateSelect').value = fuStateFilter || '';
   document.getElementById('fuStageSelect').value = fuStageFilter || '';
   const sentSel = document.getElementById('fuSentSelect');
@@ -7000,7 +7108,6 @@ function resetFuFilters() {
   fuStageFilter = '';
   fuStateFilter = '';
   fuSpecialFilter = '';
-  fuRungFilter = '';
   fuSentFilter = '';
   fuSortKey = '';
   fuSortDir = 'desc';
@@ -8454,15 +8561,15 @@ function renderFuLadder(rungs) {
   if (sub) sub.textContent = everything
     ? fuPlural(onLadder, 'contact', 'contacts') + ' on the ladder, right now'
     : 'All your contacts, right now';
-  const tile = k => `<button class="fu-rung fu-rg-${k}${n(k) ? '' : ' zero'}" data-rung="${k}" onclick="fuTierClick(this.dataset.rung)" title="Open the ${k.toUpperCase()} list">` +
+  const tile = k => `<button class="fu-rung fu-rg-${k}${n(k) ? '' : ' zero'}" data-rung="${k}" onclick="openFuTier(this.dataset.rung)" title="Open the ${k.toUpperCase()} list">` +
       `<div class="fu-rung-n">${n(k)}</div><div class="fu-rung-name">${k.toUpperCase()}</div>` +
       `<div class="fu-rung-d">${esc(FU_RUNG_DESC[k])}</div></button>`;
   const el = document.getElementById('fuLadder');
   if (!el) return;
   el.innerHTML = '<div class="fu-rung-strip">' + FU_RUNG_ORDER.map(tile).join('') + '</div>' +
     '<div class="fu-rung-aside">' +
-      `<button class="fu-rung-chip" data-rung="dormant" onclick="fuTierClick(this.dataset.rung)" title="Open the DORMANT list"><b>${n('dormant')}</b>Dormant: resting, wakes when they send a load</button>` +
-      `<button class="fu-rung-chip" data-rung="excluded" onclick="fuTierClick(this.dataset.rung)" title="Open the EXCLUDED list"><b>${n('excluded')}</b>Excluded: never contacted again</button>` +
+      `<button class="fu-rung-chip" data-rung="dormant" onclick="openFuTier(this.dataset.rung)" title="Open the DORMANT list"><b>${n('dormant')}</b>Dormant: resting, wakes when they send a load</button>` +
+      `<button class="fu-rung-chip" data-rung="excluded" onclick="openFuTier(this.dataset.rung)" title="Open the EXCLUDED list"><b>${n('excluded')}</b>Excluded: never contacted again</button>` +
     '</div>' +
     (everything ? '' : '<div class="fu-fn-note">No contacts in follow-up yet. Add one with Add Contact, or from a reply on the Replies page.</div>');
 }
@@ -8492,7 +8599,7 @@ function renderNeedsYou(items, meta) {
       '<div class="fu-ny-who"><div class="fu-ny-name">' + esc(name) + ' ' + fuRungPill(it.rung) + '</div>' +
         (showEmail ? '<div class="fu-ny-email">' + esc(it.contact_email) + '</div>' : '') + '</div>' +
       '<div class="fu-ny-detail">' + esc(it.detail || '') + '</div>' +
-      `<button class="btn btn-secondary btn-sm" data-rung="${esc(it.rung)}" data-email="${esc(it.contact_email)}" onclick="fuTierClick(this.dataset.rung, this.dataset.email)" title="Open ${esc(name)} in the ${esc(String(it.rung).toUpperCase())} list">Open</button>` +
+      `<button class="btn btn-secondary btn-sm" data-rung="${esc(it.rung)}" data-email="${esc(it.contact_email)}" onclick="openFuTier(this.dataset.rung, this.dataset.email)" title="Open ${esc(name)} in the ${esc(String(it.rung).toUpperCase())} list">Open</button>` +
     '</div>';
   }).join('') + note;
 }
@@ -8573,17 +8680,21 @@ function renderFuConversion(data) {
 }
 
 // `sw` is the funnel payload: it carries the three switches that gate every automatic send.
-function renderFuActivity(a, sw) {
-  const el = document.getElementById('fuActivity');
-  if (!el) return;
-  const sent = a.sent || 0, raised = a.raised || 0, quieted = a.quieted || 0, stopped = a.stopped || 0;
+// Empty when all three are on.
+function fuOffBlockHtml(sw, tail) {
   const why = [];
   if (!sw.fu_auto_enabled) why.push('Follow-up automation is switched off.');
   if (!sw.ladder_auto_enabled) why.push('The warmth ladder has not been switched on yet.');
   if (!sw.auto_send_enabled) why.push('The auto-send master switch is off.');
-  const off = why.length
-    ? '<div class="fu-act-off"><b>Automatic sending is off for the ladder.</b> The ladder will not email anyone on its own. ' + esc(why.join(' ')) + '</div>'
+  return why.length
+    ? '<div class="fu-act-off"><b>Automatic sending is off for the ladder.</b> The ladder will not email anyone on its own. ' + esc(why.join(' ')) + esc(tail || '') + '</div>'
     : '';
+}
+function renderFuActivity(a, sw) {
+  const el = document.getElementById('fuActivity');
+  if (!el) return;
+  const sent = a.sent || 0, raised = a.raised || 0, quieted = a.quieted || 0, stopped = a.stopped || 0;
+  const off = fuOffBlockHtml(sw);
   if (!(sent || raised || quieted || stopped)) {
     // a switched-off engine is never reported as a quiet day
     el.innerHTML = off || '<div class="fu-act">Nothing in the last ' + esc(a.hours || 24) +
@@ -8599,23 +8710,457 @@ function renderFuActivity(a, sw) {
   ].join(sep) + '</div>';
 }
 
-// A tier opens its list. Task 9's list (openFuTier) takes over when it exists;
-// until then the tier opens the Queue narrowed to that rung.
-// `email` (optional) lands on one person: the fallback puts it into the Queue search box.
-function fuTierClick(rung, email) {
-  if (typeof openFuTier === 'function') { openFuTier(rung, email); return; }
-  fuRungFilter = rung; fuSpecialFilter = ''; fuStageFilter = ''; fuStateFilter = ''; fuSentFilter = '';
-  const q = document.getElementById('fuSearch');
-  if (q) q.value = email || '';          // a stale search would make the list shorter than the tile's count
-  switchFuTab('contacts');
+// ── Tier drill-down (Funnel → one rung) ─────────────────────────────────────
+// Every contact on one rung, with what the owner may need to override by hand. The list is
+// GET /api/followups?rung= (rows carry budget and next_touch_reason; rung_counts feeds the tabs and
+// is the whole base, never narrowed). Every change goes through /api/followups/action or
+// /bulk-action (pause-auto, resume-auto, set-rung, exclude, unexclude; free-send for a manual send)
+// and the list is then read from the server again: nothing here decides what an override does.
+const FU_TIER_TABS = ['client', 'hot', 'warm', 'neutral', 'cold', 'dormant', 'excluded'];
+const FU_TIER_DESC = Object.assign({}, FU_RUNG_DESC, { dormant: 'resting, wakes when they send a load', excluded: 'never contacted again' });
+const FU_SCHEDULED = ['cold', 'neutral', 'warm', 'hot'];          // the rungs that get automatic touches
+const FU_MOVE_TARGETS = ['cold', 'neutral', 'warm', 'hot', 'client', 'dormant'];
+const FU_HIST_SHOWN = 30;
+const FU_TOUCH_TYPES = ['touch_sent', 'manual_send', 'free_send', 'recurring_sent', 'scheduled_once_sent'];
+const FU_HIST_ICON = { send: 'paper-plane-tilt', reply: 'envelope-open' };
+let fuTierRung = 'warm', fuTierRows = [], fuTierCounts = {}, fuTierSw = null, fuTierFocus = '', _fuTierSeq = 0;
+const _fuTierOpen = new Set();       // contacts whose history is expanded
+const _fuHist = new Map();           // contact id → { state: 'loading' | 'ok' | 'error', items, all }
+let _fuMenuItems = [];
+
+// Entry point of the Funnel: a rung tile, a chip, or a "Needs you" row (then `email` lands on that person).
+function openFuTier(rung, email) {
+  if (!FU_TIER_TABS.includes(rung)) { toast('This contact is on a rung the list does not know: ' + (rung || 'none'), true); return; }
+  fuTierRung = rung; fuTierFocus = email || ''; fuTierRows = [];
+  _fuTierOpen.clear(); _fuHist.clear();
+  const q = document.getElementById('fuTierSearch'); if (q) q.value = '';
+  fuTierLoadSwitches();
+  switchFuTab('tier');
 }
-function renderFuRungFilter() {
-  const el = document.getElementById('fuRungFilter');
-  if (!el) return;
-  el.style.display = fuRungFilter ? '' : 'none';
-  el.innerHTML = fuRungFilter
-    ? 'Showing ' + fuRungPill(fuRungFilter) + ' only <button class="btn btn-secondary btn-sm" onclick="fuRungFilter=\'\';loadFollowups()">Show all</button>'
-    : '';
+
+function setFuTierRung(rung) {
+  if (rung === fuTierRung) return;
+  fuTierRung = rung; fuTierFocus = ''; fuTierRows = [];
+  selectedFuIds.clear(); _fuTierOpen.clear(); _fuHist.clear();
+  const q = document.getElementById('fuTierSearch'); if (q) q.value = '';
+  loadFuTier();
+}
+
+// The next-touch dates only mean something while automatic sending is on, so say so above the table.
+async function fuTierLoadSwitches() {
+  fuTierSw = null; renderFuTierNote();
+  try {
+    const r = await fetch('/api/followups/funnel');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (fuFunnelOk(d)) { fuTierSw = d; renderFuTierNote(); }
+  } catch (e) { /* the note is optional */ }
+}
+function renderFuTierNote() {
+  const el = document.getElementById('fuTierNote');
+  // only the rungs that get automatic touches have dates it could fail to keep
+  if (el) el.innerHTML = fuTierSw && FU_SCHEDULED.includes(fuTierRung) ? fuOffBlockHtml(fuTierSw, ' The dates below show when it would.') : '';
+}
+
+async function loadFuTier() {
+  const seq = ++_fuTierSeq;
+  closeFuMenu();
+  const body = document.getElementById('fuTierList');
+  if (!fuTierRows.length) {                                 // first paint of a rung: a skeleton, not the last rung's rows
+    renderFuTierHead(true); fuTierShowEmpty('');
+    if (body) body.innerHTML = '<tr><td colspan="8"><div class="skel-lines"><span class="skel"></span><span class="skel w80"></span></div></td></tr>';
+  }
+  let d;
+  try {
+    const res = await fetch('/api/followups?rung=' + encodeURIComponent(fuTierRung));
+    d = await res.json();
+    if (seq !== _fuTierSeq) return;                         // a newer load is under way
+    if (!res.ok || !Array.isArray(d.contacts) || !d.rung_counts) throw new Error(d.error || res.status);
+  } catch (e) {
+    if (seq !== _fuTierSeq) return;
+    fuTierRows = [];
+    fuTierShowEmpty('<div class="fu-fn-error">Could not load this list <button type="button" class="btn btn-secondary btn-sm" onclick="loadFuTier()">Try again</button></div>');
+    return;
+  }
+  fuTierRows = d.contacts; fuTierCounts = d.rung_counts;
+  const here = new Set(fuTierRows.map(c => c.id));
+  [...selectedFuIds].forEach(id => { if (!here.has(id)) selectedFuIds.delete(id); });
+  [..._fuTierOpen].forEach(id => { if (!here.has(id)) _fuTierOpen.delete(id); });
+  renderFuTier();
+  _fuTierOpen.forEach(id => fuHistLoad(id, true));          // an open history may be stale after an action
+  refreshFuBadge();                                        // the sidebar badge counts "Needs you", which an action can change
+  fuTierLandOnPerson();
+}
+
+function fuTierShowEmpty(html) {
+  const wrap = document.getElementById('fuTierWrap'), empty = document.getElementById('fuTierEmpty');
+  if (wrap) wrap.style.display = html ? 'none' : '';
+  if (empty) { empty.style.display = html ? '' : 'none'; empty.innerHTML = html || ''; }
+}
+
+function fuTierSorted(list) {
+  const t = c => c.next_followup_at ? new Date(c.next_followup_at).getTime() : Infinity;
+  return [...list].sort((a, b) => (t(a) - t(b)) || fuName(a).localeCompare(fuName(b)));   // soonest first, undated last
+}
+function fuTierVisible() {
+  const q = (document.getElementById('fuTierSearch')?.value || '').trim().toLowerCase();
+  const rows = q ? fuTierRows.filter(c => [c.contact_email, c.contact_name, c.company_name].some(v => (v || '').toLowerCase().includes(q))) : fuTierRows;
+  return fuTierSorted(rows);
+}
+
+function renderFuTierHead(loading) {
+  const r = fuTierRung;
+  const title = document.getElementById('fuTierTitle'), sub = document.getElementById('fuTierSub');
+  if (title) title.textContent = r.toUpperCase() + ': ' + FU_TIER_DESC[r];
+  if (sub) sub.textContent = loading ? '' : fuPlural(fuTierRows.length, 'contact', 'contacts') + '. ' +
+    (r === 'excluded' ? 'An excluded contact can be restored one at a time.' : 'Send, postpone, pause or move anyone by hand.');
+  renderFuTierNote();
+  const tabs = document.getElementById('fuTierTabs');
+  if (tabs) tabs.innerHTML = FU_TIER_TABS.map(k =>
+    `<button type="button" class="fu-segment-btn${k === r ? ' active' : ''}" aria-pressed="${k === r}" onclick="setFuTierRung('${k}')">` +
+    `${k.toUpperCase()}<span class="fu-t-n">${fuTierCounts[k] || 0}</span></button>`).join('');
+}
+
+function renderFuTier() {
+  const r = fuTierRung;
+  renderFuTierHead(false);
+  const list = fuTierVisible();
+  const body = document.getElementById('fuTierList');
+  // a re-render replaces the button that was just used: keep a keyboard user on the same row
+  const heldRow = body && body.contains(document.activeElement) ? document.activeElement.closest('tr.fu-t-row')?.id : '';
+  if (!list.length) {
+    if (body) body.innerHTML = '';
+    fuTierShowEmpty(fuTierRows.length ? '<div class="fu-empty-title">No contact on this list matches the search</div>'
+      : `<div class="fu-empty-title">Nobody is on ${esc(r.toUpperCase())} right now</div>`);
+  } else {
+    fuTierShowEmpty('');
+    if (body) body.innerHTML = list.map(renderFuTierRow).join('');
+  }
+  if (heldRow) document.getElementById(heldRow)?.querySelector('[aria-expanded]')?.focus();
+  renderFuTierSelection();
+}
+
+function fuCap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Next touch cell: the date from next_followup_at, and under it the payload's own reason.
+function fuTierNext(c) {
+  const why = fuCap(c.next_touch_reason);
+  const d = c.next_followup_at ? new Date(c.next_followup_at) : null;
+  if (!d || isNaN(d)) return { main: '—', cls: 'none', why };
+  const f = formatFuDate(c.next_followup_at);
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return { main: f.text + ', ' + time, cls: d < new Date() ? 'overdue' : (f.text === 'Today' ? 'today' : ''), why };
+}
+
+function renderFuTierRow(c) {
+  const id = c.id, name = fuName(c);
+  const open = _fuTierOpen.has(id);
+  const nx = fuTierNext(c);
+  const sched = FU_SCHEDULED.includes(c.rung);
+  const live = c.state === 'active';
+  const sti = getFuStateInfo(c.state);
+  const budget = c.budget || 0, spent = c.touch_attempt || 0;
+  const act = (icon, label, js, cls) => `<button type="button" class="fu-t-act${cls ? ' ' + cls : ''}" onclick="${js}" title="${esc(label)}" aria-label="${esc(label)}: ${esc(name)}"><i class="ph-bold ph-${icon}"></i></button>`;
+  const acts = [];
+  if (c.rung !== 'excluded' && c.state !== 'blocked' && c.state !== 'closed') acts.push(act('paper-plane-tilt', 'Send now', `fuTierSend('${id}')`));
+  if (sched && live && !c.auto_paused) acts.push(act('clock', 'Postpone', `fuTierPostpone(event,'${id}')`));
+  acts.push(`<button type="button" class="fu-t-act" id="fut-hb-${id}" onclick="toggleFuHistory('${id}')" aria-expanded="${open}" title="History" aria-label="History: ${esc(name)}"><i class="ph-bold ph-clock-counter-clockwise"></i></button>`);
+  if (sched && live) acts.push(c.auto_paused ? act('play', 'Resume automation', `fuTierAct('${id}','resume-auto')`)
+                                             : act('pause', 'Pause automation', `fuTierAct('${id}','pause-auto')`));
+  if (c.rung !== 'dormant' && c.rung !== 'excluded') acts.push(act('prohibit', 'Move to inactive', `fuTierMove('${id}','dormant')`, 'stop'));
+  acts.push(`<button type="button" class="fu-t-act" onclick="fuTierMenu(event,'${id}')" aria-haspopup="menu" title="More" aria-label="More actions: ${esc(name)}"><i class="ph-bold ph-dots-three"></i></button>`);
+  const cls = ['fu-table-row', 'fu-t-row', (c.auto_paused || !live) ? 'muted' : '', selectedFuIds.has(id) ? 'selected' : ''].filter(Boolean).join(' ');
+  const row = `<tr class="${cls}" id="fut-row-${id}">` +
+    `<td class="fu-col-select">${c.rung === 'excluded' ? '' : `<input type="checkbox" class="fu-checkbox" id="fut-cb-${id}" ${selectedFuIds.has(id) ? 'checked' : ''} onclick="toggleFuTierSelect('${id}')" aria-label="Select ${esc(name)}">`}</td>` +
+    `<td class="fu-contact-cell"><div class="fu-contact-primary" title="${esc(name)}">${c.attention_at ? '🔥 ' : ''}${esc(name)}</div>` +
+      `<div class="fu-contact-secondary" title="${esc(fuSub(c))}">${esc(fuSub(c))}</div></td>` +
+    `<td>${c.rung ? fuRungPill(c.rung) : '—'}` +
+      (c.auto_paused ? '<div><span class="fu-t-chip">Auto paused</span></div>' : '') +
+      (!live ? `<div><span class="fu-state-badge ${sti.cls}">${esc(sti.label)}</span></div>` : '') + `</td>` +
+    `<td class="fu-t-num">${c.load_count || 0}</td>` +
+    `<td class="fu-t-att" title="${spent} touches sent">${budget ? `${spent} <span>of ${budget}</span>` : '—'}</td>` +
+    `<td><div class="fu-time-cell"><span class="fu-time-main ${nx.cls}">${esc(nx.main)}</span><span class="fu-t-sub">${esc(nx.why)}</span></div></td>` +
+    `<td class="fu-route-cell" title="${esc(c.current_route || '')}"><span class="fu-route-text">${esc(c.current_route || '—')}</span></td>` +
+    `<td><div class="fu-t-acts">${acts.join('')}</div></td></tr>`;
+  return row + (open ? fuHistRowHtml(c) : '');
+}
+
+// After a Needs-you "Open": scroll to the person, mark the row for a moment, open their history.
+function fuTierLandOnPerson() {
+  const email = (fuTierFocus || '').toLowerCase(); fuTierFocus = '';
+  if (!email) return;
+  const c = fuTierRows.find(x => (x.contact_email || '').toLowerCase() === email);
+  if (!c) { toast('That contact is no longer on this list', true); return; }
+  if (!_fuTierOpen.has(c.id)) toggleFuHistory(c.id);
+  const row = document.getElementById('fut-row-' + c.id);
+  if (!row) return;
+  row.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+  row.classList.add('fu-t-focus');
+  setTimeout(() => row.classList.remove('fu-t-focus'), 2600);
+}
+
+// ── Selection: the same Set as the Queue, its own bulk bar ──
+function toggleFuTierSelect(id) {
+  selectedFuIds.has(id) ? selectedFuIds.delete(id) : selectedFuIds.add(id);
+  document.getElementById('fut-row-' + id)?.classList.toggle('selected', selectedFuIds.has(id));
+  renderFuTierSelection();
+}
+function fuTierMasterChange(cb) {
+  fuTierVisible().forEach(c => { if (c.rung !== 'excluded') cb.checked ? selectedFuIds.add(c.id) : selectedFuIds.delete(c.id); });
+  fuTierSyncRows();
+  renderFuTierSelection();
+}
+function fuTierSyncRows() {
+  fuTierRows.forEach(c => {
+    document.getElementById('fut-row-' + c.id)?.classList.toggle('selected', selectedFuIds.has(c.id));
+    const cb = document.getElementById('fut-cb-' + c.id); if (cb) cb.checked = selectedFuIds.has(c.id);
+  });
+}
+function renderFuTierSelection() {
+  const bar = document.getElementById('fuTierBulk'), master = document.getElementById('fuTierMaster');
+  if (!bar) return;
+  const n = selectedFuIds.size, excluded = fuTierRung === 'excluded';
+  bar.style.display = n > 0 && !excluded ? '' : 'none';             // an exclusion is undone one contact at a time
+  const cnt = document.getElementById('fuTierBulkCount'); if (cnt) cnt.textContent = n + ' selected';
+  bar.querySelectorAll('[data-ladder-only]').forEach(b => { b.style.display = FU_SCHEDULED.includes(fuTierRung) ? '' : 'none'; });
+  if (master) {
+    const vis = fuTierVisible(), sel = vis.filter(c => selectedFuIds.has(c.id)).length;
+    master.style.visibility = excluded ? 'hidden' : '';
+    master.checked = sel > 0 && sel === vis.length;
+    master.indeterminate = sel > 0 && sel < vis.length;
+  }
+}
+
+// ── Row actions ──
+// Send now: the same pair the Queue uses (drip step → send-now, anything else → free-send).
+function fuTierSend(id) {
+  const c = fuTierRows.find(x => x.id === id); if (!c) return;
+  return fuAction(id, /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send');
+}
+
+async function fuLadderCall(id, action, rung) {
+  const key = id + ':' + action;
+  if (_fuInflight.has(key)) return null;
+  _fuInflight.add(key);
+  try {
+    const res = await fetch('/api/followups/action', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rung ? { id, action, rung } : { id, action }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { toast('Error: ' + (d.error || 'unknown'), true); return null; }
+    return d;
+  } catch (e) { toast('Error: ' + e.message, true); return null; }
+  finally { _fuInflight.delete(key); }
+}
+
+// What the server dropped because the owner had scheduled it by hand (told in the response).
+function fuDiscardNote(d) {
+  const p = [];
+  if (d.discarded_scheduled_at) p.push('the one-time send set for ' + fuStamp(d.discarded_scheduled_at) + ' was cancelled');
+  if (d.discarded_recurring) p.push('the recurring send was switched off');
+  return p.length ? ' (' + p.join('; ') + ')' : '';
+}
+
+async function fuTierAct(id, action, rung) {
+  const c = fuTierRows.find(x => x.id === id); if (!c) return false;
+  const who = fuName(c);
+  const d = await fuLadderCall(id, action, rung);
+  if (!d) return false;
+  const msg = {
+    'pause-auto': `Paused automation for ${who}`,
+    'resume-auto': `Resumed automation for ${who}`,
+    'set-rung': `Moved ${who} to ${String(rung).toUpperCase()}`,
+    'exclude': `Excluded ${who}: never contacted again`,
+    'unexclude': `Restored ${who} to ${String((d.contact || {}).rung || '').toUpperCase()}`
+  }[action];
+  toast(msg + fuDiscardNote(d));
+  await loadFuTier();
+  return true;
+}
+
+// The owner needs this where he does it: a move down brings the next touch sooner.
+const FU_MOVE_TIP = 'Starts a fresh run on this rung: attempts go back to 0 and the next touch is set for tomorrow. Moving down brings the next touch sooner, not later.';
+function fuMoveTip(to) {
+  return to === 'dormant' ? 'Stops automatic emails until they send a load; hand-scheduled sends are switched off.'
+       : to === 'client' ? 'A client gets no automatic emails; hand-scheduled sends are switched off.' : FU_MOVE_TIP;
+}
+function fuMoveText(who, from, to, many) {
+  const T = to.toUpperCase();
+  if (to === 'dormant') return `${who} ${many ? 'go' : 'goes'} to DORMANT (inactive). No automatic emails until they send a load, and any one-time or recurring send you scheduled for them is switched off.`;
+  if (to === 'client') return `${who} ${many ? 'become' : 'becomes'} CLIENT. Clients get no automatic emails, and any one-time or recurring send you scheduled for them is switched off.`;
+  // the rung order is the ladder's; client is above hot, so a move out of it is a move down
+  const rank = r => ['cold', 'neutral', 'warm', 'hot', 'client'].indexOf(r);
+  const up = from && rank(to) > rank(from);
+  return `${who} ${many ? 'move' : 'moves'} ${from ? 'from ' + from.toUpperCase() + ' ' : ''}to ${T} and ${many ? 'start' : 'starts'} a fresh run there: attempts go back to 0.\n\n` +
+    'Attempt 0 is the next-day touch on every rung, so the next email is set for tomorrow.' +
+    (up ? '' : ' A move down brings the next touch sooner, not later.') + ' Nothing is sent now.';
+}
+
+async function fuTierMove(id, rung) {
+  const c = fuTierRows.find(x => x.id === id); if (!c) return;
+  if (!await showConfirm(fuMoveText(fuName(c), c.rung, rung), { title: 'Move to ' + rung.toUpperCase() + '?', okText: 'Move', danger: false })) return;
+  return fuTierAct(id, 'set-rung', rung);
+}
+async function fuTierExclude(id) {
+  const c = fuTierRows.find(x => x.id === id); if (!c) return;
+  if (!await showConfirm(`${fuName(c)} is never contacted again: their address goes on the Stop List, so nothing in the app emails them. You can restore one contact at a time from the EXCLUDED list.`,
+    { title: 'Exclude this contact?', okText: 'Exclude' })) return;
+  return fuTierAct(id, 'exclude');
+}
+async function fuTierRestore(id) {
+  const c = fuTierRows.find(x => x.id === id); if (!c) return;
+  if (!await showConfirm(`${fuName(c)} comes off the excluded list and goes back on the rung their loads earn. Their address leaves the Stop List unless you blocked them too, and the ladder can email them again once automation is on.`,
+    { title: 'Restore this contact?', okText: 'Restore', danger: false })) return;
+  return fuTierAct(id, 'unexclude');
+}
+
+// ── Row menus (the shared #fuDropdown) ──
+function fuTierPostpone(event, id) {
+  fuOpenMenu(event, id, [1, 3, 7].map(d => ({ label: 'Postpone ' + d + (d === 1 ? ' day' : ' days'), icon: 'clock', run: () => fuTouch(id, 'snooze', d) })));
+}
+function fuTierMenu(event, id) {
+  const c = fuTierRows.find(x => x.id === id); if (!c) return;
+  const items = [];
+  if (c.rung === 'excluded') items.push({ label: 'Restore contact', icon: 'arrow-counter-clockwise', tip: 'Takes them off the excluded list and the Stop List', run: () => fuTierRestore(id) });
+  else {
+    FU_MOVE_TARGETS.filter(r => r !== c.rung).forEach(r =>
+      items.push({ label: 'Move to ' + r.toUpperCase(), icon: 'arrow-right', tip: fuMoveTip(r), run: () => fuTierMove(id, r) }));
+    items.push('-', { label: 'Exclude: never contact again', icon: 'prohibit', danger: true, run: () => fuTierExclude(id) });
+  }
+  fuOpenMenu(event, id, items);
+}
+function closeFuMenu() {
+  const dd = document.getElementById('fuDropdown');
+  if (!dd) return;
+  dd.classList.remove('open'); dd._owner = null; _fuDropdownContactId = null;
+}
+function fuOpenMenu(event, id, items) {
+  event.stopPropagation();
+  const dd = document.getElementById('fuDropdown'), btn = event.currentTarget;
+  if (!dd._tierBound) {
+    dd._tierBound = true;
+    dd.addEventListener('click', e => {
+      const b = e.target.closest('[data-fut]'); if (!b) return;
+      const it = _fuMenuItems[+b.dataset.fut];
+      closeFuMenu();
+      if (it && it.run) it.run();
+    });
+    dd.addEventListener('keydown', e => {
+      const btns = [...dd.querySelectorAll('[data-fut]')], i = btns.indexOf(document.activeElement);
+      if (e.key === 'Escape') { const o = dd._owner; closeFuMenu(); if (o) o.focus(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); btns[(i + 1) % btns.length]?.focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); btns[(i - 1 + btns.length) % btns.length]?.focus(); }
+    });
+  }
+  if (dd.classList.contains('open') && dd._owner === btn) { closeFuMenu(); return; }
+  _fuMenuItems = items;
+  dd.innerHTML = items.map((it, i) => it === '-' ? '<div class="fu-dd-sep"></div>' :
+    `<button type="button" class="fu-dd-item${it.danger ? ' danger' : ''}" data-fut="${i}" title="${esc(it.tip || '')}">` +
+    `${it.icon ? `<i class="ph-bold ph-${it.icon}"></i>` : ''}${esc(it.label)}</button>`).join('');
+  dd._owner = btn; _fuDropdownContactId = id;
+  const r = btn.getBoundingClientRect();
+  dd.style.left = Math.max(8, Math.min(r.right - 200, window.innerWidth - 232)) + 'px';
+  dd.classList.add('open');
+  const h = dd.offsetHeight;                      // position:fixed: open upwards when it would run off the bottom
+  dd.style.top = (r.bottom + 4 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
+  dd.querySelector('[data-fut]')?.focus();
+}
+
+// ── Bulk ──
+function fuTierBulkMove(sel) {
+  const r = sel.value; sel.value = '';
+  if (r) fuTierBulk('set-rung', r);
+}
+async function fuTierBulk(action, rung) {
+  const ids = [...selectedFuIds];
+  if (!ids.length) return;
+  const n = ids.length, who = fuPlural(n, 'contact', 'contacts');
+  if (action === 'set-rung' && !await showConfirm(fuMoveText(who, null, rung, n !== 1), { title: 'Move to ' + rung.toUpperCase() + '?', okText: 'Move', danger: false })) return;
+  if (action === 'exclude' && !await showConfirm(`${who} will never be contacted again: their addresses go on the Stop List, so nothing in the app emails them. An excluded contact can be restored one at a time.`,
+    { title: 'Exclude ' + who + '?', okText: 'Exclude' })) return;
+  if (action === 'free-send' && !await showConfirm(`A follow-up email goes to ${who} now.`, { title: 'Send now?', okText: 'Send', danger: false })) return;
+  let data;
+  try {
+    const res = await fetch('/api/followups/bulk-action', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rung ? { ids, action, rung } : { ids, action }) });
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) { toast('Error: ' + (data.error || 'unknown'), true); return; }
+  } catch (e) { toast('Error: ' + e.message, true); return; }
+  const results = data.results || [];
+  const bad = results.filter(r => !r.ok), ok = n - bad.length;
+  const done = {
+    'free-send': `Sent to ${fuPlural(ok, 'contact', 'contacts')}`,
+    'pause-auto': `Paused automation for ${fuPlural(ok, 'contact', 'contacts')}`,
+    'resume-auto': `Resumed automation for ${fuPlural(ok, 'contact', 'contacts')}`,
+    'set-rung': `Moved ${fuPlural(ok, 'contact', 'contacts')} to ${String(rung).toUpperCase()}`,
+    'exclude': `Excluded ${fuPlural(ok, 'contact', 'contacts')}`
+  }[action];
+  const dropped = results.filter(r => r.ok && (r.discarded_scheduled_at || r.discarded_recurring)).length;
+  toast(done + (dropped ? ` (${fuPlural(dropped, 'hand-scheduled send was', 'hand-scheduled sends were')} cancelled)` : '') +
+    (bad.length ? `; ${bad.length} could not: ${bad[0].error || 'unknown'}` : ''), bad.length > 0 && ok === 0);
+  selectedFuIds.clear();
+  await loadFuTier();
+}
+
+// ── History: every touch and every rung change, newest first (the server orders it) ──
+function fuStamp(iso) {
+  if (!iso) return '';
+  const d = new Date(/(?:Z|[+-]\d\d:?\d\d)$/.test(iso) ? iso : iso + 'Z');      // the timeline's times are UTC without a zone
+  if (isNaN(d)) return '';
+  const o = { month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== new Date().getFullYear()) o.year = 'numeric';
+  return d.toLocaleDateString('en-US', o) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function fuHistRowHtml(c) {
+  const h = _fuHist.get(c.id), name = fuName(c);
+  let inner;
+  if (!h || h.state === 'loading') inner = '<div class="skel-lines"><span class="skel"></span><span class="skel w80"></span></div>';
+  else if (h.state === 'error') inner = `<div class="fu-fn-error">Could not load the history <button type="button" class="btn btn-secondary btn-sm" onclick="fuHistLoad('${c.id}')">Try again</button></div>`;
+  else if (!h.items.length) inner = '<div class="fu-fn-empty">Nothing recorded for this contact yet.</div>';
+  else {
+    const shown = h.all ? h.items : h.items.slice(0, FU_HIST_SHOWN);
+    inner = shown.map(it => `<div class="fu-t-hl ${esc(it.kind)}"><span class="fu-t-hd">${esc(fuStamp(it.at))}</span>` +
+      `<span class="fu-t-hi"><i class="ph-bold ph-${FU_HIST_ICON[it.kind] || (/^manual_/.test(it.type || '') ? 'user' : 'gear')}"></i></span>` +
+      `<div><b>${esc(it.title)}</b>${it.detail && it.detail.toLowerCase() !== it.title.toLowerCase() ? ' <em>' + esc(it.detail) + '</em>' : ''}</div></div>`).join('') +
+      (h.items.length > shown.length ? `<button type="button" class="fu-t-hmore" onclick="fuHistAll('${c.id}')">Show all ${h.items.length}</button>` : '') +
+      (h.items.some(it => FU_TOUCH_TYPES.includes(it.type)) ? '<div class="fu-fn-note">A touch shows when it went out and which attempt it was. The text of the email is not kept here; it is in your Gmail sent folder.</div>' : '');
+  }
+  return `<tr class="fu-t-hist" id="fut-hist-${c.id}"><td colspan="8"><div class="fu-t-hbox" role="region" aria-label="History of ${esc(name)}">` +
+    `<div class="fu-t-hhead">History: ${esc(name)}</div>${inner}</div></td></tr>`;
+}
+function fuHistPaint(id) {
+  const c = fuTierRows.find(x => x.id === id), el = document.getElementById('fut-hist-' + id);
+  if (c && el && _fuTierOpen.has(id)) el.outerHTML = fuHistRowHtml(c);
+}
+async function fuHistLoad(id, quiet) {
+  if (!quiet || !_fuHist.has(id)) { _fuHist.set(id, { state: 'loading', items: [] }); fuHistPaint(id); }
+  const keepAll = !!(_fuHist.get(id) || {}).all;
+  try {
+    const res = await fetch('/api/followups/timeline?id=' + encodeURIComponent(id));
+    const d = await res.json();
+    if (!res.ok || !Array.isArray(d.items)) throw new Error(d.error || res.status);
+    _fuHist.set(id, { state: 'ok', items: d.items, all: keepAll });
+  } catch (e) {
+    if (!quiet) _fuHist.set(id, { state: 'error', items: [] });
+  }
+  fuHistPaint(id);
+}
+function fuHistAll(id) {
+  const h = _fuHist.get(id); if (h) { h.all = true; fuHistPaint(id); }
+}
+async function toggleFuHistory(id) {
+  const c = fuTierRows.find(x => x.id === id); if (!c) return;
+  const btn = document.getElementById('fut-hb-' + id);
+  if (_fuTierOpen.has(id)) {
+    _fuTierOpen.delete(id);
+    document.getElementById('fut-hist-' + id)?.remove();
+    btn?.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  _fuTierOpen.add(id);
+  btn?.setAttribute('aria-expanded', 'true');
+  document.getElementById('fut-row-' + id)?.insertAdjacentHTML('afterend', fuHistRowHtml(c));
+  await fuHistLoad(id);
 }
 
 // ── Analytics tab ─────────────────────────────────────────────────────────────

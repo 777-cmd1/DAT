@@ -163,17 +163,15 @@ def _stagger(contact_id, window):
 def _reply_kind(reply, ws, now):
     """What this reply means, read exactly as the live hook reads it.
 
-    A row stored before triage shipped carries no category, so the category is
-    recovered from its text first — the same two steps as app.py's reply hook.
+    `_ladder_reply_triage` is the hook's own category/filter-key lookup (it
+    recovers either one from the text when the row is missing it), and
+    `interpret_reply` is the hook's own rule — so this is the same
+    implementation and not a second copy of it.
     """
     app_mod = _app_module()
-    category = reply.triage_category
-    if category is None:
-        res = app_mod.classify_reply_text(reply.subject, reply.body,
-                                          ws.get_reply_filters(), ws.get_filter_keywords())
-        category = res['category'] if res else None
+    category, filter_key = app_mod._ladder_reply_triage(reply, ws)
     kind, _resume_at = _ladder.interpret_reply(
-        category, app_mod._strip_quoted(reply.body), now)
+        category, app_mod._strip_quoted(reply.body), now, filter_key=filter_key)
     return kind
 
 
@@ -185,7 +183,27 @@ def _not_lower(current, derived):
     return max(current, derived, key=_ladder.RUNGS.index)
 
 
-def _plan_contact(fc, replies, ws, now, deferred, silence_days):
+def _rescued_ids(uid, rows):
+    """contact id -> when the owner last moved it by hand (`manual_set_rung`).
+
+    A rerun re-derives the refusal from the same replies every time, so without
+    this the owner's correction of a misread reply would be undone by the next run.
+    """
+    app_mod = _app_module()
+    from app.models import FollowupContact as FC, FollowupEvent as FE
+    from sqlalchemy import func
+    out, ids = {}, [fc.id for fc in rows]
+    for i in range(0, len(ids), 400):
+        rowset = app_mod.db.session.query(
+            FE.followup_contact_id, func.max(FE.event_at)).join(
+            FC, FE.followup_contact_id == FC.id).filter(
+            FC.user_id == uid, FE.followup_contact_id.in_(ids[i:i + 400]),
+            FE.event_type == 'manual_set_rung').group_by(FE.followup_contact_id)
+        out.update({cid: at for cid, at in rowset})
+    return out
+
+
+def _plan_contact(fc, replies, ws, now, deferred, silence_days, rescued_at=None):
     """What this contact should become. Pure reads — nothing is written here, so a
     dry run and a real run decide identically. None means "leave it alone".
 
@@ -201,20 +219,24 @@ def _plan_contact(fc, replies, ws, now, deferred, silence_days):
         return None                                 # rule 1: permanent, and not even read
 
     # rule 3: replay the replies oldest first, the way the live hook applies them.
-    seen, convs, refused = set(), [], False
+    seen, convs, refused, newest = set(), [], False, None
     for r in sorted(replies, key=lambda r: _reply_at(r, fc, now)):
+        at = _reply_at(r, fc, now)
+        newest = at if newest is None else max(newest, at)
         kind = _reply_kind(r, ws, now)
         if kind == 'refusal':
             refused = True
             continue
         if kind != 'load':
             continue                                # deferral/unknown: only "replied"
-        refused = False                             # a load undoes an earlier refusal
-        at = _reply_at(r, fc, now)
         key = _ladder.load_conversation_key(r.thread_id, fc.contact_email, at)
         if key in seen:
+            # a later message in a conversation this replay already saw: a no-op,
+            # exactly as the live hook's "already counted" early return is. It must
+            # not undo a refusal that arrived after the conversation was counted.
             continue
         seen.add(key)
+        refused = False     # the load conversation revives them, as a live load does
         convs.append((key, at))
     fresh = [(k, at) for k, at in convs if not app_mod._ladder_load_counted(fc, k)]
     load_count = (fc.load_count or 0) + len(fresh)
@@ -226,7 +248,10 @@ def _plan_contact(fc, replies, ws, now, deferred, silence_days):
         rung = current                              # rule 2: already out of play, stays out
     else:
         rung = _not_lower(current, _ladder.rung_for(load_count, replied))
-    if refused:
+    # The owner's hand beats the classifier's guess: once he has moved this contact
+    # by hand after its newest reply, a rerun must not re-park it on that reply.
+    rescued = bool(rescued_at and newest is not None and rescued_at > newest)
+    if refused and not rescued:
         rung, exit_reason = 'dormant', 'refused'    # they asked us to stop
 
     state = (fc.state or '').strip().lower()        # rule 4: the owner's own mark wins
@@ -264,10 +289,16 @@ def _plan_contact(fc, replies, ws, now, deferred, silence_days):
     # `_ladder_set_next` applies, so the stagger window can be sized before any write.
     dates = (keeps is None and rung in _ladder.RUNGS and rung != 'client'
              and not auto_paused and state == 'active')
+    # The Stop List gates the Send page's INITIAL outreach too, so only an
+    # exclusion that came from a Block earns one — the app's own `close` action
+    # deliberately does not stop-list, and a legacy `closed` contact must keep
+    # receiving new DAT load mail. (`current == 'excluded'` cannot reach here:
+    # rule 1 returns above. It is named so the intent survives a later edit.)
+    stop_list = rung == 'excluded' and (state == 'blocked' or current == 'excluded')
     return {'from_rung': fc.rung, 'rung': rung, 'load_count': load_count,
             'new_loads': fresh, 'exit_reason': exit_reason, 'auto_paused': auto_paused,
             'keeps_date': keeps, 'redate': keeps is None, 'dates': dates,
-            'last_seen': last}
+            'stop_list': stop_list, 'last_seen': last}
 
 
 _PLACED = ('rung', 'load_count', 'exit_reason', 'auto_paused', 'is_followup_enabled',
@@ -302,9 +333,10 @@ def _apply_plan(fc, plan, ws, now, window=_STAGGER_DAYS):
         # the one-time and recurring senders do not read the rung, so a date left
         # on a contact we just parked would still be mailed
         app_mod._ladder_stop_all(fc)
-        if fc.rung == 'excluded':
-            # the Stop List is what makes it permanent for every sender, and this
-            # migration is now the thing asserting `excluded` for these contacts
+        if plan['stop_list']:
+            # the Stop List is what makes `excluded` permanent for every sender,
+            # including the Send page's initial outreach — hence only for a contact
+            # the owner had actually blocked (see the plan's `stop_list`)
             listed = app_mod._add_to_stop_list(fc.user_id, fc.contact_email,
                                                reason=app_mod._EXCLUDE_STOP_REASON)
     elif plan['redate']:
@@ -361,10 +393,13 @@ def place_contacts_on_ladder(workspace_id, now, dry_run=True, silence_days=SILEN
     replies = app_mod._replies_by_contact(uid, rows)
     deferred = app_mod._ladder_deferred_ids(uid, rows)   # a date a broker asked for
 
-    out = {'workspace_id': ws.id, 'dry_run': bool(dry_run), 'placed': 0, 'skipped': 0,
-           'loads_counted': 0, 'foreign': foreign, 'failed': [],
+    rescued = _rescued_ids(uid, rows)                    # moved by hand since its last reply
+
+    out = {'workspace_id': ws.id, 'dry_run': bool(dry_run), 'total': len(rows),
+           'placed': 0, 'skipped': 0, 'loads_counted': 0, 'foreign': foreign, 'failed': [],
            'silence_days': int(silence_days or 0), 'new_dates': 0, 'stagger_days': 0,
-           'rungs': {r: 0 for r in _RUNG_VALUES}, 'moves': {}, 'keeps_date': {}, 'rows': []}
+           'stop_listed': 0, 'rungs': {r: 0 for r in _RUNG_VALUES},
+           'exits': {}, 'moves': {}, 'keeps_date': {}, 'rows': []}
 
     # Decide every contact first: the stagger window has to be sized against the
     # whole population, which with the silence rule off is most of the base.
@@ -372,7 +407,8 @@ def place_contacts_on_ladder(workspace_id, now, dry_run=True, silence_days=SILEN
     for fc in rows:
         mine = replies.get(fc.id, [])
         try:
-            plans.append((fc, _plan_contact(fc, mine, ws, now, deferred, silence_days), len(mine)))
+            plans.append((fc, _plan_contact(fc, mine, ws, now, deferred, silence_days,
+                                            rescued.get(fc.id)), len(mine)))
         except Exception:
             out['failed'].append(fc.contact_email)
             app_mod.app.logger.exception('ladder placement failed for %s', fc.contact_email)
@@ -383,6 +419,8 @@ def place_contacts_on_ladder(workspace_id, now, dry_run=True, silence_days=SILEN
         if plan is None:
             out['skipped'] += 1
             out['rungs']['excluded'] += 1
+            key = f'excluded/{fc.exit_reason or "unspecified"}'
+            out['exits'][key] = out['exits'].get(key, 0) + 1
             continue
         if not dry_run:
             try:
@@ -397,6 +435,11 @@ def place_contacts_on_ladder(workspace_id, now, dry_run=True, silence_days=SILEN
         out['placed'] += 1
         out['loads_counted'] += len(plan['new_loads'])
         out['rungs'][plan['rung']] += 1
+        if plan['stop_list']:
+            out['stop_listed'] += 1
+        if plan['rung'] in _ladder.OFF_LADDER:
+            key = f'{plan["rung"]}/{plan["exit_reason"] or "unspecified"}'
+            out['exits'][key] = out['exits'].get(key, 0) + 1
         if plan['rung'] != plan['from_rung']:
             move = f'{plan["from_rung"]} -> {plan["rung"]}'
             out['moves'][move] = out['moves'].get(move, 0) + 1
@@ -420,8 +463,11 @@ def place_contacts_on_ladder(workspace_id, now, dry_run=True, silence_days=SILEN
 def _print_report(out, verbose=False):
     head = 'DRY RUN — nothing written' if out['dry_run'] else 'APPLIED'
     print(f'\n{head}  ·  workspace {out["workspace_id"]}')
-    print(f'  contacts placed      {out["placed"]}')
-    print(f'  left alone (excluded) {out["skipped"]}')
+    # placed + left alone + failed must account for every contact, or the rung
+    # table below is quietly missing somebody
+    print(f'  contacts             {out["total"]}  '
+          f'= placed {out["placed"]} + left alone (excluded) {out["skipped"]}'
+          f' + failed {len(out["failed"])}')
     print(f'  load conversations counted {out["loads_counted"]}')
     sil = out['silence_days']
     print('  silence rule         ' + (f'park after {sil} days of silence' if sil
@@ -440,6 +486,15 @@ def _print_report(out, verbose=False):
     print('\n  resulting rungs')
     for rung in _RUNG_VALUES:
         print(f'    {rung:<9} {out["rungs"][rung]:>5}')
+    if out['exits']:
+        # "dormant" is two very different piles: a timeout he may want to undo,
+        # and brokers who asked us to stop. He must not have to grep for that.
+        print('\n  off the ladder, by reason')
+        for key, n in sorted(out['exits'].items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f'    {key:<22} {n:>5}')
+        print(f'    on the Stop List       {out["stop_listed"]:>5}'
+              f'  (of {sum(n for k, n in out["exits"].items() if k.startswith("excluded/"))}'
+              f' excluded; a Block, never a Close)')
     if out['moves']:
         print('\n  rung changes')
         for move, n in sorted(out['moves'].items(), key=lambda kv: -kv[1]):

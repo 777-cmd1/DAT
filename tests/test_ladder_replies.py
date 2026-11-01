@@ -442,3 +442,42 @@ def test_a_failed_route_refresh_costs_only_the_route(app, db, monkeypatch):
     assert (fc.rung, fc.load_count, fc.touch_attempt) == ('warm', 1, 0)
     assert fc.next_followup_at is not None and fc.next_followup_at > _app._utcnow()
     assert fc.current_route == 'Old, TX → Elsewhere, TX'
+
+
+# ══ fix round 2 ══════════════════════════════════════════════════════════════
+# The shared 'negative' bucket holds the mc_request filter, so a broker opening a
+# carrier packet ("send me your MC and insurance") came out of interpret_reply as
+# a refusal and was parked. It is the hottest reply in the book: it must reach the
+# owner instead. The split lives in Follow-up — the Replies page, its categories
+# and its keyword sets are untouched.
+
+def test_an_mc_request_asks_for_a_human_instead_of_parking_the_contact(app, db):
+    fc = _contact(db, rung='cold')
+    _reply(db, fc, category='negative', body='Sure, send me your MC and insurance',
+           reply_filter_key='mc_request')
+    assert (fc.rung, fc.exit_reason) == ('neutral', None)
+    assert fc.attention_at is not None                 # it lands in "Needs you"
+    assert _events(fc, 'ladder_refusal') == []
+    assert len(_events(fc, 'ladder_unknown')) == 1
+
+
+def test_an_mc_request_is_recognised_without_a_stored_filter_key(app, db):
+    fc = _contact(db, rung='neutral')
+    _reply(db, fc, category='negative', body="What's your MC number?")
+    assert (fc.rung, fc.exit_reason) == ('neutral', None)
+    assert _events(fc, 'ladder_refusal') == []
+
+
+def test_a_genuine_refusal_is_untouched_by_the_mc_split(app, db):
+    fc = _contact(db, rung='warm')
+    _reply(db, fc, category='negative', body='please remove me from your list',
+           reply_filter_key='declined')
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+    assert len(_events(fc, 'ladder_refusal')) == 1
+
+
+def test_an_mc_request_that_also_asks_us_to_stop_is_a_refusal(app, db):
+    fc = _contact(db, rung='neutral')
+    _reply(db, fc, category='negative', reply_filter_key='mc_request',
+           body='send me your mc — actually, take me off this list')
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')

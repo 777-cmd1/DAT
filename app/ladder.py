@@ -181,13 +181,24 @@ _REFUSAL_PHRASES = (
     'remove me', 'unsubscribe', 'take me off', 'stop contacting',
     "don't contact", 'do not contact', 'dont contact', 'dnu', 'do not use',
 )
+# Reply filters that sit in the shared 'negative' bucket but are not a "no" to us.
+# "Send me your MC and insurance" is a broker opening a carrier packet — the
+# hottest reply in the book. The Replies page files it under Negative because its
+# recommended action there is Ignore; the ladder must not read that as a refusal,
+# so it goes to the human instead. Same shape as the deferral split below: the
+# shared keyword sets are never edited, Follow-up tells the cases apart itself.
+PACKET_REQUEST_FILTERS = ('mc_request',)
 
 
-def interpret_reply(category, text: str, now: datetime):
+def interpret_reply(category, text: str, now: datetime, filter_key=None):
     """Classify a broker reply as (kind, resume_at).
 
     kind is one of 'load', 'refusal', 'deferral', 'unknown'. resume_at is only
     set for a 'deferral' that states a time, and is always after `now`.
+
+    `filter_key` is the triage filter that matched (`Reply.reply_filter_key`, or
+    `classify_reply_text`'s `filter_key`). It is what tells a carrier-packet ask
+    apart from a real "no" inside the shared 'negative' bucket.
     """
     t = _norm(text)    # real mail has curly apostrophes and hard-wrapped lines
     if category in (None, 'negative'):
@@ -196,6 +207,8 @@ def interpret_reply(category, text: str, now: datetime):
         stated = parse_deferral(t, now)
         if stated is not None or any(p in t for p in _DEFERRAL_PHRASES):
             return 'deferral', stated
+        if filter_key in PACKET_REQUEST_FILTERS:
+            return 'unknown', None      # they want our packet: the owner answers it
         return ('refusal', None) if category == 'negative' else ('unknown', None)
     if category == 'gave_info':
         return 'load', None

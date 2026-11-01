@@ -5701,6 +5701,9 @@ def api_followups_bulk_action():
             if fc.rung == 'excluded':
                 results.append({'id': cid, 'ok': False, 'error': _EXCLUDED_MSG})
                 continue
+            if fc.exit_reason == 'refused':     # as the single free-send refuses it
+                results.append({'id': cid, 'ok': False, 'error': _REFUSED_MSG})
+                continue
             dup = _recent_followup_block(fc)
             if dup:
                 results.append({'id': cid, 'ok': False, 'skip': True, 'duplicate': True, 'error': dup})
@@ -7475,6 +7478,28 @@ def _ladder_refresh_route(fc, reply, now):
         fc.current_route = f'{chosen[0]} \u2192 {chosen[1]}'
 
 
+def _ladder_reply_triage(reply, ws):
+    """(category, filter_key) for one stored reply, as the ladder must read it.
+
+    Either can be missing: at ingest this hook runs before triage has written a
+    category, and rows from before the filter-key column carry none. Whichever is
+    absent is recovered from the text with the same classifier the Replies page
+    uses; a category already stored is never overridden by the recovery.
+
+    The filter key matters because the shared 'negative' bucket holds
+    `mc_request` — see `_ladder.PACKET_REQUEST_FILTERS`. The migration reads
+    replies through this same function, so it and the live hook cannot disagree.
+    """
+    category, filter_key = reply.triage_category, reply.reply_filter_key
+    if category is None or not filter_key:
+        res = classify_reply_text(reply.subject, reply.body,
+                                  ws.get_reply_filters(), ws.get_filter_keywords())
+        if res:
+            category = category or res['category']
+            filter_key = filter_key or res['filter_key']
+    return category, filter_key
+
+
 def _apply_reply_to_ladder(fc, reply, ws, now):
     """Move a contact on the warmth ladder because of an inbound reply.
 
@@ -7498,13 +7523,9 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
                       notes=f'unrecognised rung {fc.rung!r}')
         return 'unknown'
     cfg = _ladder.LADDER_DEFAULTS
-    category = reply.triage_category
-    if category is None:
-        # At ingest the hook runs before triage has stored a category on the row.
-        res = classify_reply_text(reply.subject, reply.body,
-                                  ws.get_reply_filters(), ws.get_filter_keywords())
-        category = res['category'] if res else None
-    kind, resume_at = _ladder.interpret_reply(category, _strip_quoted(reply.body), now)
+    category, filter_key = _ladder_reply_triage(reply, ws)
+    kind, resume_at = _ladder.interpret_reply(category, _strip_quoted(reply.body), now,
+                                              filter_key=filter_key)
     old_rung = fc.rung
 
     if kind == 'load':

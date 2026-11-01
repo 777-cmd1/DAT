@@ -155,3 +155,30 @@ def test_a_past_date_rolls_forward_only_with_a_forward_cue():
 
 def test_a_future_date_this_year_needs_no_cue():
     assert ladder.parse_deferral('Dec 5', NOW) == datetime(2026, 12, 5, 9, 0, 0)
+
+
+# ── fix round 2: the 'negative' bucket is not all "no" ───────────────────────
+
+def test_a_carrier_packet_ask_is_not_a_refusal():
+    # the Replies page files mc_request under Negative (its action there is
+    # Ignore); to the ladder it is a live broker asking for our packet
+    body = 'Sure, send me your MC and insurance'
+    assert ladder.interpret_reply('negative', body, NOW) == ('refusal', None)
+    assert ladder.interpret_reply('negative', body, NOW,
+                                  filter_key='mc_request') == ('unknown', None)
+
+
+def test_the_packet_split_never_rescues_a_real_refusal():
+    for text in ('remove me from your list', 'take me off this list', 'do not contact me'):
+        assert ladder.interpret_reply('negative', text, NOW,
+                                      filter_key='mc_request') == ('refusal', None), text
+    # and a stated return date still reads as a deferral, not as a packet ask
+    assert ladder.interpret_reply('negative', 'nothing this week', NOW,
+                                  filter_key='mc_request')[0] == 'deferral'
+
+
+def test_an_unrelated_filter_key_changes_nothing():
+    assert ladder.interpret_reply('negative', 'not interested', NOW,
+                                  filter_key='declined') == ('refusal', None)
+    assert ladder.interpret_reply('gave_info', 'we have a load', NOW,
+                                  filter_key='mc_request')[0] == 'load'

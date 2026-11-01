@@ -26,6 +26,17 @@ NOW = _app._utcnow().replace(microsecond=0)
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
 
+@pytest.fixture(autouse=True)
+def _clean_base(app, db):
+    """Every test here commits contacts, replies and events, and the in-memory DB
+    outlives the test. Clear them first, as the other ladder suites do: a few
+    hundred stray rows otherwise slow every scheduler scan that runs after them."""
+    from app.models import FollowupContact, FollowupEvent, Reply, StopListEntry
+    for model in (FollowupEvent, FollowupContact, Reply, StopListEntry):
+        model.query.delete()
+    db.session.commit()
+
+
 def _workspace(db):
     import bcrypt as _bcrypt
     from app.models import User, Workspace
@@ -52,15 +63,22 @@ def _contact(db, ws, days_ago=1, **kw):
     return fc
 
 
-def _reply(db, fc, category='gave_info', thread=None, days_ago=1, body='load Laredo to Dallas'):
+def _reply(db, fc, category='gave_info', thread=None, days_ago=1,
+           body='load Laredo to Dallas', filter_key=None):
     from app.models import Reply
     r = Reply(user_id=fc.user_id, workspace_id=fc.workspace_id,
               msg_id=f'<{uuid.uuid4().hex}@mail>', thread_id=thread,
               from_email=fc.contact_email, subject='Re: Laredo to Dallas',
-              body=body, triage_category=category,
+              body=body, triage_category=category, reply_filter_key=filter_key,
               received_at=NOW - timedelta(days=days_ago))
     db.session.add(r); db.session.commit()
     return r
+
+
+def _event(fc, event_type):
+    from app.models import FollowupEvent
+    return FollowupEvent.query.filter_by(followup_contact_id=fc.id,
+                                         event_type=event_type).one()
 
 
 def _run(db, ws, dry_run=False, now=None, **kw):
@@ -295,6 +313,182 @@ def test_silence_does_not_move_a_manual_decision(app, db):
     db.session.refresh(client); db.session.refresh(gone)
     assert client.rung == 'client'
     assert gone.rung == 'excluded'
+
+
+# ── fix round 2: an MC request is not a refusal ─────────────────────────────
+# The shared 'negative' bucket holds the mc_request filter, so "send me your MC
+# and insurance" — a broker opening a carrier packet, the hottest reply there is
+# — went straight into interpret_reply and came out a refusal.
+
+def test_an_mc_request_is_not_read_as_a_refusal(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', body='Sure, send me your MC and insurance',
+           filter_key='mc_request')
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('neutral', None)
+    assert fc.next_followup_at is not None
+
+
+def test_an_mc_request_with_no_stored_filter_key_is_recovered(app, db):
+    # older rows carry a category but no reply_filter_key
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', body="What's your MC number?", filter_key=None)
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('neutral', None)
+
+
+def test_a_genuine_refusal_is_still_a_refusal(app, db):
+    # the two must not drift back together
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', body='Please remove me from your list',
+           filter_key='declined')
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+
+
+def test_an_mc_request_that_also_says_stop_is_a_refusal(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', filter_key='mc_request',
+           body='send me your mc, actually never mind, take me off this list')
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+
+
+# ── fix round 2: a duplicate load message must not undo a later refusal ─────
+
+def test_a_duplicate_load_message_does_not_revive_a_refuser(app, db):
+    # the conversation was counted, THEN they refused, then wrote again in the
+    # same thread: the live hook returns early on the duplicate and leaves them
+    # parked, so the replay must too
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='gave_info', thread='t1', days_ago=30)
+    _reply(db, fc, category='negative', body='take me off this list', days_ago=20)
+    _reply(db, fc, category='gave_info', thread='t1', days_ago=10,
+           body='still open, can you cover')
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+    assert fc.load_count == 1                      # the one conversation still counted
+
+
+def test_a_new_load_conversation_after_a_refusal_still_revives(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='gave_info', thread='t1', days_ago=30)
+    _reply(db, fc, category='negative', body='take me off this list', days_ago=20)
+    _reply(db, fc, category='gave_info', thread='t2', days_ago=10, body='new load')
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.load_count, fc.exit_reason) == ('hot', 2, None)
+
+
+def test_a_rerun_does_not_re_park_a_contact_a_load_revived(app, db):
+    # Review Focus: on the second run the load is already counted — it must still
+    # be the thing that undid the earlier refusal
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', body='take me off this list', days_ago=30)
+    _reply(db, fc, category='gave_info', thread='t1', days_ago=10)
+    _run(db, ws)
+    _run(db, ws, now=NOW + timedelta(days=14))
+    db.session.refresh(fc)
+    assert (fc.rung, fc.load_count, fc.exit_reason) == ('warm', 1, None)
+
+
+# ── fix round 2: the owner's rescue survives a rerun ────────────────────────
+
+def test_a_rerun_does_not_undo_a_rung_the_owner_set_by_hand(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', body='take me off this list', days_ago=10)
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert fc.rung == 'dormant'                    # misread, and the owner fixes it
+
+    fc.rung, fc.exit_reason = 'warm', None
+    fc.load_count = 1
+    _app._record_event(fc, 'manual_set_rung', actor_type='user',
+                       from_state='dormant', to_state='warm', notes='moved by you')
+    db.session.commit()
+
+    _run(db, ws, now=NOW + timedelta(days=1))
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('warm', None), 'the rescue was undone'
+
+
+def test_a_hand_move_older_than_the_newest_reply_does_not_shield_a_refusal(app, db):
+    # he moved them, THEN they asked us to stop: the refusal is the newer fact
+    ws = _workspace(db)
+    fc = _contact(db, ws, rung='warm', load_count=1, is_followup_enabled=False)
+    _app._record_event(fc, 'manual_set_rung', actor_type='user',
+                       from_state='cold', to_state='warm')
+    db.session.commit()
+    _event(fc, 'manual_set_rung').event_at = NOW - timedelta(days=20)
+    db.session.commit()
+    _reply(db, fc, category='negative', body='take me off this list', days_ago=3)
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+
+
+# ── fix round 2: a legacy `closed` contact stays off the global Stop List ───
+
+def test_only_a_blocked_contact_reaches_the_stop_list(app, db):
+    # the Stop List gates the Send page's INITIAL outreach too, and the app's own
+    # `close` action deliberately does not stop-list — only `block` does
+    from app.models import StopListEntry
+    ws = _workspace(db)
+    blocked = _contact(db, ws, state='blocked', is_followup_enabled=False)
+    closed = _contact(db, ws, state='closed', is_followup_enabled=False)
+    out = _run(db, ws)
+    for fc in (blocked, closed):
+        db.session.refresh(fc)
+        assert fc.rung == 'excluded'               # the rung mapping is unchanged
+    listed = {e.value for e in StopListEntry.query.filter_by(user_id=ws.owner_id)}
+    assert listed == {blocked.contact_email}
+    assert closed.contact_email not in listed
+    assert out['stop_listed'] == 1
+    assert out['exits'] == {'excluded/blocked': 1, 'excluded/closed': 1}
+
+
+# ── fix round 2: the report the owner reads ────────────────────────────────
+
+def test_the_summary_splits_dormant_by_reason_and_accounts_for_everyone(app, db):
+    ws = _workspace(db)
+    _contact(db, ws, days_ago=SILENCE_DAYS + 5)                    # stale
+    _contact(db, ws, days_ago=SILENCE_DAYS + 5)                    # stale
+    refuser = _contact(db, ws)
+    _reply(db, refuser, category='negative', body='take me off this list')
+    _contact(db, ws, state='blocked', is_followup_enabled=False)   # excluded
+    _contact(db, ws)                                               # cold, live
+    out = _run(db, ws)
+    assert out['exits'] == {'dormant/stale': 2, 'dormant/refused': 1,
+                            'excluded/blocked': 1}
+    assert out['total'] == 5
+    assert out['placed'] + out['skipped'] + len(out['failed']) == out['total']
+    assert sum(out['rungs'].values()) == out['placed'] + out['skipped']
+
+
+def test_a_row_that_raises_is_accounted_for_in_the_totals(app, db, monkeypatch):
+    ws = _workspace(db)
+    good, bad = _contact(db, ws), _contact(db, ws)
+    import scripts.migrate_to_ladder as mig
+    real = mig._plan_contact
+    monkeypatch.setattr(mig, '_plan_contact', lambda fc, *a, **k: (_ for _ in ()).throw(
+        RuntimeError('boom')) if fc.id == bad.id else real(fc, *a, **k))
+    out = _run(db, ws)
+    assert out['failed'] == [bad.contact_email]
+    assert out['total'] == 2 and out['placed'] == 1
+    assert out['placed'] + out['skipped'] + len(out['failed']) == out['total']
 
 
 # ── fix round 1: the silence rule is the operator's choice ──────────────────

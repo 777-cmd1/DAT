@@ -970,3 +970,19 @@ def test_restarting_the_sequence_still_works_for_an_exhausted_contact(app, db, c
     assert _act(client, fc, 'restart-fu1').status_code == 200
     fc = _reload(db, fc)
     assert fc.stage == 'fu1_scheduled' and fc.is_followup_enabled is True
+
+
+# ══ fix round 2 ══════════════════════════════════════════════════════════════
+
+def test_the_bulk_one_off_send_is_refused_to_someone_who_asked_us_to_stop(
+        app, db, client, me, sent_log):
+    # the fourth copy of the gate: the bulk branch had no refusal guard at all,
+    # and after the ladder migration it reaches every broker who said stop
+    refuser = _fc(db, me, 'dormant', exit_reason='refused')
+    fine = _fc(db, me, 'dormant', exit_reason='exhausted')
+    results = {r['id']: r for r in
+               _bulk(client, [refuser.id, fine.id], 'free-send').get_json()['results']}
+    assert results[refuser.id]['ok'] is False
+    assert 'asked us to stop' in results[refuser.id]['error']
+    assert results[fine.id]['ok'] is True       # a deliberate one-off still works
+    assert sent_log == [fine.contact_email]

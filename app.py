@@ -1257,6 +1257,11 @@ def _restart_contact_from_fu1(contact, actor_user_id=None):
     """Re-open a contact into the FU1 scheduled sequence."""
     if contact.rung == 'excluded':
         return False, _EXCLUDED_MSG
+    # This re-arms the drip, so it must honour a refusal like every other sender:
+    # the owner moves them back to a rung by hand first (the ladder migration puts
+    # every broker who asked us to stop on `refused`, so a bulk restart reaches them).
+    if contact.exit_reason == 'refused':
+        return False, _REFUSED_MSG
     now = _utcnow()
     old_state = contact.state
     old_stage = contact.stage
@@ -5409,6 +5414,11 @@ def _followup_send_now_core(fc, uid):
         return 'skip', 'Contact must be active to send'
     if fc.rung == 'excluded':
         return 'skip', _EXCLUDED_MSG
+    # This is the drip's own path: it sends the stage template and advances the stage.
+    # A contact the ladder has taken out of play keeps a live stage (the stage is its
+    # history, not its schedule), so the rung — not the stage — decides here.
+    if fc.rung in _ladder.OFF_LADDER or fc.rung == 'client':
+        return 'skip', _OFF_LADDER_SEND_MSG[fc.rung]
     if fc.stage not in STAGE_TO_TEMPLATE:
         return 'skip', 'No scheduled follow-up to send'
     dup = _recent_followup_block(fc)
@@ -5491,6 +5501,10 @@ def api_followups_action():
             return jsonify(error='Cannot send to blocked or closed contact'), 400
         if fc.rung == 'excluded':
             return jsonify(error=_EXCLUDED_MSG), 400
+        # a deliberate one-off to a dormant contact is allowed; to someone who asked
+        # us to stop it is not, and the tier screen's own guard is only in the browser
+        if fc.exit_reason == 'refused':
+            return jsonify(error=_REFUSED_MSG), 400
         dup = _recent_followup_block(fc)
         if dup:
             return jsonify(error=dup, duplicate=True), 409
@@ -7551,6 +7565,11 @@ _LADDER_RUNG_VALUES = _ladder.RUNGS + _ladder.OFF_LADDER
 _LADDER_MANUAL_ACTIONS = ('pause-auto', 'resume-auto', 'set-rung', 'exclude')   # single and bulk
 _LADDER_SINGLE_ACTIONS = ('unexclude',)        # one contact at a time, never in bulk
 _EXCLUDED_MSG = 'Excluded contacts are never contacted again'
+_REFUSED_MSG = 'This contact asked us to stop'
+# Why the drip's scheduled follow-up cannot go to a contact that is out of play.
+_OFF_LADDER_SEND_MSG = {'dormant': 'This contact is inactive: move it to a rung first',
+                        'excluded': _EXCLUDED_MSG,
+                        'client': 'Clients get no scheduled follow-ups'}
 _EXCLUDE_STOP_REASON = 'excluded'              # what `exclude` writes on the Stop List; unexclude removes only this
 # Events that (re)set a contact's date. A deferral is only "why the date is what it is"
 # while none of these has come after it.

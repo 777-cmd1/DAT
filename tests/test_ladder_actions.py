@@ -911,3 +911,62 @@ def test_unexclude_keeps_the_stop_list_entry_of_a_contact_that_was_blocked_meanw
     assert entry.value == fc.contact_email
     assert _app.is_blocked(fc.contact_email, *_app.load_stop_list(uid=me[0].id)) is True
     assert _reload(db, fc).state == 'blocked'
+
+
+# ══ fix round 1 (Task 10) ════════════════════════════════════════════════════
+# The drip's own send path (`send-now`) checked only `rung == 'excluded'`, then
+# sent the stage template, advanced the stage and assigned next_followup_at
+# directly — the one date written outside `_ladder_set_next`. Before the ladder
+# migration almost no row was off the ladder with a live FU stage; afterwards
+# most of the base is, and the tier screen offers the button on every one.
+
+@pytest.mark.parametrize('rung,fragment', [
+    ('dormant', 'inactive'),
+    ('client', 'Clients'),
+])
+def test_the_drip_send_path_refuses_a_contact_that_is_out_of_play(
+        app, db, client, me, sent_log, rung, fragment):
+    fc = _fc(db, me, rung, stage='fu1_scheduled', is_followup_enabled=False)
+    status, detail = _app._followup_send_now_core(fc, me[0].id)
+    assert (status, fragment in detail) == ('skip', True), detail
+    resp = _act(client, fc, 'send-now')
+    assert resp.status_code == 400 and fragment in resp.get_json()['error']
+    fc = _reload(db, fc)
+    assert sent_log == []
+    assert fc.stage == 'fu1_scheduled' and fc.rung == rung
+
+
+def test_a_one_off_send_still_reaches_a_dormant_contact(app, db, client, me, sent_log):
+    # Task 9 deliberately allows the owner a deliberate one-off to a dormant contact
+    fc = _fc(db, me, 'dormant', exit_reason='exhausted')
+    assert _act(client, fc, 'free-send').status_code == 200
+    assert sent_log == [fc.contact_email]
+
+
+def test_a_one_off_send_is_refused_to_someone_who_asked_us_to_stop(app, db, client, me, sent_log):
+    # the tier screen hides the button, but that guard only exists in the browser
+    fc = _fc(db, me, 'dormant', exit_reason='refused')
+    resp = _act(client, fc, 'free-send')
+    assert resp.status_code == 400 and 'asked us to stop' in resp.get_json()['error']
+    assert sent_log == []
+
+
+def test_restarting_the_sequence_is_refused_for_someone_who_asked_us_to_stop(
+        app, db, client, me, sent_log):
+    # restart-fu1 re-arms the drip, and the ladder migration puts every broker who
+    # asked us to stop on exit_reason 'refused' — a bulk restart must not reach them
+    fc = _fc(db, me, 'dormant', exit_reason='refused')
+    resp = _act(client, fc, 'restart-fu1')
+    assert resp.status_code == 400 and 'asked us to stop' in resp.get_json()['error']
+    bulk = _bulk(client, [fc.id], 'restart-fu1').get_json()['results'][0]
+    assert bulk['ok'] is False and 'asked us to stop' in bulk['error']
+    fc = _reload(db, fc)
+    assert fc.rung == 'dormant' and fc.is_followup_enabled is False
+    assert fc.next_followup_at is None and sent_log == []
+
+
+def test_restarting_the_sequence_still_works_for_an_exhausted_contact(app, db, client, me):
+    fc = _fc(db, me, 'dormant', exit_reason='exhausted')
+    assert _act(client, fc, 'restart-fu1').status_code == 200
+    fc = _reload(db, fc)
+    assert fc.stage == 'fu1_scheduled' and fc.is_followup_enabled is True

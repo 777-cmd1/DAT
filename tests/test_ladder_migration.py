@@ -13,11 +13,13 @@ import sys
 import uuid
 from datetime import timedelta
 
+import pytest
 import sqlalchemy as sa
 
 _app = sys.modules['_dat_mailer_app']
 
-from scripts.migrate_to_ladder import SILENCE_DAYS, place_contacts_on_ladder   # noqa: E402
+from scripts.migrate_to_ladder import (                                        # noqa: E402
+    SILENCE_DAYS, _STAGGER_PER_DAY, place_contacts_on_ladder)
 
 NOW = _app._utcnow().replace(microsecond=0)
 
@@ -61,8 +63,8 @@ def _reply(db, fc, category='gave_info', thread=None, days_ago=1, body='load Lar
     return r
 
 
-def _run(db, ws, dry_run=False):
-    out = place_contacts_on_ladder(ws.id, NOW, dry_run=dry_run)
+def _run(db, ws, dry_run=False, now=None, **kw):
+    out = place_contacts_on_ladder(ws.id, now or NOW, dry_run=dry_run, **kw)
     db.session.commit()
     return out
 
@@ -71,6 +73,12 @@ def _migration_events(fc):
     from app.models import FollowupEvent
     return FollowupEvent.query.filter_by(followup_contact_id=fc.id,
                                          event_type='migrated_to_ladder').count()
+
+
+def _migration_event(fc):
+    from app.models import FollowupEvent
+    return FollowupEvent.query.filter_by(followup_contact_id=fc.id,
+                                         event_type='migrated_to_ladder').one()
 
 
 def _load_events(fc):
@@ -103,7 +111,7 @@ def test_rung_comes_from_counted_load_conversations(app, db):
 def test_a_reply_that_is_not_a_load_only_lifts_cold_to_neutral(app, db):
     ws = _workspace(db)
     answered = _contact(db, ws)
-    _reply(db, answered, category='negative', body='nothing for us right now')
+    _reply(db, answered, category='rate_request', body='what is your rate on this lane?')
     silent = _contact(db, ws)
     _run(db, ws)
     db.session.refresh(answered); db.session.refresh(silent)
@@ -131,6 +139,124 @@ def test_a_colleague_reply_counts_for_the_address_we_wrote_to(app, db):
     _run(db, ws)
     db.session.refresh(fc)
     assert (fc.load_count, fc.rung) == (1, 'warm')
+
+
+# ── fix round 1: a broker who asked us to stop must stay stopped ─────────────
+# The migration used to read only "is there a reply", never what it said, so a
+# refusal the live hook parks as dormant/refused came out as neutral — dated,
+# with three touches to spend. Nothing else catches it: _auto_triage_new_replies
+# deliberately never auto-blocks a negative reply.
+
+@pytest.mark.parametrize('body', [
+    'please remove me from your list',
+    'take me off this list',
+    'we are not interested at all',
+    'nothing for us right now',           # 'negative' with no deferral wording
+])
+def test_a_refusal_is_parked_exactly_as_the_live_hook_parks_it(app, db, body):
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', body=body)
+    assert _app._ladder.interpret_reply('negative', body, NOW)[0] == 'refusal', 'test premise'
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused'), body
+    assert fc.next_followup_at is None and fc.touch_enabled is False
+    assert _app._ladder_budget(fc.rung) == 0
+
+
+def test_a_refusal_before_triage_shipped_is_still_read(app, db):
+    # the row carries no category; the live hook recovers one with classify_reply_text
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category=None, body='Please remove me from your list, thanks.')
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+
+
+def test_a_load_after_a_refusal_brings_them_back(app, db):
+    # replayed oldest first, as the live hook applies them: only a load revives
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', body='take me off this list', days_ago=20)
+    _reply(db, fc, category='gave_info', thread='t1', days_ago=2)
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.load_count, fc.exit_reason) == ('warm', 1, None)
+
+
+def test_a_vague_reply_after_a_refusal_does_not_bring_them_back(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', body='take me off this list', days_ago=20)
+    _reply(db, fc, category='rate_request', body='what is your rate?', days_ago=2)
+    _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+
+
+def test_a_load_from_before_triage_is_recovered_from_its_text(app, db):
+    # load_count must not read as a floor: pre-triage rows have no category
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category=None, thread='t1', days_ago=3,
+           body='I have a load Laredo TX to Dallas TX picking up 11/05, '
+                '42,000 lbs, rate $2,400')
+    out = _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.load_count) == ('warm', 1)
+    assert out['loads_counted'] == 1
+
+
+# ── fix round 1: nothing may keep a schedule once it is off the ladder ───────
+
+def test_a_parked_contact_loses_a_one_time_and_recurring_schedule(app, db):
+    # Review Focus: Path 0 / Path 2 gate on active + not paused + rung != excluded,
+    # and `dormant` passes all three — a kept date would still be mailed
+    ws = _workspace(db)
+    once = _contact(db, ws, days_ago=SILENCE_DAYS + 5, scheduled_once=True)
+    repeating = _contact(db, ws, days_ago=SILENCE_DAYS + 5, recurring_enabled=True,
+                         recurring_days='0,2', recurring_time='14:00')
+    refuser = _contact(db, ws, scheduled_once=True)
+    _reply(db, refuser, category='negative', body='take me off this list')
+    out = _run(db, ws)
+    for fc in (once, repeating, refuser):
+        db.session.refresh(fc)
+        assert fc.rung == 'dormant', fc.contact_email
+        assert fc.next_followup_at is None and fc.touch_enabled is False
+        assert not (fc.scheduled_once or fc.recurring_enabled or fc.is_followup_enabled)
+    assert repeating.recurring_days is None and repeating.recurring_time is None
+    assert out['keeps_date'] == {}          # and the dry run must not claim they keep one
+
+
+def test_an_excluded_contact_is_written_to_the_stop_list(app, db):
+    # the Stop List is what makes `excluded` permanent for every sender
+    from app.models import StopListEntry
+    ws = _workspace(db)
+    blocked = _contact(db, ws, state='blocked', is_followup_enabled=False)
+    _run(db, ws)
+    entry = StopListEntry.query.filter_by(user_id=ws.owner_id, type='email',
+                                          value=blocked.contact_email).one()
+    assert entry.reason == _app._EXCLUDE_STOP_REASON      # so unexclude can undo it
+    evt = _app.json.loads(_migration_event(blocked).metadata_json)
+    assert evt['stop_list_added'] is True
+
+
+# ── fix round 1: the backlog is spread, not queued for one morning ──────────
+
+def test_first_touches_are_staggered_over_a_window(app, db):
+    ws = _workspace(db)
+    made = [_contact(db, ws) for _ in range(25)]
+    for fc in made:
+        _reply(db, fc, category='rate_request', body='what is your rate?')
+    _run(db, ws)
+    days = set()
+    for fc in made:
+        db.session.refresh(fc)
+        assert fc.next_followup_at is not None
+        days.add(fc.next_followup_at.date())
+    assert len(days) >= 4, f'all {len(made)} land on {len(days)} day(s)'
 
 
 # ── the 90-day silence rule ──────────────────────────────────────────────────
@@ -169,6 +295,84 @@ def test_silence_does_not_move_a_manual_decision(app, db):
     db.session.refresh(client); db.session.refresh(gone)
     assert client.rung == 'client'
     assert gone.rung == 'excluded'
+
+
+# ── fix round 1: the silence rule is the operator's choice ──────────────────
+# The owner saw the distribution and does not want four fifths of his book parked.
+
+def test_silence_days_zero_parks_nobody_for_silence(app, db):
+    ws = _workspace(db)
+    old = SILENCE_DAYS + 200
+    quiet = _contact(db, ws, days_ago=old)
+    answered = _contact(db, ws, days_ago=old)
+    _reply(db, answered, category='rate_request', body='what is your rate?', days_ago=old)
+    shipper = _contact(db, ws, days_ago=old)
+    _reply(db, shipper, category='gave_info', thread='t1', days_ago=old)
+
+    out = _run(db, ws, silence_days=0)
+    for fc in (quiet, answered, shipper):
+        db.session.refresh(fc)
+    assert (quiet.rung, quiet.exit_reason) == ('cold', None)
+    assert (answered.rung, answered.exit_reason) == ('neutral', None)
+    assert (shipper.rung, shipper.load_count) == ('warm', 1)
+    for fc in (quiet, answered, shipper):
+        assert fc.next_followup_at is not None and fc.touch_enabled is True
+    assert out['silence_days'] == 0
+    assert out['rungs']['dormant'] == 0
+    assert out['new_dates'] == 3
+
+
+def test_silence_days_defaults_to_ninety(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws, days_ago=SILENCE_DAYS + 5)
+    out = _run(db, ws)                             # no silence_days given
+    db.session.refresh(fc)
+    assert out['silence_days'] == SILENCE_DAYS == 90
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'stale')
+
+
+def test_a_refusal_still_parks_them_with_the_silence_rule_off(app, db):
+    # Review Focus: "remove me" a year ago is a decision, not a timeout
+    ws = _workspace(db)
+    fc = _contact(db, ws, days_ago=400)
+    _reply(db, fc, category='negative', body='please remove me from your list', days_ago=370)
+    _run(db, ws, silence_days=0)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+    assert fc.next_followup_at is None and fc.touch_enabled is False
+
+
+def test_client_and_excluded_stay_exempt_with_the_silence_rule_off(app, db):
+    ws = _workspace(db)
+    old = SILENCE_DAYS + 200
+    client = _contact(db, ws, days_ago=old, state='loads', is_followup_enabled=False)
+    gone = _contact(db, ws, days_ago=old, rung='excluded')
+    parked = _contact(db, ws, days_ago=old, rung='dormant', exit_reason='refused',
+                      is_followup_enabled=False)
+    _run(db, ws, silence_days=0)
+    for fc in (client, gone, parked):
+        db.session.refresh(fc)
+    assert client.rung == 'client' and client.next_followup_at is None
+    assert gone.rung == 'excluded'
+    assert (parked.rung, parked.exit_reason) == ('dormant', 'refused')
+
+
+def test_the_whole_population_is_spread_when_nobody_is_parked(app, db):
+    # with the rule off, several hundred land on live rungs at once: the stagger
+    # window has to widen with the population, not stay at its floor
+    n = 10 * _STAGGER_PER_DAY
+    ws = _workspace(db)
+    made = [_contact(db, ws, days_ago=SILENCE_DAYS + 100) for _ in range(n)]
+    out = _run(db, ws, silence_days=0)
+    assert out['new_dates'] == n
+    assert out['stagger_days'] == 10, 'the window did not widen for the population'
+    days = {}
+    for fc in made:
+        db.session.refresh(fc)
+        days[fc.next_followup_at.date()] = days.get(fc.next_followup_at.date(), 0) + 1
+    assert len(days) == out['stagger_days']
+    # the id hash fills the buckets unevenly, but nothing like the whole base at once
+    assert max(days.values()) <= 2 * _STAGGER_PER_DAY, days
 
 
 # ── the owner's own decisions ────────────────────────────────────────────────
@@ -251,10 +455,14 @@ def test_a_schedule_the_owner_set_by_hand_keeps_its_date(app, db):
                          recurring_time='14:00', is_followup_enabled=False)
     repeating.next_followup_at = when
     db.session.commit()
-    _run(db, ws)
+    out = _run(db, ws)
     db.session.refresh(once); db.session.refresh(repeating)
     assert once.next_followup_at == when
     assert repeating.next_followup_at == when
+    # the operator must be able to see what the run will NOT change, and why
+    assert out['keeps_date'] == {'scheduled_once': 1, 'recurring': 1}
+    assert {r['email']: r['keeps_date'] for r in out['rows']} == {
+        once.contact_email: 'scheduled_once', repeating.contact_email: 'recurring'}
 
 
 def test_a_date_a_broker_asked_for_survives(app, db):
@@ -343,7 +551,9 @@ def test_rerunning_is_idempotent(app, db):
 
     dates = [fc.next_followup_at for fc in (hot, cold, stale, blocked)]
 
-    second = _run(db, ws)
+    # a fortnight later every first touch has come and gone: a second run must not
+    # re-date the overdue ones and quietly empty the Overdue bucket
+    second = _run(db, ws, now=NOW + timedelta(days=14))
     for fc in (hot, cold, stale, blocked):
         db.session.refresh(fc)
     assert state() == after_first
@@ -356,9 +566,25 @@ def test_rerunning_is_idempotent(app, db):
 
 
 def test_an_unknown_workspace_is_refused(app, db):
-    import pytest
     with pytest.raises(ValueError):
         place_contacts_on_ladder('no-such-workspace', NOW)
+
+
+def test_one_bad_row_does_not_take_the_rest_down(app, db, monkeypatch):
+    ws = _workspace(db)
+    good, bad = _contact(db, ws), _contact(db, ws)
+    _reply(db, good, thread='t1')
+    _reply(db, bad, thread='t2')
+    import scripts.migrate_to_ladder as mig
+    real = mig._apply_plan
+    monkeypatch.setattr(mig, '_apply_plan', lambda fc, *a: (_ for _ in ()).throw(
+        RuntimeError('boom')) if fc.id == bad.id else real(fc, *a))
+    out = _run(db, ws)
+    db.session.refresh(good); db.session.refresh(bad)
+    assert out['failed'] == [bad.contact_email]        # named, not a traceback
+    assert out['placed'] == 1 and out['rungs']['warm'] == 1
+    assert good.rung == 'warm'                         # the good row still landed
+    assert bad.rung == 'cold' and bad.load_count == 0  # and the bad one is untouched
 
 
 # ── the inline migration loop itself (the gap left by Task 2) ────────────────

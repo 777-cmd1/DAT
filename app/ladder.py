@@ -21,6 +21,10 @@ LADDER_DEFAULTS = {
     'budget_engaged': 5,
     'hot_weekly': True,
     'higher_rung_patience': True,
+    # Most touches the scheduler sends per local day, per workspace. Without it, switching
+    # the ladder on mails the whole overdue backlog in one pass and, since every contact is
+    # then re-dated by the same rule, the whole cohort comes due together again.
+    'daily_cap': 25,
 }
 
 # "next month" is a flat 30 days, not a calendar month: it keeps the result

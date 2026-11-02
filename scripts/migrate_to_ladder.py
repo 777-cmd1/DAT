@@ -359,7 +359,7 @@ def _apply_plan(fc, plan, ws, now, window=_STAGGER_DAYS):
                                                reason=app_mod._EXCLUDE_STOP_REASON)
     elif plan['redate']:
         due = _ladder.next_touch_at(fc.rung, fc.touch_attempt or 0, now,
-                                    _ladder.LADDER_DEFAULTS)
+                                    app_mod._ladder_cfg(ws))
         if due is not None:
             due += timedelta(days=_stagger(fc.id, window))
         app_mod._ladder_set_next(fc, due, ws)

@@ -291,7 +291,7 @@ def test_inactive_beyond_ninety_days_starts_dormant(app, db):
     assert fc.load_count == 3                      # the history is still counted
     assert fc.next_followup_at is None and fc.touch_enabled is False
     # the screens must say why it is out, not just that it is
-    assert _app._ladder_next_reason(fc) == 'dormant: silent for months when the ladder started'
+    assert _app._ladder_next_reason(fc, False, ws) == 'dormant: silent for months when the ladder started'
 
 
 def test_a_recent_reply_keeps_a_contact_off_the_stale_pile(app, db):
@@ -717,7 +717,7 @@ def test_the_drip_stops_owning_a_placed_contact(app, db):
     assert fc.stage == 'fu1_scheduled'             # ...but the stage, and its history, stay
     assert _app._ladder_owns_schedule(fc) is True
     assert fc.next_followup_at is not None and fc.touch_enabled is True
-    assert _app._ladder_next_reason(fc) != 'first follow-up sequence'
+    assert _app._ladder_next_reason(fc, False, ws) != 'first follow-up sequence'
 
 
 def test_a_schedule_the_owner_set_by_hand_keeps_its_date(app, db):

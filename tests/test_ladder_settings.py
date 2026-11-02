@@ -260,12 +260,38 @@ def test_a_load_reply_refills_from_the_workspace_config(app, db, me):
 
 
 def test_no_engine_path_still_reads_the_global_defaults():
-    """The settings are only real if nothing bypasses them: the one allowed mention of
-    LADDER_DEFAULTS in app.py is the base _ladder_cfg merges the saved values over."""
+    """The settings are only real if nothing bypasses them: the one allowed code mention of
+    LADDER_DEFAULTS outside app/ladder.py is the base _ladder_cfg merges the saved values over.
+    Scripts that date contacts (the migration) are engine paths too."""
+    import glob
+    import os
     import re
-    src = open(_app.__file__, encoding='utf-8').read()
-    uses = [l for l in re.findall(r'^.*LADDER_DEFAULTS.*$', src, re.M) if not l.lstrip().startswith('#')]
-    assert len(uses) == 1 and 'dict(_ladder.LADDER_DEFAULTS)' in uses[0], uses
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    files = [os.path.join(root, 'app.py')] + sorted(glob.glob(os.path.join(root, 'scripts', '*.py')))
+    assert len(files) > 1, 'scripts/ not found'
+    uses = []
+    for path in files:
+        src = open(path, encoding='utf-8').read()
+        uses += [(os.path.basename(path), l) for l in re.findall(r'^.*LADDER_DEFAULTS.*$', src, re.M)
+                 if not l.lstrip().startswith('#')]
+    assert len(uses) == 1 and uses[0][0] == 'app.py' and 'dict(_ladder.LADDER_DEFAULTS)' in uses[0][1], uses
+
+
+def test_the_migration_dates_contacts_from_the_workspace_config(app, db):
+    """scripts/migrate_to_ladder.py re-dates with the workspace's first_touch_days too."""
+    import importlib.util
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    spec = importlib.util.spec_from_file_location('migrate_to_ladder', os.path.join(root, 'scripts', 'migrate_to_ladder.py'))
+    mig = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mig)
+    user, ws = _user(db, cfg={'ladder': {'first_touch_days': 20}, 'touch_hour': 12})
+    fc = _fc(db, (user, ws), 'neutral', touch_attempt=0, next_followup_at=None, touch_enabled=False)
+    now = _app._utcnow()
+    mig._apply_plan(fc, {'from_rung': 'neutral', 'rung': 'neutral', 'load_count': 0, 'new_loads': [],
+                         'exit_reason': None, 'auto_paused': False, 'redate': True, 'attention': False,
+                         'stop_list': False}, ws, now)
+    assert fc.next_followup_at is not None and fc.next_followup_at > now + timedelta(days=19)
 
 
 # ── the switch ───────────────────────────────────────────────────────────────
@@ -507,5 +533,132 @@ def test_the_follow_up_page_carries_the_switch_not_only_settings():
 def test_settings_carry_the_knobs_and_the_copy_editor():
     html = _html()
     for el in ('plLadderAuto', 'plLdFirst', 'plLdSecond', 'plLdWeekly', 'plLdBudgetNo',
-               'plLdBudgetEng', 'plLdPatience', 'plLdHotWeekly', 'ladderCopyEditor'):
+               'plLdBudgetEng', 'plLdCap', 'plLdPatience', 'plLdHotWeekly', 'ladderCopyEditor',
+               'ladderCopyNote', 'ladderKnobNote'):
         assert f'id="{el}"' in html, el
+
+
+# ── the daily cap ────────────────────────────────────────────────────────────
+
+def _due(db, me, n, rung='cold', **kw):
+    """n overdue contacts, oldest first, returned in that order."""
+    out = []
+    for i in range(n):
+        out.append(_fc(db, me, rung, touch_attempt=0,
+                       next_followup_at=_app._utcnow() - timedelta(hours=10 + n - i), **kw))
+    return out
+
+
+def test_the_cap_ships_at_25_and_is_a_setting(app, db, client, me):
+    assert ladder.LADDER_DEFAULTS['daily_cap'] == 25 and _cfg(db, me[1])['daily_cap'] == 25
+    _put(client, ladder={'daily_cap': 10})
+    assert _cfg(db, me[1])['daily_cap'] == 10
+    _put(client, ladder={'daily_cap': 0})
+    assert _cfg(db, me[1])['daily_cap'] == 1
+    _put(client, ladder={'daily_cap': 99999})
+    assert _cfg(db, me[1])['daily_cap'] == 500
+
+
+def test_a_tick_sends_no_more_than_the_cap_oldest_first(app, db, sent):
+    me = _user(db, ladder_on=True, cfg={'ladder': {'daily_cap': 2}})
+    fcs = _due(db, me, 5)
+    assert _app._run_ladder_touches(_app._utcnow()) == 2
+    assert sent == [fcs[0].contact_email, fcs[1].contact_email]
+    for fc in fcs[2:]:                                    # capped: nothing spent, nobody flagged
+        fc = _reload(db, fc)
+        assert fc.touch_attempt == 0 and fc.attention_at is None and fc.rung == 'cold'
+        assert fc.next_followup_at < _app._utcnow() and fc.auto_paused is False
+    for fc in fcs[:2]:                                    # sent: re-dated from the real send
+        assert _reload(db, fc).next_followup_at > _app._utcnow()
+
+
+def test_the_cap_holds_across_ticks_and_restarts_until_local_midnight(app, db, sent):
+    me = _user(db, ladder_on=True, cfg={'ladder': {'daily_cap': 2}})
+    fcs = _due(db, me, 5)
+    assert _app._run_ladder_touches(_app._utcnow()) == 2
+    # a second run (a new tick, or a restarted process: nothing is kept in memory) sends nothing
+    assert _app._run_ladder_touches(_app._utcnow()) == 0 and len(sent) == 2
+    # yesterday's sends do not count: move them before the owner's local midnight
+    from app.models import FollowupEvent
+    midnight = _app._local_day_start(_app._ws_tz(_reload(db, me[1])))
+    for ev in FollowupEvent.query.filter_by(event_type='touch_sent'):
+        ev.event_at = midnight - timedelta(hours=1)
+    db.session.commit()
+    assert _app._run_ladder_touches(_app._utcnow()) == 2 and len(sent) == 4
+    assert sent[2:] == [fcs[2].contact_email, fcs[3].contact_email]       # the backlog drains in order
+
+
+def test_the_cap_is_per_workspace(app, db, sent):
+    a = _user(db, ladder_on=True, cfg={'ladder': {'daily_cap': 1}})
+    b = _user(db, ladder_on=True, cfg={'ladder': {'daily_cap': 3}})
+    _due(db, a, 3)
+    _due(db, b, 4)
+    assert _app._run_ladder_touches(_app._utcnow()) == 4         # 1 for a, 3 for b
+
+
+def test_a_failed_send_does_not_use_up_the_cap(app, db, monkeypatch):
+    monkeypatch.setattr(_app, 'send_followup_email', lambda fu, tpl, cfg, uid=None: (False, 'smtp down'))
+    me = _user(db, ladder_on=True, cfg={'ladder': {'daily_cap': 1}})
+    _due(db, me, 2)
+    _app._run_ladder_touches(_app._utcnow())
+    assert _app._ladder_sent_today(_reload(db, me[1])) == 0
+
+
+def test_a_capped_tick_still_parks_a_contact_whose_attempts_are_spent(app, db, sent):
+    me = _user(db, ladder_on=True, cfg={'ladder': {'daily_cap': 1}})
+    fcs = _due(db, me, 2)
+    spent = _fc(db, me, 'cold', touch_attempt=3, next_followup_at=_app._utcnow() - timedelta(hours=1))
+    _app._run_ladder_touches(_app._utcnow())
+    assert _reload(db, spent).rung == 'dormant'                  # parked by the exhaust rule, no email
+    assert spent.contact_email not in sent
+
+
+def test_the_label_reports_the_cap_and_the_days_the_backlog_takes(app, db, client, me):
+    _put(client, ladder={'daily_cap': 5})
+    _due(db, me, 12)
+    got = client.get('/api/followups/pipeline-config').get_json()
+    assert (got['ladder_due_total'], got['ladder_due_24h'], got['ladder_drain_days']) == (12, 5, 3)
+    fun = client.get('/api/followups/funnel').get_json()
+    assert (fun['ladder_due_total'], fun['ladder_due_24h'], fun['ladder_drain_days']) == (12, 5, 3)
+
+
+def test_the_label_counts_what_is_left_of_today_and_a_small_set_is_one_day(app, db, client, me, sent):
+    _put(client, ladder={'daily_cap': 5}, ladder_auto_enabled=True)
+    _due(db, me, 3)
+    assert _app._run_ladder_touches(_app._utcnow()) == 3
+    _due(db, me, 4)                                              # 2 of today's 5 are left
+    got = client.get('/api/followups/pipeline-config').get_json()
+    assert (got['ladder_due_total'], got['ladder_due_24h'], got['ladder_drain_days']) == (4, 2, 2)
+    assert client.get('/api/followups/pipeline-config').get_json()['ladder_due_total'] == 4
+
+
+def test_the_label_for_nobody_due_and_for_a_set_that_fits(app, db, client, me):
+    got = client.get('/api/followups/pipeline-config').get_json()
+    assert (got['ladder_due_total'], got['ladder_due_24h'], got['ladder_drain_days']) == (0, 0, 0)
+    _due(db, me, 3)
+    got = client.get('/api/followups/pipeline-config').get_json()
+    assert (got['ladder_due_total'], got['ladder_due_24h'], got['ladder_drain_days']) == (3, 3, 1)
+
+
+# ── the same numbers sent again move nothing ────────────────────────────────
+
+def test_a_cadence_sent_unchanged_does_not_redate_anyone(app, db, client, me):
+    stage = str(_reload(db, me[1]).get_stages()[0]['id'])
+    cad = {stage: {'days': 3, 'mode': 'manual'}}
+    _put(client, cadence=cad)
+    sentinel = _app._utcnow() + timedelta(days=40)
+    fc = _fc(db, me, 'cold', touch_attempt=0, pipeline_stage=int(stage), next_followup_at=sentinel)
+    # what the Automation Save does, every time, with ladder_auto_enabled flipped alongside
+    assert _put(client, cadence=cad, ladder_auto_enabled=True).status_code == 200
+    assert _reload(db, fc).next_followup_at == sentinel
+    # a real change still re-bases the stage cadence
+    assert _put(client, cadence={stage: {'days': 5, 'mode': 'manual'}}).status_code == 200
+    assert _reload(db, fc).next_followup_at != sentinel
+
+
+def test_the_engine_reads_need_a_workspace_argument(app, db, me):
+    fc = _fc(db, me, 'warm')
+    with pytest.raises(TypeError):
+        _app._ladder_next_reason(fc)
+    with pytest.raises(TypeError):
+        _app._ladder_budget('warm')

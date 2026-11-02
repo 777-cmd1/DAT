@@ -2717,6 +2717,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 .fu-sw-main { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .fu-sw-head { font-size: 14px; font-weight: 700; color: var(--text); }
 .fu-sw-head.on { color: var(--green); }
+.fu-sw-head.paused { color: var(--yellow); }
 .fu-sw-sub { font-size: 13px; color: var(--text2); line-height: 1.55; margin-top: 4px; }
 .fu-sw-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--text2); cursor: pointer; flex: 0 0 auto; }
 .fu-sw-toggle input { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; }
@@ -3977,6 +3978,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
               <div class="settings-sub">What each rung sends, under your name. This is the built-in wording until you change it: read it here before you switch automatic follow-ups on. A rung with several emails uses them in turn, so two touches in a row never read the same. Saved with the Save button below.</div>
             </div>
           </div>
+          <div class="settings-note" id="ladderCopyNote" style="margin-bottom:12px">Changing any one email saves the whole rung as your own text: it then stops following wording changes made to the built-in emails, until you press Restore the built-in text. A blank box is dropped when you save, so the rung ends up with one email fewer. Keep at least as many emails as the attempts a rung is allowed (3 or 5 by default), or an email will be sent twice.</div>
           <div id="ladderCopyEditor"></div>
           <div class="settings-note" id="ladderCopyVars"></div>
         </section>
@@ -4013,7 +4015,9 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
             <label class="ld-field"><span>Then every (days)</span><input id="plLdWeekly" type="number" min="1" max="365"></label>
             <label class="ld-field"><span>Attempts while they have sent no load</span><input id="plLdBudgetNo" type="number" min="1" max="20"></label>
             <label class="ld-field"><span>Attempts once they have sent a load</span><input id="plLdBudgetEng" type="number" min="1" max="20"></label>
+            <label class="ld-field"><span>Most follow-ups sent per day</span><input id="plLdCap" type="number" min="1" max="500"></label>
           </div>
+          <div class="settings-note" id="ladderKnobNote" style="margin-bottom:12px">The attempt numbers act at once, not only on new dates: if you lower them, every contact that has already used that many attempts is parked as dormant at the next scheduler run, with no email sent, and none of them show in the 24-hour count. The daily limit counts from your local midnight; contacts over it keep their place and go out the next day, oldest first.</div>
           <div class="settings-stack-sm">
             <div class="settings-toggle-row">
               <div class="settings-toggle-copy">
@@ -6929,7 +6933,7 @@ let pipelineDripAuto = true;      // scheduler auto-sends the FU1–FU3 drip seq
 let pipelineAutoSend = true;      // master switch over every automatic send path
 let pipelineAutoPreview = { drip: 0, touches: 0, scheduled: 0 };   // due in next 24h, per path
 let pipelineLadder = { first_touch_days: 1, second_touch_days: 3, weekly_days: 7, budget_no_load: 3,
-                       budget_engaged: 5, hot_weekly: true, higher_rung_patience: true };   // cadence + patience (server is the truth)
+                       budget_engaged: 5, hot_weekly: true, higher_rung_patience: true, daily_cap: 25 };   // cadence + patience (server is the truth)
 let pipelineLadderAuto = false;   // the warmth ladder's own switch: off until the owner turns it on
 let pipelineLadderDue = 0;        // contacts it would email in the next 24 h if it were on
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
@@ -7890,7 +7894,7 @@ function renderPipelineCadenceEditor() {
 }
 
 const LADDER_KNOBS = { plLdFirst: 'first_touch_days', plLdSecond: 'second_touch_days', plLdWeekly: 'weekly_days',
-                       plLdBudgetNo: 'budget_no_load', plLdBudgetEng: 'budget_engaged' };
+                       plLdBudgetNo: 'budget_no_load', plLdBudgetEng: 'budget_engaged', plLdCap: 'daily_cap' };
 const LADDER_FLAGS = { plLdPatience: 'higher_rung_patience', plLdHotWeekly: 'hot_weekly' };
 function renderLadderKnobs() {
   for (const [id, key] of Object.entries(LADDER_KNOBS)) {
@@ -8040,8 +8044,14 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
       mode: r.querySelector('.pl-cad-mode')?.value || 'off',
     };
   });
+  // The same numbers sent again would re-date contacts, so send them only when they changed:
+  // the switch must do the same thing wherever it is flipped.
+  const cadenceSame = Object.keys(cadence).every(sid => {
+    const was = pipelineCadence[sid] || { days: 0, mode: 'off' }, now = cadence[sid];
+    return was.mode === now.mode && (now.mode === 'off' || was.days === now.days);
+  });
   const body = scope === 'automation'
-    ? { cadence,
+    ? { ...(cadenceSame ? {} : { cadence }),
         touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
         digest_enabled: !!document.getElementById('plDigest')?.checked,
         drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked,
@@ -8149,28 +8159,51 @@ async function saveLadderCopy() {
 // Off until the owner turns it on. The label says what turning it on will do; the payload is
 // the funnel's, which also carries the other two switches every automatic send sits behind.
 let _fuSwData = null, _fuSwBusy = false;
+// The other two gates every automatic send sits behind; `why` names one in a sentence, `fix` says what to do.
+function fuLadderGates(d) {
+  const g = [];
+  if (!d.fu_auto_enabled) g.push({ why: 'the FU1–FU3 switch is off', fix: 'turn on the FU1–FU3 switch in Settings → Automation (it stops every follow-up)' });
+  if (!d.auto_send_enabled) g.push({ why: 'automatic sending is off', fix: 'turn on “Allow automatic sending” in Settings → Automation' });
+  return g;
+}
+// What the switch would send, under the daily limit: the payload's total, today's share and the days it takes.
+function fuLadderPlan(d) {
+  const total = d.ladder_due_total || 0, today = d.ladder_due_24h || 0, days = d.ladder_drain_days || 0;
+  const cap = (d.ladder || pipelineLadder).daily_cap;
+  if (!total) return 'Nobody is due in the next 24 hours.';
+  const who = fuPlural(total, 'contact is', 'contacts are') + ' due in the next 24 hours';
+  if (today >= total) return `${who}, within the daily limit of ${cap}: they go out together at the next scheduler run (every 15 minutes).`;
+  return today
+    ? `${who}, more than the daily limit of ${cap}. ${today} go out today, oldest first, and the rest follow over ${fuPlural(days, 'day', 'days')} in all.`
+    : `${who}. The daily limit of ${cap} is already used today, so they start tomorrow and take ${fuPlural(days, 'day', 'days')}.`;
+}
 function renderFuLadderSwitch(d) {
   const el = document.getElementById('fuLadderSwitch');
   if (!el) return;
   _fuSwData = d;
-  const on = d.ladder_auto_enabled === true, n = d.ladder_due_24h || 0, c = d.ladder || pipelineLadder;
+  const on = d.ladder_auto_enabled === true, c = d.ladder || pipelineLadder;
   const rhythm = `first follow-up after ${fuPlural(c.first_touch_days, 'day', 'days')}, second after ${fuPlural(c.second_touch_days, 'day', 'days')}, ` +
     `then every ${fuPlural(c.weekly_days, 'day', 'days')}; ${fuPlural(c.budget_no_load, 'attempt', 'attempts')} while they have sent no load, ` +
     `${fuPlural(c.higher_rung_patience ? c.budget_engaged : c.budget_no_load, 'attempt', 'attempts')} once they have`;
-  const due = n ? `${n} ${n === 1 ? 'contact is' : 'contacts are'} due in the next 24 hours (overdue ones first)`
-                : 'nobody is due in the next 24 hours';
-  const blocked = [];
-  if (!d.fu_auto_enabled) blocked.push('the FU1–FU3 switch is off (Settings → Automation), which stops every follow-up');
-  if (!d.auto_send_enabled) blocked.push('“Allow automatic sending” is off (Settings → Automation)');
-  const warn = blocked.length
-    ? `<div class="fu-sw-warn"><b>${on ? 'Switched on, but nothing will be sent:' : 'Turning it on will not be enough:'}</b> ${esc(blocked.join('; '))}.</div>` : '';
+  const gates = fuLadderGates(d);
+  const plan = fuLadderPlan(d);
+  const warn = gates.length
+    ? `<div class="fu-sw-warn"><b>${on ? 'Nothing will be sent until:' : 'Turning it on will not be enough:'}</b> ` +
+      `${esc(gates.map(g => g.fix).join('; '))}.</div>` : '';
+  const paused = on && gates.length;
+  const head = !on ? 'Automatic follow-ups are OFF'
+    : paused ? 'Automatic follow-ups are ON, but paused: ' + gates.map(g => g.why).join(' and ')
+    : 'Automatic follow-ups are ON';
+  const sub = !on
+    ? `Nothing is sent on its own. Turning this on lets the ladder email contacts as their touch comes due. ${plan} Rhythm: ${rhythm}. It sends the texts under Settings → Ladder emails.`
+    : paused
+      ? `Nothing is being sent, whatever is due. The ladder starts as soon as the item below is on. Then: ${plan} Rhythm: ${rhythm}.`
+      : `The ladder emails each contact on its own when its touch comes due. ${plan} Replies are checked right before every send. Rhythm: ${rhythm}.`;
   el.hidden = false;
   el.innerHTML =
     '<div class="fu-sw-main"><div>' +
-      `<div class="fu-sw-head${on ? ' on' : ''}" id="fuSwTitle">Automatic follow-ups are ${on ? 'ON' : 'OFF'}</div>` +
-      '<div class="fu-sw-sub">' + esc(on
-        ? `The ladder emails each contact on its own when its touch comes due; ${due}. Replies are checked right before every send. Rhythm: ${rhythm}.`
-        : `Nothing is sent on its own. Turning this on lets the ladder email contacts as their touch comes due: ${due}. Rhythm: ${rhythm}. It sends the texts under Settings → Ladder emails.`) + '</div>' +
+      `<div class="fu-sw-head${paused ? ' paused' : on ? ' on' : ''}" id="fuSwTitle">${esc(head)}</div>` +
+      '<div class="fu-sw-sub">' + esc(sub) + '</div>' +
     '</div>' +
     `<label class="fu-sw-toggle"><span>${on ? 'On' : 'Off'}</span>` +
       `<input type="checkbox" role="switch" id="fuLadderAuto" aria-label="Automatic follow-ups" ${on ? 'checked' : ''} onchange="onFuLadderSwitch(this)"></label>` +
@@ -8187,11 +8220,13 @@ function openLadderSettings(anchor) {
 }
 async function onFuLadderSwitch(el) {
   if (_fuSwBusy) { el.checked = !el.checked; return; }
-  const want = el.checked, d = _fuSwData || {}, n = d.ladder_due_24h || 0;
+  const want = el.checked, d = _fuSwData || {};
   if (want) {
+    const gates = fuLadderGates(d);
     const ok = await showConfirm(
-      (n ? `The ladder will start emailing on its own, beginning with ${fuPlural(n, 'contact', 'contacts')} that ${n === 1 ? 'is' : 'are'} due in the next 24 hours (overdue ones first).`
-         : 'The ladder will start emailing on its own as contacts come due. Nobody is due in the next 24 hours.') +
+      (gates.length ? `Nothing will be sent yet: ${gates.map(g => g.why).join(' and ')}. The switch is saved, and the ladder starts as soon as that is on.`
+                    : 'The ladder will start emailing on its own.') +
+      '\n\n' + fuLadderPlan(d) +
       '\n\nEach email is the text under Settings → Ladder emails, and replies are checked right before every send. You can switch it off here at any time.',
       { title: 'Turn on automatic follow-ups?', okText: 'Turn on', danger: false });
     if (!ok) { el.checked = false; return; }

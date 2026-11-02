@@ -1131,7 +1131,8 @@ def _at_touch_hour(nxt, ws, uid):
 # Every engine read goes through _ladder_cfg(ws); the code defaults in
 # ladder.LADDER_DEFAULTS are only the base it merges the saved values over.
 _LADDER_INT_MAX = {'first_touch_days': 365, 'second_touch_days': 365, 'weekly_days': 365,
-                   'budget_no_load': 20, 'budget_engaged': 20}     # every one is at least 1
+                   'budget_no_load': 20, 'budget_engaged': 20,
+                   'daily_cap': 500}                              # every one is at least 1
 _LADDER_BOOL_KEYS = ('hot_weekly', 'higher_rung_patience')
 
 
@@ -6053,7 +6054,7 @@ def api_followups_pipeline_config():
                    auto_send_preview=_auto_send_preview(ws),
                    ladder=_ladder_cfg(ws),
                    ladder_auto_enabled=bool(ws and ws.ladder_auto_enabled),
-                   ladder_due_24h=_ladder_due_count(ws),
+                   **_ladder_preview_fields(ws),
                    timezone=_cfg.get('timezone') or '',
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
@@ -6223,6 +6224,7 @@ def api_followups_pipeline_config_save():
 
     cadence = data.get('cadence')
     cadence_changed = False
+    cadence_before = ws.get_cadence()
     if isinstance(cadence, dict):
         from app.models import CADENCE_MODES
         valid_stage_ids = {str(s['id']) for s in (ws.get_stages())}
@@ -6239,7 +6241,6 @@ def api_followups_pipeline_config_save():
                 continue
             merged_cad[str(k)] = {'days': days, 'mode': mode}
         cfg['cadence'] = merged_cad
-        cadence_changed = True
 
     th = data.get('touch_hour')
     if th is not None:
@@ -6282,6 +6283,9 @@ def api_followups_pipeline_config_save():
         cfg['ladder'] = {**_ladder_clean(cfg.get('ladder')), **_ladder_clean(data['ladder'])}
 
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
+    # re-date only when the effective cadence differs: the same numbers sent again (the
+    # Automation Save always sends them) must not move anyone's date
+    cadence_changed = isinstance(cadence, dict) and ws.get_cadence() != cadence_before
     db.session.commit()
 
     if cadence_changed:
@@ -6305,7 +6309,7 @@ def api_followups_pipeline_config_save():
                    auto_send_preview=_auto_send_preview(ws),
                    ladder=_ladder_cfg(ws),
                    ladder_auto_enabled=bool(ws.ladder_auto_enabled),
-                   ladder_due_24h=_ladder_due_count(ws),
+                   **_ladder_preview_fields(ws),
                    timezone=(ws.pipeline_config or {}).get('timezone') or '')
 
 
@@ -7013,7 +7017,7 @@ def api_followups_funnel():
     ws = Workspace.query.filter_by(owner_id=uid).first()
     data['fu_auto_enabled'] = bool(ws and ws.fu_auto_enabled)
     data['ladder_auto_enabled'] = bool(ws and ws.ladder_auto_enabled)
-    data['ladder_due_24h'] = _ladder_due_count(ws)    # what switching the ladder on would send
+    data.update(_ladder_preview_fields(ws))           # what switching the ladder on would send
     data['ladder'] = _ladder_cfg(ws)                  # the rhythm the switch's label describes
     data['auto_send_enabled'] = bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True))
     return jsonify(data)
@@ -7867,7 +7871,7 @@ def _ladder_deferred_ids(uid, contacts):
     return out
 
 
-def _ladder_next_reason(fc, deferred=False, ws=None):
+def _ladder_next_reason(fc, deferred, ws):
     """One line saying why the contact's next touch is (or is not) what it is."""
     rung = fc.rung or 'cold'
     if rung == 'excluded':
@@ -8405,10 +8409,45 @@ def _ladder_sendable(fc, ws):
                 and (fc.touch_attempt or 0) < _ladder.budget_for(fc.rung, _ladder_cfg(ws)))
 
 
+def _ladder_sent_today(ws):
+    """Ladder touches this workspace has sent since its owner's local midnight, counted from
+    the `touch_sent` events the scheduler writes, so a restart cannot hand out a second day's
+    worth. Failed sends write a differently worded event and are not counted."""
+    from app.models import FollowupEvent
+    if not ws:
+        return 0
+    return FollowupEvent.query.filter(
+        FollowupEvent.workspace_id == ws.id,
+        FollowupEvent.event_type == 'touch_sent',
+        FollowupEvent.actor_type == 'scheduler',
+        FollowupEvent.notes.startswith('ladder touch', autoescape=True),
+        FollowupEvent.event_at >= _local_day_start(_ws_tz(ws)),
+    ).count()
+
+
+def _ladder_due_summary(ws, hours=24):
+    """What switching the ladder on would do, under the workspace's daily cap: `due` are the
+    contacts that would be emailed in the next `hours` (overdue included) if the switch were
+    on, `today` is how many of them the cap lets out today, `days` how many days the whole
+    set takes to go. It never sends or changes anything."""
+    cap = _ladder_cfg(ws)['daily_cap']
+    due = _ladder_due_count(ws, hours)
+    room = max(0, cap - _ladder_sent_today(ws))
+    today = min(due, room)
+    days = (1 if today else 0) + -(-(due - today) // cap)      # days that send; ceil division
+    return {'due': due, 'today': today, 'days': days}
+
+
+def _ladder_preview_fields(ws):
+    """The payload keys behind the switch's label: due in 24 h, how many of those go out
+    today under the cap, and over how many days the whole set drains."""
+    s = _ladder_due_summary(ws)
+    return {'ladder_due_total': s['due'], 'ladder_due_24h': s['today'], 'ladder_drain_days': s['days']}
+
+
 def _ladder_due_count(ws, hours=24):
     """How many contacts the ladder would email in the next `hours` (overdue included)
-    if its switch were on, whatever the switch says now: the figure that tells the owner
-    what turning it on will do. It never sends or changes anything."""
+    if its switch were on, whatever the switch says now, before the daily cap."""
     from app.models import FollowupContact
     if not ws:
         return 0
@@ -8471,6 +8510,7 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
     """
     from app.models import FollowupContact, EmailAccount, Workspace
     gate = {}
+    sent_today = {}            # workspace id -> ladder touches sent since its local midnight
     try:
         # The drip, one-time and recurring paths own the contacts flagged for them.
         q = FollowupContact.query.join(
@@ -8524,6 +8564,12 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
                 if _ladder_flag(fc, now, 'ladder_blocked', 'no follow-up template: cannot send'):
                     db.session.commit()
                 continue
+            # The daily cap comes last: a capped tick spends no attempt and flags nobody; the
+            # contact stays due and goes out on a later day, oldest first.
+            if ws.id not in sent_today:
+                sent_today[ws.id] = _ladder_sent_today(ws)
+            if sent_today[ws.id] >= cfg['daily_cap']:
+                continue
             send_cfg = {'name': acct.your_name or '', 'company': acct.your_company or '',
                         'phone': acct.your_phone or '', 'route': fc.current_route or '',
                         'gmail_address': acct.gmail_address or '', 'gmail_app_password': acct.gmail_password or ''}
@@ -8540,6 +8586,7 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
                 _record_event(fc, 'touch_sent', actor_type='scheduler',
                               from_state=fc.rung, to_state=fc.rung,
                               notes=f'ladder touch {fc.touch_attempt} on {fc.rung}')
+                sent_today[ws.id] += 1
                 if fc.touch_attempt >= _ladder.budget_for(fc.rung, cfg):
                     _ladder_exhaust(fc, now, ws)
                 else:

@@ -57,6 +57,13 @@ contact that keeps its date is reported, with the reason, in the dry run. First
 touches are staggered deterministically by contact id over a window that widens
 with the population, so the whole backlog does not land on one morning.
 
+The migration flags nobody for attention — hundreds of months-old replies would
+drown the "Needs you" panel — with one narrow exception: a contact whose NEWEST
+reply is a broker asking for our carrier packet gets `attention_at`, because those
+are the best rows in the base (they tried to open a packet and never got an
+answer) and as plain dated `neutral` rows they would appear nowhere. The dry run
+counts them on their own line.
+
 Nothing here sends mail or widens what sends: both `fu_auto_enabled` and
 `ladder_auto_enabled` are untouched, and every date goes through
 `_ladder_set_next`, which refuses a date to anyone who must not get one.
@@ -160,19 +167,23 @@ def _stagger(contact_id, window):
         return 0
 
 
-def _reply_kind(reply, ws, now):
-    """What this reply means, read exactly as the live hook reads it.
+def _read_reply(reply, ws, now):
+    """(kind, is_packet_ask) — what this reply means, as the live hook reads it.
 
     `_ladder_reply_triage` is the hook's own category/filter-key lookup (it
     recovers either one from the text when the row is missing it), and
     `interpret_reply` is the hook's own rule — so this is the same
     implementation and not a second copy of it.
+
+    `is_packet_ask` is only true when the reply is a carrier-packet request AND
+    nothing worse: "send me your MC, actually take me off this list" is a
+    refusal, so its kind is 'refusal' and the flag is false.
     """
     app_mod = _app_module()
     category, filter_key = app_mod._ladder_reply_triage(reply, ws)
     kind, _resume_at = _ladder.interpret_reply(
         category, app_mod._strip_quoted(reply.body), now, filter_key=filter_key)
-    return kind
+    return kind, (kind == 'unknown' and _ladder.is_packet_request(category, filter_key))
 
 
 def _not_lower(current, derived):
@@ -219,11 +230,12 @@ def _plan_contact(fc, replies, ws, now, deferred, silence_days, rescued_at=None)
         return None                                 # rule 1: permanent, and not even read
 
     # rule 3: replay the replies oldest first, the way the live hook applies them.
-    seen, convs, refused, newest = set(), [], False, None
+    seen, convs, refused, newest, newest_packet = set(), [], False, None, False
     for r in sorted(replies, key=lambda r: _reply_at(r, fc, now)):
         at = _reply_at(r, fc, now)
-        newest = at if newest is None else max(newest, at)
-        kind = _reply_kind(r, ws, now)
+        kind, packet = _read_reply(r, ws, now)
+        if newest is None or at >= newest:       # oldest first, so the last one wins
+            newest, newest_packet = at, packet
         if kind == 'refusal':
             refused = True
             continue
@@ -295,10 +307,16 @@ def _plan_contact(fc, replies, ws, now, deferred, silence_days, rescued_at=None)
     # receiving new DAT load mail. (`current == 'excluded'` cannot reach here:
     # rule 1 returns above. It is named so the intent survives a later edit.)
     stop_list = rung == 'excluded' and (state == 'blocked' or current == 'excluded')
+    # The one narrow exception to "the migration flags nobody": a contact whose
+    # NEWEST reply is a broker asking for our carrier packet. Those are the most
+    # valuable rows in the base — they tried to open a packet and never got an
+    # answer — and as plain dated `neutral` rows they would appear nowhere. Every
+    # other old reply still goes unflagged, so the panel is not flooded.
+    attention = newest_packet and rung in _ladder.RUNGS
     return {'from_rung': fc.rung, 'rung': rung, 'load_count': load_count,
             'new_loads': fresh, 'exit_reason': exit_reason, 'auto_paused': auto_paused,
             'keeps_date': keeps, 'redate': keeps is None, 'dates': dates,
-            'stop_list': stop_list, 'last_seen': last}
+            'stop_list': stop_list, 'attention': attention, 'last_seen': last}
 
 
 _PLACED = ('rung', 'load_count', 'exit_reason', 'auto_paused', 'is_followup_enabled',
@@ -345,10 +363,14 @@ def _apply_plan(fc, plan, ws, now, window=_STAGGER_DAYS):
         if due is not None:
             due += timedelta(days=_stagger(fc.id, window))
         app_mod._ladder_set_next(fc, due, ws)
+    flagged = False
+    if plan['attention'] and fc.attention_at is None:
+        fc.attention_at = now       # lands in "Needs you" as an unanswered reply
+        flagged = True
     for key, at in plan['new_loads']:
         evt = app_mod._ladder_record_load(fc, key, plan['from_rung'], notes='load from reply history')
         evt.event_at = at           # the day it really arrived, not migration day
-    if not listed and all(before[f] == getattr(fc, f) for f in _PLACED):
+    if not (listed or flagged) and all(before[f] == getattr(fc, f) for f in _PLACED):
         return None                 # already where it belongs: nothing to log
     return app_mod._record_event(
         fc, _MIGRATION_EVENT, actor_type='system',
@@ -398,7 +420,7 @@ def place_contacts_on_ladder(workspace_id, now, dry_run=True, silence_days=SILEN
     out = {'workspace_id': ws.id, 'dry_run': bool(dry_run), 'total': len(rows),
            'placed': 0, 'skipped': 0, 'loads_counted': 0, 'foreign': foreign, 'failed': [],
            'silence_days': int(silence_days or 0), 'new_dates': 0, 'stagger_days': 0,
-           'stop_listed': 0, 'rungs': {r: 0 for r in _RUNG_VALUES},
+           'stop_listed': 0, 'attention': 0, 'rungs': {r: 0 for r in _RUNG_VALUES},
            'exits': {}, 'moves': {}, 'keeps_date': {}, 'rows': []}
 
     # Decide every contact first: the stagger window has to be sized against the
@@ -437,6 +459,8 @@ def place_contacts_on_ladder(workspace_id, now, dry_run=True, silence_days=SILEN
         out['rungs'][plan['rung']] += 1
         if plan['stop_list']:
             out['stop_listed'] += 1
+        if plan['attention']:
+            out['attention'] += 1
         if plan['rung'] in _ladder.OFF_LADDER:
             key = f'{plan["rung"]}/{plan["exit_reason"] or "unspecified"}'
             out['exits'][key] = out['exits'].get(key, 0) + 1
@@ -450,6 +474,7 @@ def place_contacts_on_ladder(workspace_id, now, dry_run=True, silence_days=SILEN
             'email': fc.contact_email, 'from_rung': plan['from_rung'], 'rung': plan['rung'],
             'loads': plan['load_count'], 'new_loads': len(plan['new_loads']),
             'exit_reason': plan['exit_reason'], 'auto_paused': plan['auto_paused'],
+            'attention': plan['attention'],
             'keeps_date': plan['keeps_date'], 'state': fc.state, 'replies': n_replies,
             'last_seen': plan['last_seen'].isoformat() if plan['last_seen'] else None,
         })
@@ -477,6 +502,9 @@ def _print_report(out, verbose=False):
     print(f'  keeping their current date {kept}' + (f'  ({detail})' if detail else ''))
     print(f'  given a new date     {out["new_dates"]}'
           + (f', spread over {out["stagger_days"]} days' if out['new_dates'] else ''))
+    # the best rows in the base: they asked for our carrier packet and got no answer
+    print(f'  flagged for you      {out["attention"]}'
+          '  (newest reply asks for our MC/insurance → "Needs you")')
     if out['foreign']:
         print(f'  !! {out["foreign"]} contact(s) owned by another user: not touched')
     if out['failed']:
@@ -510,6 +538,8 @@ def _print_report(out, verbose=False):
                 bits.append('auto-paused')
             if r['keeps_date']:
                 bits.append(f'keeps date ({r["keeps_date"]})')
+            if r['attention']:
+                bits.append('NEEDS YOU: wants our packet')
             print('    ' + '  '.join(bits))
     print()
 

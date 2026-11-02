@@ -362,6 +362,86 @@ def test_an_mc_request_that_also_says_stop_is_a_refusal(app, db):
     assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
 
 
+# ── fix round 3: the packet asks reach "Needs you" ──────────────────────────
+# The migration flags nobody (hundreds of old replies would drown the panel) —
+# except a contact whose NEWEST reply asks for our carrier packet. Those tried to
+# open a packet and never got an answer.
+
+def test_a_packet_ask_is_flagged_but_an_ordinary_old_reply_is_not(app, db):
+    ws = _workspace(db)
+    packet = _contact(db, ws, days_ago=60)
+    _reply(db, packet, category='negative', filter_key='mc_request', days_ago=60,
+           body='Sure, send me your MC and insurance')
+    ordinary = _contact(db, ws, days_ago=60)
+    _reply(db, ordinary, category='rate_request', days_ago=60,
+           body='what is your rate on this lane?')
+    shipper = _contact(db, ws, days_ago=60)
+    _reply(db, shipper, category='gave_info', thread='t1', days_ago=60)
+
+    out = _run(db, ws)
+    for fc in (packet, ordinary, shipper):
+        db.session.refresh(fc)
+    assert packet.attention_at is not None
+    assert ordinary.attention_at is None, 'the blanket no-flag decision broke'
+    assert shipper.attention_at is None
+    assert out['attention'] == 1
+    assert {r['email'] for r in out['rows'] if r['attention']} == {packet.contact_email}
+
+
+def test_a_flagged_packet_ask_shows_up_in_needs_you(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws, days_ago=45)
+    _reply(db, fc, category='negative', filter_key='mc_request', days_ago=45,
+           body='send me your MC and insurance please')
+    _run(db, ws)
+    db.session.refresh(fc)
+    items = _app._ladder_needs_you(ws.owner_id, _app._utcnow())
+    mine = [i for i in items if i['id'] == fc.id]
+    assert len(mine) == 1 and mine[0]['reason'] == 'unparsed_reply'
+
+
+def test_only_the_newest_reply_decides_the_flag(app, db):
+    ws = _workspace(db)
+    answered = _contact(db, ws, days_ago=40)          # packet ask, then moved on
+    _reply(db, answered, category='negative', filter_key='mc_request', days_ago=40,
+           body='send me your MC and insurance')
+    _reply(db, answered, category='gave_info', thread='t1', days_ago=5)
+    latest = _contact(db, ws, days_ago=40)            # load first, packet ask last
+    _reply(db, latest, category='gave_info', thread='t2', days_ago=40)
+    _reply(db, latest, category='negative', filter_key='mc_request', days_ago=5,
+           body='send me your MC and insurance')
+    _run(db, ws)
+    db.session.refresh(answered); db.session.refresh(latest)
+    assert answered.attention_at is None
+    assert latest.attention_at is not None and latest.rung == 'warm'
+
+
+def test_a_packet_ask_that_also_says_stop_is_not_flagged(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws)
+    _reply(db, fc, category='negative', filter_key='mc_request',
+           body='send me your mc — actually, take me off this list')
+    out = _run(db, ws)
+    db.session.refresh(fc)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+    assert fc.attention_at is None and out['attention'] == 0
+
+
+def test_a_rerun_does_not_re_flag_or_re_log_a_packet_ask(app, db):
+    ws = _workspace(db)
+    fc = _contact(db, ws, days_ago=30)
+    _reply(db, fc, category='negative', filter_key='mc_request', days_ago=30,
+           body='send me your MC and insurance')
+    _run(db, ws)
+    db.session.refresh(fc)
+    first = fc.attention_at
+    assert first is not None
+    _run(db, ws, now=NOW + timedelta(days=14))
+    db.session.refresh(fc)
+    assert fc.attention_at == first                # the owner's 🔥 keeps its date
+    assert _migration_events(fc) == 1
+
+
 # ── fix round 2: a duplicate load message must not undo a later refusal ─────
 
 def test_a_duplicate_load_message_does_not_revive_a_refuser(app, db):

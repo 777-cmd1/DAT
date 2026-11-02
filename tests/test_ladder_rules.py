@@ -177,6 +177,14 @@ def test_the_packet_split_never_rescues_a_real_refusal():
                                   filter_key='mc_request')[0] == 'deferral'
 
 
+def test_is_packet_request_reads_the_filter_and_not_the_words():
+    assert ladder.is_packet_request('negative', 'mc_request') is True
+    assert ladder.is_packet_request(None, 'mc_request') is True
+    assert ladder.is_packet_request('negative', 'declined') is False
+    assert ladder.is_packet_request('gave_info', 'mc_request') is False
+    assert ladder.is_packet_request('negative', None) is False
+
+
 def test_an_unrelated_filter_key_changes_nothing():
     assert ladder.interpret_reply('negative', 'not interested', NOW,
                                   filter_key='declined') == ('refusal', None)

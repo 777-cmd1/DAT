@@ -190,6 +190,16 @@ _REFUSAL_PHRASES = (
 PACKET_REQUEST_FILTERS = ('mc_request',)
 
 
+def is_packet_request(category, filter_key) -> bool:
+    """True when this reply's triage says it is a broker asking for our packet.
+
+    Only says what the filter says; it does not read the words, so a reply that
+    also asks us to stop still comes out of `interpret_reply` as a refusal.
+    Callers that want "a packet ask and nothing worse" check both.
+    """
+    return category in (None, 'negative') and filter_key in PACKET_REQUEST_FILTERS
+
+
 def interpret_reply(category, text: str, now: datetime, filter_key=None):
     """Classify a broker reply as (kind, resume_at).
 

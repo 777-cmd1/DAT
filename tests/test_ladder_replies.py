@@ -3,6 +3,8 @@ import sys
 import uuid
 from datetime import timedelta
 
+import pytest
+
 _app = sys.modules['_dat_mailer_app']
 
 _DEFAULT_LOADS = {'warm': 1, 'hot': 2}
@@ -546,6 +548,7 @@ def test_a_contact_the_owner_parked_by_hand_is_not_revived_by_a_reply(app, db):
     _reply(db, fc, category=None, body='been slammed, what do you have?')
     assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('dormant', 'manual', 3)
     assert fc.next_followup_at is None
+    assert fc.attention_at is not None                 # but he gets to see it
 
 
 def test_a_load_still_revives_a_contact_the_owner_parked_by_hand(app, db):
@@ -553,6 +556,60 @@ def test_a_load_still_revives_a_contact_the_owner_parked_by_hand(app, db):
     _reply(db, fc, category='gave_info', body='we have a load', thread='t1')
     assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('warm', None, 0)
     assert fc.next_followup_at is not None
+
+
+# ══ fix round 5 ══════════════════════════════════════════════════════════════
+# The opt-out bypass. A contact already carrying `refused` reaches
+# _ladder_back_in_play through any reply that is not itself a refusal, and round 4
+# revived it: budget reset, date set, exit_reason cleared. A vague line four
+# months after "remove me" put the broker back on an automated sequence. The
+# refusal branch cannot cover this — it protects a reply that IS a refusal.
+
+@pytest.mark.parametrize('category,body,filter_key', [
+    ('negative', 'nothing this week, try next week', None),        # deferral
+    (None, 'been slammed, what do you have?', None),               # unknown
+    ('negative', 'Sure, send me your MC and insurance', 'mc_request'),   # packet ask
+])
+def test_a_refused_contact_is_never_revived_by_a_reply(app, db, category, body, filter_key):
+    fc = _parked(db, exit_reason='refused')
+    _reply(db, fc, category=category, body=body, reply_filter_key=filter_key)
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused'), body
+    assert fc.touch_attempt == 3, 'the budget was refilled'
+    assert fc.next_followup_at is None and fc.touch_enabled is False
+
+
+@pytest.mark.parametrize('category,body', [
+    ('negative', 'nothing this week, try next week'),
+    (None, 'been slammed, what do you have?'),
+])
+def test_a_refused_contact_that_writes_in_goes_to_the_owner(app, db, category, body):
+    fc = _parked(db, exit_reason='refused')
+    _reply(db, fc, category=category, body=body)
+    assert fc.attention_at is not None
+    evt, = _events(fc, 'ladder_optout_reply')
+    assert evt.actor_type == 'system' and 'refused' in evt.notes
+    # and the list really shows it: the opt-out event must not read as "handled"
+    items = _app._ladder_needs_you(fc.user_id, _app._utcnow())
+    mine = [i for i in items if i['id'] == fc.id]
+    assert len(mine) == 1 and mine[0]['reason'] == 'unparsed_reply'
+    assert body[:12] in mine[0]['detail']              # his words are on the row
+
+
+def test_a_load_still_revives_a_refused_contact(app, db):
+    # sending freight is unambiguous: that is a reopening, not a vague line
+    fc = _parked(db, exit_reason='refused')
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1')
+    assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('warm', None, 0)
+    assert fc.next_followup_at is not None
+
+
+def test_a_fresh_refusal_from_a_refused_contact_is_still_handled(app, db):
+    # it must not linger in "Needs you": the ladder dealt with it
+    fc = _parked(db, exit_reason='refused')
+    _reply(db, fc, category='negative', body='I said remove me')
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+    items = _app._ladder_needs_you(fc.user_id, _app._utcnow())
+    assert [i for i in items if i['id'] == fc.id] == []
 
 
 def test_a_live_contacts_deferral_still_refills_nothing(app, db):

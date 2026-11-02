@@ -6583,6 +6583,7 @@ def api_followups_timeline():
                   'ladder_load': 'Sent load information', 'ladder_refusal': 'Asked us to stop',
                   'ladder_deferral': 'Asked to come back later', 'ladder_unknown': 'Reply needs a human look',
                   'ladder_exhausted': 'Every attempt used', 'ladder_parked': 'Automatic sending parked',
+                  'ladder_optout_reply': 'Wrote in after opting out — your decision',
                   'ladder_blocked': 'Could not send',
                   # what the owner did by hand (Task 7 overrides)
                   'manual_pause_auto': 'Automation paused by you', 'manual_resume_auto': 'Automation resumed by you',
@@ -7500,31 +7501,64 @@ def _ladder_revive(fc, now, ws, cfg):
     _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, 0, now, cfg), ws)
 
 
+# Why a dormant contact is out of play, in the two cases where it is a DECISION
+# rather than silence — somebody chose it, so a reply does not undo it.
+_LADDER_DECIDED_EXITS = ('refused', 'manual')
+# What the ladder writes when such a contact writes in anyway. Deliberately NOT in
+# `_LADDER_HANDLED`: this event means "a human still has to decide", so the
+# "Needs you" list must keep showing the contact after it is written.
+_LADDER_OPTOUT_EVENT = 'ladder_optout_reply'
+
+
 def _ladder_back_in_play(fc, category, now, ws, cfg):
-    """Apply a non-load reply's effect on where the contact stands. Returns True
-    if it brought a dormant contact back.
+    """Apply a non-load reply's effect on where the contact stands.
+
+    Returns 'revived' if it brought a dormant contact back, 'optout' if the
+    contact wrote in but stays out of play and now needs the owner, else ''.
 
     A contact that goes quiet is parked, and writing in brings it back — so any
-    reply revives a dormant contact. What does not revive one is anything that
-    is not the contact choosing to write to us:
+    reply revives a dormant contact. What does not revive one:
 
-      * an automatic reply — the mailbox is talking, not the broker;
-      * a refusal — a decision, not silence (it never reaches here; it has its
-        own branch, which parks the contact rather than reviving it);
-      * the owner having parked them by hand (`exit_reason == 'manual'`) — also
-        a decision, and his beats the machine's. A load still overrides it,
-        because new business overrides everything and that is the ladder's
-        existing hierarchy; a mere reply is not strong enough to undo his call.
+      * an automatic reply — the mailbox is talking, not the broker, and nobody
+        wrote in;
+      * a contact already carrying `refused` or `manual`. Those are decisions,
+        not silence: the broker opted out, or the owner moved them out. Reviving
+        them would be an opt-out bypass — a vague line four months after "remove
+        me" would put him back on an automated sequence — and it is not the
+        machine's call to undo either decision. Note that the refusal branch
+        cannot cover this: it protects a reply that IS a refusal, and says
+        nothing about a contact that is already carrying one.
+
+        So the reply is not dropped either: `attention_at` goes up and the
+        contact lands in "Needs you" with its words visible, and the owner
+        decides with `set-rung`, which clears `exit_reason`. A load still
+        revives them, because sending freight is unambiguous.
 
     A contact that is still live only gets the usual lift out of cold.
     """
     if fc.rung != 'dormant':
         _ladder_lift_cold(fc)
-        return False
-    if category == 'auto_reply' or fc.exit_reason == 'manual':
-        return False
+        return ''
+    if category == 'auto_reply':
+        return ''
+    if fc.exit_reason in _LADDER_DECIDED_EXITS:
+        fc.attention_at = now
+        return 'optout'
     _ladder_revive(fc, now, ws, cfg)
-    return True
+    return 'revived'
+
+
+def _ladder_record_reply_outcome(fc, back, event_type, old_rung, notes):
+    """One event for what a non-load reply did. A contact that wrote in but stays
+    out of play gets its own type, because the owner — not the ladder — acts next."""
+    if back == 'optout':
+        event_type = _LADDER_OPTOUT_EVENT
+        notes = (f'wrote in after {fc.exit_reason}: needs your decision '
+                 '(move them to a rung to reopen)')
+    elif back == 'revived':
+        notes += ' — back on the ladder'
+    return _record_event(fc, event_type, actor_type='system',
+                         from_state=old_rung, to_state=fc.rung, notes=notes)
 
 
 def _ladder_reply_triage(reply, ws):
@@ -7557,9 +7591,10 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
     neutral. A refusal parks the contact as dormant, a deferral keeps its place
     and comes back on their date, anything else asks for a human.
 
-    A contact goes quiet and is parked; if it writes in, it comes back. What is
-    not the contact writing in does not revive one: a refusal, an automatic
-    reply, or the owner having parked them by hand — see `_ladder_back_in_play`.
+    A contact goes quiet and is parked; if it writes in, it comes back. An
+    automatic reply does not count as writing in, and a contact already out of
+    play by someone's DECISION — `refused` or `manual` — is not revived at all:
+    it goes to the owner instead. See `_ladder_back_in_play`.
 
     Returns the kind applied: 'load' | 'refusal' | 'deferral' | 'unknown'.
     Returns None when nothing was applied: an excluded contact, or a load whose
@@ -7601,22 +7636,20 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
         _record_event(fc, 'ladder_refusal', actor_type='system',
                       from_state=old_rung, to_state='dormant', notes='refused')
     elif kind == 'deferral':
-        revived = _ladder_back_in_play(fc, category, now, ws, cfg)
-        # a date they stated wins; otherwise they keep their place in the rhythm
+        back = _ladder_back_in_play(fc, category, now, ws, cfg)
+        # A date they stated wins; otherwise they keep their place in the rhythm.
+        # A contact that stayed out of play is on no rung, so this gives it none.
         _ladder_set_next(fc, resume_at or _ladder.next_touch_at(
             fc.rung, fc.touch_attempt or 0, now, cfg), ws)
-        _record_event(fc, 'ladder_deferral', actor_type='system',
-                      from_state=old_rung, to_state=fc.rung,
-                      notes='asked to come back ' + (resume_at.strftime('%Y-%m-%d')
-                                                     if resume_at else 'later')
-                            + (' — back on the ladder' if revived else ''))
+        _ladder_record_reply_outcome(
+            fc, back, 'ladder_deferral', old_rung,
+            'asked to come back ' + (resume_at.strftime('%Y-%m-%d')
+                                     if resume_at else 'later'))
     else:
-        revived = _ladder_back_in_play(fc, category, now, ws, cfg)
+        back = _ladder_back_in_play(fc, category, now, ws, cfg)
         fc.attention_at = now
-        _record_event(fc, 'ladder_unknown', actor_type='system',
-                      from_state=old_rung, to_state=fc.rung,
-                      notes='reply needs a human look'
-                            + (' — back on the ladder' if revived else ''))
+        _ladder_record_reply_outcome(fc, back, 'ladder_unknown', old_rung,
+                                     'reply needs a human look')
     return kind
 
 

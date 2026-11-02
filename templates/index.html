@@ -6848,14 +6848,14 @@ let pipelineStages = [];          // [{id,name,color}, ...]
 let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_advance_to}, ...]
 let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
 let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
-let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (hour in the user's time zone for cadence touches)
+let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (hour in the user's time zone for ladder touches)
 let pipelineTimezone = '';        // IANA zone from Settings ('' = not set yet → browser zone is saved)
 let pipelineDigest = true;        // weekly digest email on Mondays
 let pipelineDripAuto = true;      // the follow-up kill switch (Workspace.fu_auto_enabled): off = nothing follows up on its own
 let pipelineAutoSend = true;      // master switch over every automatic send path
 let pipelineAutoPreview = { touches: 0, scheduled: 0 };   // due in next 24h, per path
 let pipelineLadder = { first_touch_days: 1, second_touch_days: 3, weekly_days: 7, budget_no_load: 3,
-                       budget_engaged: 5, hot_weekly: true, higher_rung_patience: true, daily_cap: 25 };   // cadence + patience (server is the truth)
+                       budget_engaged: 5, hot_weekly: true, higher_rung_patience: true, daily_cap: 25 };   // rhythm + patience (server is the truth)
 let pipelineLadderAuto = false;   // the warmth ladder's own switch: off until the owner turns it on
 let pipelineLadderDue = 0;        // contacts it would email in the next 24 h if it were on
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
@@ -7578,7 +7578,7 @@ async function fuTouch(id, action, days) {
     });
     const d = await res.json();
     if (!d.ok) { toast(d.error || 'Failed'); return; }
-    toast(action === 'skip' ? 'Skipped — rescheduled by cadence' : `Snoozed +${days}d`);
+    toast(action === 'skip' ? 'Skipped — moved to the next ladder date' : `Snoozed +${days}d`);
     await loadFollowups();
   } catch (e) { toast('Failed'); }
 }
@@ -7640,7 +7640,7 @@ function fuKanbanCard(c) {
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',1)" title="Snooze 1 day">+1</button>
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',3)" title="Snooze 3 days">+3</button>
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',7)" title="Snooze 7 days">+7</button>
-      <button class="fu-qa-btn" onclick="fuTouch('${c.id}','skip')" title="Skip — reschedule by cadence"><i class="ph-bold ph-arrow-bend-up-right"></i></button>
+      <button class="fu-qa-btn" onclick="fuTouch('${c.id}','skip')" title="Skip — push to the next ladder date"><i class="ph-bold ph-arrow-bend-up-right"></i></button>
       <button class="fu-qa-btn" onclick="openTimeline('${c.id}')" title="History"><i class="ph-bold ph-clock-counter-clockwise"></i></button>
     </div>
   </div>`;
@@ -9123,7 +9123,7 @@ function renderFuTierSelection() {
 }
 
 // ── Row actions ──
-// Send now: the same pair the Queue uses (drip step → send-now, anything else → free-send).
+// Send now: the one-off send the Queue uses too (the server picks the rung's copy).
 function fuTierSend(id) {
   const c = fuTierRows.find(x => x.id === id); if (!c) return;
   return fuAction(id, 'free-send');

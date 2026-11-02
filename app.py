@@ -348,7 +348,9 @@ ALLOWED_TRANSITIONS = {
 # The FU1 -> FU2 -> FU3 stage drip is retired (warmth ladder, 2026-11): `stage` and the
 # fu*_sent_at / completed_fu3_at columns stay as the record of what that engine did, and
 # no code advances them any more. `is_followup_enabled` survives only as "not yet placed
-# on the ladder by scripts/migrate_to_ladder.py": no engine sends a contact that carries it.
+# on the ladder by scripts/migrate_to_ladder.py": no engine sends a contact that carries it
+# (schedule-once / set-recurring clear it when the owner takes control of a schedule, and the
+# startup normalisation clears it on a row that already carries one of those dates).
 
 
 # Minimum gap between manual follow-up sends to the same contact (anti-duplicate guard).
@@ -491,6 +493,10 @@ def _normalize_followup_contact(contact):
             changed = True
     # (no completed_fu3 hand-over any more: a contact still flagged is unplaced, and only
     # scripts/migrate_to_ladder.py, which reads its history, puts it on a rung)
+    if (contact.scheduled_once or contact.recurring_enabled) and contact.is_followup_enabled:
+        # a date the owner set himself (before schedule-once/set-recurring cleared the flag)
+        contact.is_followup_enabled = False
+        changed = True
     elif contact.recurring_enabled and (not contact.recurring_days or not contact.recurring_time):
         contact.recurring_enabled = False
         contact.recurring_days = None
@@ -500,7 +506,7 @@ def _normalize_followup_contact(contact):
     # Iron rule (lazy self-heal on every listing): an active contact on the ladder
     # with no date gets the one its rung implies.
     try:
-        if _schedule_touch(contact):
+        if _schedule_touch(contact, stagger=True):
             changed = True
     except Exception:
         pass   # never let cadence scheduling break a listing
@@ -1118,14 +1124,17 @@ def _ladder_cfg(ws):
     return merged
 
 
-def _schedule_touch(fc, ws=None, force=False):
+def _schedule_touch(fc, ws=None, force=False, stagger=False):
     """Iron rule: an active contact on the warmth ladder always carries the next touch
     its rung implies (and none while it is paused or off the ladder).
 
     force=False only fills gaps (no reschedule churn on read paths); force=True
     re-bases from now (after a send / move / reply). A contact still carrying the
     legacy drip flag is unplaced and a one-time or recurring send owns its own date:
-    neither is touched here. Returns True if a touch was set.
+    neither is touched here. stagger=True (the gap-filling sweep only, never a fresh entry
+    or a send) spreads a backlog of undated contacts over a deterministic, id-based window of
+    the ladder's weekly interval, so they do not all come due on the same day.
+    Returns True if a touch was set.
     """
     from app.models import Workspace
     if (fc.state != 'active' or fc.is_followup_enabled
@@ -1139,8 +1148,14 @@ def _schedule_touch(fc, ws=None, force=False):
         return False                     # a rung we do not know: never guess a date
     if not force and fc.touch_enabled and fc.next_followup_at:
         return False                     # already scheduled: don't churn on read paths
-    _ladder_set_next(fc, _ladder.next_touch_at(
-        fc.rung, fc.touch_attempt or 0, _utcnow(), _ladder_cfg(ws)), ws)
+    cfg = _ladder_cfg(ws)
+    when = _ladder.next_touch_at(fc.rung, fc.touch_attempt or 0, _utcnow(), cfg)
+    if stagger and when is not None and not force:
+        try:
+            when += timedelta(days=int(str(fc.id).replace('-', '')[:8], 16) % max(1, cfg['weekly_days']))
+        except (ValueError, TypeError):
+            pass
+    _ladder_set_next(fc, when, ws)
     return fc.next_followup_at is not None
 
 
@@ -5463,7 +5478,9 @@ def _followup_send_now_core(fc, uid, kind='touch'):
     fc.last_activity_at = now
     fc.attention_at = None              # touch delivered: 🔥 resolved
     _schedule_touch(fc, force=True)     # next touch from the rung; a parked contact gets none
-    _record_event(fc, event, actor_user_id=uid, from_stage=fc.stage, to_stage=fc.stage)
+    # no from_stage: the stage is the retired drip's record, and /api/followups/analytics
+    # buckets manual_send events by it ("FU1 sent"), so writing it would invent drip history
+    _record_event(fc, event, actor_user_id=uid)
     db.session.commit()
     return 'sent', None
 
@@ -5514,6 +5531,7 @@ def api_followups_action():
             return jsonify(error='Invalid scheduled_at format — use ISO8601 UTC'), 400
         fc.next_followup_at = scheduled_at
         fc.scheduled_once = True
+        fc.is_followup_enabled = False       # the owner took control of the schedule: not "unplaced" any more
         fc.updated_at = _utcnow()
         _record_event(fc, 'scheduled_once', actor_user_id=uid,
                       notes=f'Scheduled for {scheduled_at.strftime("%Y-%m-%d %H:%M")} UTC')
@@ -5544,6 +5562,7 @@ def api_followups_action():
         fc.recurring_days    = r_days
         fc.recurring_time    = r_time
         fc.scheduled_once    = False
+        fc.is_followup_enabled = False       # the owner took control of the schedule
         fc.next_followup_at  = _next_recurring_datetime(r_days, r_time)
         fc.updated_at = _utcnow()
         _record_event(fc, 'recurring_set', actor_user_id=uid,
@@ -5678,6 +5697,7 @@ def api_followups_bulk_action():
                 continue
             fc.next_followup_at = scheduled_at
             fc.scheduled_once = True
+            fc.is_followup_enabled = False
             fc.updated_at = _utcnow()
             _record_event(fc, 'scheduled_once', actor_user_id=uid,
                           notes=f'Scheduled {scheduled_at.strftime("%Y-%m-%d %H:%M")} UTC')
@@ -5700,6 +5720,7 @@ def api_followups_bulk_action():
                 fc.recurring_days    = r_days
                 fc.recurring_time    = r_time
                 fc.scheduled_once    = False
+                fc.is_followup_enabled = False
                 fc.next_followup_at  = _next_recurring_datetime(r_days, r_time)
                 fc.updated_at = _utcnow()
                 _record_event(fc, 'recurring_set', actor_user_id=uid,
@@ -6732,8 +6753,9 @@ def api_followups_analytics():
     loads_contacts = FollowupContact.query.filter_by(user_id=uid, state='loads').all()
     for lc in loads_contacts:
         last_send = FollowupEvent.query.filter_by(followup_contact_id=lc.id)\
-            .filter(FollowupEvent.event_type.in_(['auto_send', 'manual_send']))\
-            .order_by(FollowupEvent.event_at.desc()).first()
+            .filter(FollowupEvent.event_type.in_(['auto_send', 'manual_send']),
+                    FollowupEvent.from_stage.isnot(None))\
+            .order_by(FollowupEvent.event_at.desc()).first()   # the last send that carried a drip stage
         if last_send and last_send.from_stage:
             if 'fu1' in last_send.from_stage: conversion['fu1_to_loads'] += 1
             elif 'fu2' in last_send.from_stage: conversion['fu2_to_loads'] += 1
@@ -7652,7 +7674,7 @@ _LADDER_MANUAL_ACTIONS = ('pause-auto', 'resume-auto', 'set-rung', 'exclude')   
 _LADDER_SINGLE_ACTIONS = ('unexclude',)        # one contact at a time, never in bulk
 _EXCLUDED_MSG = 'Excluded contacts are never contacted again'
 _REFUSED_MSG = 'This contact asked us to stop'
-# Why the drip's scheduled follow-up cannot go to a contact that is out of play.
+# Why "send now" (a touch on a live rung) cannot go to a contact that is out of play.
 _OFF_LADDER_SEND_MSG = {'dormant': 'This contact is inactive: move it to a rung first',
                         'excluded': _EXCLUDED_MSG,
                         'client': 'Clients get no scheduled follow-ups'}
@@ -8227,20 +8249,33 @@ def _ladder_sendable(fc, ws):
                 and (fc.touch_attempt or 0) < _ladder.budget_for(fc.rung, _ladder_cfg(ws)))
 
 
-def _ladder_sent_today(ws):
-    """Ladder touches this workspace has sent since its owner's local midnight, counted from
-    the `touch_sent` events the scheduler writes, so a restart cannot hand out a second day's
-    worth. Failed sends write a differently worded event and are not counted."""
+# What a successful automated send writes, by event type: the note prefix is what tells
+# it from the failure event that shares the type (a failure's note is 'Send failed ...').
+_AUTO_SEND_NOTES = (('touch_sent', 'ladder touch'),
+                    ('scheduled_once_sent', 'one-time send'),
+                    ('recurring_sent', 'recurring send'))
+
+
+def _auto_sent_today(ws):
+    """Follow-ups the scheduler has emailed for this workspace since its owner's local
+    midnight, whichever engine queued them (ladder touch, one-time or recurring send), counted
+    from the events it writes, so a restart cannot hand out a second day's worth. The daily
+    cap protects the broker's inbox and the owner's sending reputation, and neither cares
+    which engine queued the mail. Failed sends write a differently worded note and do not count."""
     from app.models import FollowupEvent
     if not ws:
         return 0
     return FollowupEvent.query.filter(
         FollowupEvent.workspace_id == ws.id,
-        FollowupEvent.event_type == 'touch_sent',
         FollowupEvent.actor_type == 'scheduler',
-        FollowupEvent.notes.startswith('ladder touch', autoescape=True),
         FollowupEvent.event_at >= _local_day_start(_ws_tz(ws)),
+        db.or_(*[db.and_(FollowupEvent.event_type == et,
+                         FollowupEvent.notes.startswith(prefix, autoescape=True))
+                 for et, prefix in _AUTO_SEND_NOTES]),
     ).count()
+
+
+_ladder_sent_today = _auto_sent_today        # the ladder's own name for it, kept for its callers
 
 
 def _ladder_due_summary(ws, hours=24):
@@ -8294,11 +8329,12 @@ def _ladder_flag(fc, now, event_type, notes):
     return False
 
 
-def _ladder_send_failed(fc, err, now, ws=None):
-    """A ladder send did not go through: the shared backoff, then park the contact
+def _ladder_send_failed(fc, err, now, ws=None, event_type='touch_sent'):
+    """A scheduled send did not go through: the shared backoff, then park the contact
     once auto-sending has been given up on, so a dead token cannot retry for ever.
-    Parked = paused with a reason: rung and attempts are kept for a deliberate resume."""
-    if _record_send_failure(fc, 'touch_sent', err, now):
+    Parked = paused with a reason: rung and attempts are kept for a deliberate resume.
+    Used by the ladder and by the one-time and recurring paths alike."""
+    if _record_send_failure(fc, event_type, err, now):
         fc.auto_paused = True
         fc.exit_reason = 'send_failed'
         _ladder_set_next(fc, None, ws)
@@ -8346,6 +8382,9 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
             FollowupContact.next_followup_at <= now,
             db.or_(FollowupContact.rung.is_(None),
                    FollowupContact.rung.notin_(_ladder.OFF_LADDER + ('client',))),
+            # a refusal is never emailed, whatever its rung (it is dormant today; do not rely on it)
+            db.or_(FollowupContact.exit_reason.is_(None),
+                   FollowupContact.exit_reason != 'refused'),
         ).order_by(FollowupContact.next_followup_at)
         try:
             contacts = q.with_for_update(skip_locked=True, of=FollowupContact).all()
@@ -8437,7 +8476,11 @@ def _run_scheduled_followups():
       Path 0  a one-time send the owner scheduled for one contact;
       Path 2  a recurring send the owner set for one contact;
       Path 3  the warmth ladder (_run_ladder_touches), which also needs its own consent
-              flag and obeys the workspace's daily cap.
+              flag.
+    One daily cap (ladder.daily_cap, per workspace, from its local midnight) covers all
+    three: Paths 0 and 2 spend room first, the ladder gets what is left. A capped contact
+    stays due and goes out on a later day. A send that fails five times parks the contact
+    (auto_paused, exit_reason 'send_failed') on every path, so a dead token cannot retry for ever.
     The FU1-FU3 stage drip that used to be Path 1 is retired."""
     from app.models import FollowupContact, EmailAccount, Workspace
     now = _utcnow()
@@ -8469,6 +8512,15 @@ def _run_scheduled_followups():
             )
 
         processed_ids = set()
+        sent_today = {}              # workspace id -> follow-ups emailed since its local midnight
+
+        def _has_room(c):
+            """The workspace's daily cap covers every automated follow-up, not just the ladder:
+            this path spends the same room the ladder is left with afterwards."""
+            ws_ = db.session.get(Workspace, c.workspace_id)
+            if c.workspace_id not in sent_today:
+                sent_today[c.workspace_id] = _auto_sent_today(ws_)
+            return sent_today[c.workspace_id] < _ladder_cfg(ws_)['daily_cap']
 
         # ── Path 0: One-time scheduled sends ────────────────────────────────
         try:
@@ -8494,20 +8546,23 @@ def _run_scheduled_followups():
                 acct = EmailAccount.query.filter_by(user_id=fc.user_id).first()
                 if not acct:
                     continue
+                if not _has_room(fc):
+                    continue             # capped: stays due and goes out on a later day
                 fu_dict, cfg = _followup_send_args(fc, acct)
                 ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
                 if ok:
+                    sent_today[fc.workspace_id] += 1
                     fc.scheduled_once = False
                     fc.last_followup_sent_at = now
                     fc.last_activity_at = now
                     _restore_contact_schedule(fc, now=now)
                     fc.send_fail_count = 0
                     _record_event(fc, 'scheduled_once_sent', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage)
+                                  from_stage=fc.stage, to_stage=fc.stage, notes='one-time send')
                     processed_ids.add(fc.id)
                     sched_total += 1
                 else:
-                    _record_send_failure(fc, 'scheduled_once_sent', err, now)
+                    _ladder_send_failed(fc, err, now, event_type='scheduled_once_sent')
                 db.session.commit()
             except Exception as e:
                 db.session.rollback()
@@ -8546,10 +8601,13 @@ def _run_scheduled_followups():
                 if not acct:
                     continue
 
+                if not _has_room(fc):
+                    continue             # capped: stays due and goes out on a later day
                 fu_dict, cfg = _followup_send_args(fc, acct)
                 ok, err = send_followup_email(fu_dict, template_text, cfg, uid=fc.user_id)
 
                 if ok:
+                    sent_today[fc.workspace_id] += 1
                     fc.last_followup_sent_at = now
                     fc.last_activity_at = now
                     try:
@@ -8560,11 +8618,11 @@ def _run_scheduled_followups():
 
                     fc.send_fail_count = 0
                     _record_event(fc, 'recurring_sent', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage)
+                                  from_stage=fc.stage, to_stage=fc.stage, notes='recurring send')
                     processed_ids.add(fc.id)
                     rec_total += 1
                 else:
-                    _record_send_failure(fc, 'recurring_sent', err, now)
+                    _ladder_send_failed(fc, err, now, event_type='recurring_sent')
 
                 db.session.commit()
             except Exception as e:

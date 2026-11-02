@@ -124,7 +124,7 @@ with m.app.app_context():
             contact_email=f'fu{i}.' + s.recipient_email,
             contact_name=rng.choice(FIRST).title() + ' ' + rng.choice(['Smith', 'Jones', 'Lee', 'Brown']),
             company_name=s.company, state=state, stage=stage,
-            is_followup_enabled=(state == 'active'),
+            is_followup_enabled=False,
             next_followup_at=nfa,
             last_followup_sent_at=now - timedelta(days=rng.randint(1, 6)) if 'sent' in stage or stage == 'completed_fu3' else None,
             initial_email_sent_at=now - timedelta(days=rng.randint(5, 20)),

@@ -336,3 +336,173 @@ def test_the_ladder_is_still_behind_all_three_switches_and_the_cap(app, db, me, 
     ws.pipeline_config = {**ws.pipeline_config, 'auto_send_enabled': False}
     db.session.commit()
     assert _app._run_scheduled_followups() == 0 and sent == []
+
+
+# ══ fix round 1 ══════════════════════════════════════════════════════════════
+
+def test_a_manual_send_does_not_invent_drip_history_for_the_sequence_funnel(
+        app, db, client, me, sent):
+    # /api/followups/analytics buckets manual_send events by from_stage: a new contact is
+    # born stage 'fu1_scheduled', and sending to it must not read as an "FU1 sent"
+    from app.models import FollowupEvent
+    fc = _fc(db, me, 'cold', stage='fu1_scheduled', load_count=0)
+    assert _act(client, fc, 'send-now').status_code == 200
+    assert _act(client, _fc(db, me, 'cold', stage='fu1_scheduled'), 'free-send').status_code == 200
+    evs = FollowupEvent.query.filter(FollowupEvent.event_type.in_(('manual_send', 'free_send'))).all()
+    assert len(evs) == 2 and all(e.from_stage is None and e.to_stage is None for e in evs)
+    funnel = client.get('/api/followups/analytics').get_json()['funnel']
+    assert (funnel['fu1_sent'], funnel['fu2_sent'], funnel['fu3_sent']) == (0, 0, 0)
+
+
+def test_the_conversion_screen_still_finds_a_real_drip_send_behind_a_newer_manual_one(
+        app, db, client, me, sent):
+    fc = _fc(db, me, 'warm', stage='fu1_sent', state='loads', next_followup_at=None)
+    old = _app._record_event(fc, 'auto_send', actor_type='scheduler', from_stage='fu1_scheduled', to_stage='fu2_scheduled')
+    old.event_at = _app._utcnow() - timedelta(days=9)
+    _app._record_event(fc, 'manual_send')            # a modern manual send: no stage
+    db.session.commit()
+    conv = client.get('/api/followups/analytics').get_json()['conversion_by_stage']
+    assert conv['fu1_to_loads'] == 1
+
+
+@pytest.mark.parametrize('how', ['single', 'bulk'])
+@pytest.mark.parametrize('action, extra', [
+    ('schedule-once', lambda: {'scheduled_at': FUTURE()}),
+    ('set-recurring', lambda: {'recurring_days': '0,1,2,3,4,5,6', 'recurring_time': '10:00'}),
+])
+def test_dating_an_unplaced_contact_takes_it_off_the_drip_flag(app, db, client, me, how, action, extra):
+    fc = _fc(db, me, 'cold', stage='fu2_scheduled', is_followup_enabled=True, next_followup_at=None,
+             touch_enabled=False)
+    if how == 'single':
+        assert _act(client, fc, action, **extra()).status_code == 200
+    else:
+        assert _bulk(client, [fc.id], action, **extra()).get_json()['results'][0]['ok'] is True
+    fc = _reload(db, fc)
+    assert fc.is_followup_enabled is False
+    assert fc.scheduled_once or fc.recurring_enabled
+
+
+def test_a_row_dated_by_the_owner_before_this_change_loses_the_flag_at_startup(app, db, me):
+    once = _fc(db, me, 'cold', is_followup_enabled=True, scheduled_once=True, next_followup_at=_due())
+    rec = _fc(db, me, 'cold', is_followup_enabled=True, recurring_enabled=True, recurring_days='1',
+              recurring_time='10:00', next_followup_at=_due())
+    plain = _fc(db, me, 'cold', is_followup_enabled=True, next_followup_at=_due())
+    for fc in (once, rec, plain):
+        _app._normalize_followup_contact(fc)
+    db.session.commit()
+    assert (once.is_followup_enabled, rec.is_followup_enabled, plain.is_followup_enabled) == (False, False, True)
+
+
+def test_no_scheduler_path_sends_a_contact_that_still_carries_the_flag(app, db, me, sent):
+    # a flagged contact with every engine due is sent by none of them (the date-carrying
+    # rows are normalised first, as at startup and on every listing, and lose the flag)
+    _fc(db, me, 'neutral', is_followup_enabled=True, next_followup_at=_due(), touch_enabled=True)
+    _fc(db, me, 'neutral', is_followup_enabled=True, scheduled_once=True, next_followup_at=_due())
+    _fc(db, me, 'neutral', is_followup_enabled=True, recurring_enabled=True, recurring_days='0,1,2,3,4,5,6',
+        recurring_time='10:00', next_followup_at=_due())
+    from app.models import FollowupContact
+    for fc in FollowupContact.query.all():
+        _app._normalize_followup_contact(fc)
+    db.session.commit()
+    flagged = {fc.contact_email for fc in FollowupContact.query.filter_by(is_followup_enabled=True)}
+    _app._run_scheduled_followups()
+    assert len(flagged) == 1 and not (flagged & {e['fu']['contact_email'] for e in sent})
+
+
+def test_the_backlog_sweep_spreads_undated_contacts_but_a_fresh_entry_is_not_delayed(app, db, me):
+    user, ws = me
+    ws.pipeline_config = {'touch_hour': 15}
+    db.session.commit()
+    undated = [_fc(db, me, 'cold', next_followup_at=None, touch_enabled=False) for _ in range(40)]
+    for fc in undated:
+        _app._normalize_followup_contact(fc)
+    db.session.commit()
+    days = {fc.next_followup_at.date() for fc in undated}
+    weekly = _app._ladder_cfg(ws)['weekly_days']
+    assert len(days) > 3                                   # not one wall on one day
+    assert (max(days) - min(days)).days < weekly           # and not beyond the weekly window
+    # deterministic: the same ids land on the same offsets
+    again = {fc.id: fc.next_followup_at for fc in undated}
+    for fc in undated:
+        fc.next_followup_at, fc.touch_enabled = None, False
+        _app._schedule_touch(fc, ws, stagger=True)
+    assert {fc.id: fc.next_followup_at for fc in undated} == again
+    # a fresh entry (and a forced re-base) is never pushed out by the spread
+    fresh = _fc(db, me, 'cold', next_followup_at=None, touch_enabled=False)
+    _app._schedule_touch(fresh, ws)
+    assert fresh.next_followup_at < _app._utcnow() + timedelta(days=2)
+
+
+def _cap(db, ws, n):
+    ws.pipeline_config = {**(ws.pipeline_config or {}), 'ladder': {'daily_cap': n}}
+    db.session.commit()
+
+
+def test_the_daily_cap_covers_one_time_recurring_and_ladder_sends_together(app, db, me, sent):
+    user, ws = me
+    _cap(db, ws, 3)
+    for _ in range(2):
+        _fc(db, me, 'neutral', scheduled_once=True, next_followup_at=_due())
+    for _ in range(2):
+        _fc(db, me, 'neutral', recurring_enabled=True, recurring_days='0,1,2,3,4,5,6',
+            recurring_time='10:00', next_followup_at=_due())
+    for _ in range(2):
+        _fc(db, me, 'neutral', next_followup_at=_due(), touch_enabled=True)
+    assert _app._run_scheduled_followups() == 3             # not 6
+    assert len(sent) == 3
+    assert _app._auto_sent_today(_reload(db, ws)) == 3
+    sent.clear()
+    assert _app._run_scheduled_followups() == 0             # and not three more on the next tick
+    assert sent == []
+
+
+def test_a_capped_one_time_send_stays_due_and_the_ladder_gets_only_what_is_left(app, db, me, sent):
+    user, ws = me
+    _cap(db, ws, 2)
+    once = _fc(db, me, 'neutral', scheduled_once=True, next_followup_at=_due())
+    touch = [_fc(db, me, 'neutral', next_followup_at=_due(), touch_enabled=True) for _ in range(3)]
+    assert _app._run_scheduled_followups() == 2             # the one-time first, one ladder touch
+    assert once.contact_email in {e['fu']['contact_email'] for e in sent}
+    once = _reload(db, once)
+    assert once.scheduled_once is False
+    assert sum(1 for t in touch if _reload(db, t).touch_attempt == 1) == 1
+    # with the room spent, the next one-time send waits (still due, not lost)
+    later = _fc(db, me, 'neutral', scheduled_once=True, next_followup_at=_due())
+    sent.clear()
+    assert _app._run_scheduled_followups() == 0
+    later = _reload(db, later)
+    assert later.scheduled_once is True and later.next_followup_at <= _app._utcnow()
+
+
+def test_a_failed_send_does_not_spend_cap_room(app, db, me, monkeypatch):
+    user, ws = me
+    _cap(db, ws, 1)
+    monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **k: (False, 'boom'))
+    _fc(db, me, 'neutral', scheduled_once=True, next_followup_at=_due())
+    _app._run_scheduled_followups()
+    assert _app._auto_sent_today(_reload(db, ws)) == 0
+
+
+@pytest.mark.parametrize('kind', ['once', 'recurring'])
+def test_a_dead_token_parks_a_dated_contact_like_a_ladder_touch(app, db, me, monkeypatch, kind):
+    monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **k: (False, 'invalid_grant: revoked'))
+    extra = ({'scheduled_once': True} if kind == 'once' else
+             {'recurring_enabled': True, 'recurring_days': '0,1,2,3,4,5,6', 'recurring_time': '10:00'})
+    fc = _fc(db, me, 'neutral', next_followup_at=_due(), **extra)
+    for _ in range(12):
+        fc = _reload(db, fc)
+        if not fc.auto_paused:               # force it due again, as a backoff elapsing would
+            fc.next_followup_at = _due()
+            db.session.commit()
+        _app._run_scheduled_followups()
+    fc = _reload(db, fc)
+    assert fc.send_fail_count == _app.SEND_FAIL_GIVE_UP_AFTER      # it stopped trying at the fifth
+    assert fc.auto_paused is True and fc.exit_reason == 'send_failed' and fc.next_followup_at is None
+    from app.models import FollowupEvent
+    assert FollowupEvent.query.filter_by(followup_contact_id=fc.id).count() == 3
+    assert fc.attention_at is not None
+
+
+def test_the_ladder_query_itself_skips_a_refused_contact_whatever_its_rung(app, db, me, sent):
+    _fc(db, me, 'neutral', exit_reason='refused', next_followup_at=_due(), touch_enabled=True)
+    assert _app._run_ladder_touches(_app._utcnow()) == 0 and sent == []

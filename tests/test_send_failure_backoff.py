@@ -62,19 +62,23 @@ def test_failure_backs_off_instead_of_staying_due(app, db, monkeypatch):
 
 
 def test_repeated_failures_do_not_spam_events(app, db, monkeypatch):
-    """12k rows for one contact must be impossible: 2 events, ever."""
+    """12k rows for one contact must be impossible: 3 events, ever."""
     user, ws = _mk(db)
     fc = _due(db, user, ws)
     monkeypatch.setattr(_app, 'send_followup_email',
                         lambda *a, **k: (False, 'invalid_grant: revoked'))
     for _ in range(12):
-        fc.next_followup_at = _app._utcnow() - timedelta(minutes=1)  # force due
-        fc.attention_at = None
-        db.session.commit()
+        if not fc.auto_paused:               # force it due again, as a backoff elapsing would
+            fc.next_followup_at = _app._utcnow() - timedelta(minutes=1)
+            fc.attention_at = None
+            db.session.commit()
         _app._run_scheduled_followups()
         db.session.expire_all()
-    assert fc.send_fail_count == 12
-    assert _events(db, fc) == 2     # first failure + the give-up one
+    # parked at the fifth failure (like a ladder touch): the scheduler stops trying at all, so
+    # the count stops there and the table gets 3 rows, ever: first failure, give-up, parked
+    assert fc.send_fail_count == _app.SEND_FAIL_GIVE_UP_AFTER
+    assert fc.auto_paused is True and fc.exit_reason == 'send_failed' and fc.next_followup_at is None
+    assert _events(db, fc) == 3
 
 
 def test_gives_up_and_flags_for_human(app, db, monkeypatch):

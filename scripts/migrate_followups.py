@@ -75,7 +75,7 @@ with app.app_context():
             contact_name=fu.contact_name or '',
             state=state,
             stage=stage,
-            is_followup_enabled=enabled if fu.auto_enabled else False,
+            is_followup_enabled=False,      # the stage drip is retired: a migrated row joins the ladder, unflagged
             next_followup_at=fu.scheduled_at,
             last_followup_sent_at=fu.last_fu_sent,
             last_activity_at=fu.last_contact,

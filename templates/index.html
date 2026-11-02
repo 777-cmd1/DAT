@@ -2713,6 +2713,34 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
   .fu-fn-card { padding: 14px; }
   .fu-cv-name { flex-basis: 100%; }
 }
+/* the ladder's switch on the Follow-up page, and its settings */
+.fu-sw-main { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.fu-sw-head { font-size: 14px; font-weight: 700; color: var(--text); }
+.fu-sw-head.on { color: var(--green); }
+.fu-sw-sub { font-size: 13px; color: var(--text2); line-height: 1.55; margin-top: 4px; }
+.fu-sw-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--text2); cursor: pointer; flex: 0 0 auto; }
+.fu-sw-toggle input { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; }
+.fu-sw-toggle input:disabled { cursor: progress; }
+.fu-sw-warn { font-size: 13px; color: var(--text); line-height: 1.5; padding: 8px 12px; margin-top: 10px; border-radius: 12px;
+  background: var(--yellow-dim); border: 1px solid color-mix(in srgb, var(--yellow) 40%, var(--border)); }
+.fu-sw-links { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+.fu-sw-link { font: inherit; font-size: 13px; font-weight: 600; color: var(--accent); background: transparent; border: 0; cursor: pointer; padding: 2px 0; }
+.fu-sw-link:hover { text-decoration: underline; }
+.ld-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.ld-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text3); }
+.ld-field input { width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 14px; }
+.ld-copy { border: 1px solid var(--border); border-radius: 12px; background: var(--surface2); margin-bottom: 8px; }
+.ld-copy > summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; font-size: 13px; color: var(--text2); list-style: none; }
+.ld-copy > summary::-webkit-details-marker { display: none; }
+.ld-copy-name { font-weight: 700; color: var(--text); min-width: 66px; }
+.ld-copy-badge { margin-left: auto; font-size: 12px; font-weight: 600; padding: 1px 9px; border-radius: 999px; color: var(--text3); border: 1px solid var(--border); }
+.ld-copy-badge.custom { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--border)); }
+.ld-copy-body { padding: 2px 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+.ld-copy-lbl { font-size: 12px; font-weight: 600; color: var(--text3); margin-top: 6px; }
+.ld-copy-ta { width: 100%; min-height: 140px; resize: vertical; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 13px; line-height: 1.55; }
+.ld-copy-body .btn { align-self: flex-start; margin-top: 6px; }
+@media (max-width: 560px) { .fu-sw-main { flex-direction: column; align-items: flex-start; } }
 </style>
   <!-- Phosphor Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
@@ -3221,6 +3249,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 
       <!-- FUNNEL SCOREBOARD (default view) -->
       <div id="fuFunnelTab">
+        <section class="fu-fn-card" id="fuLadderSwitch" aria-label="Automatic follow-ups" hidden></section>
         <section class="fu-fn-card" aria-labelledby="fuLadderTitle">
           <div class="fu-fn-head">
             <h2 class="fu-fn-title" id="fuLadderTitle">The ladder</h2>
@@ -3883,6 +3912,13 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
               </div>
               <input id="plDripAuto" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
             </div>
+            <div class="settings-toggle-row auto-sub-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">Warmth-ladder follow-ups</div>
+                <div class="settings-toggle-sub">Off until you switch it on. On = the ladder emails each contact when its touch comes due, using the texts under Ladder emails below. It also needs the FU1–FU3 switch above, which is the kill switch for every follow-up. The same switch sits on the Follow-up page.</div>
+              </div>
+              <input id="plLadderAuto" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
+            </div>
           </div>
         </section>
 
@@ -3934,6 +3970,17 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
           </div>
         </section>
 
+        <section class="settings-card" data-stab="automation" id="ladderCopyCard">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-title">Ladder emails</div>
+              <div class="settings-sub">What each rung sends, under your name. This is the built-in wording until you change it: read it here before you switch automatic follow-ups on. A rung with several emails uses them in turn, so two touches in a row never read the same. Saved with the Save button below.</div>
+            </div>
+          </div>
+          <div id="ladderCopyEditor"></div>
+          <div class="settings-note" id="ladderCopyVars"></div>
+        </section>
+
         <section class="settings-card" data-stab="pipeline">
           <div class="settings-card-head">
             <div>
@@ -3959,6 +4006,30 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
             </div>
           </div>
           <div id="pipelineCadenceEditor" class="pl-cfg-list"></div>
+          <div class="pl-cfg-subhead" id="ladderKnobs" style="margin-top:18px">Warmth ladder <span class="pl-cfg-hint">when the ladder follows up with a contact, and how many tries it gets. Only touches dated from now on use new numbers; dates already set stay.</span></div>
+          <div class="ld-grid">
+            <label class="ld-field"><span>First follow-up after (days)</span><input id="plLdFirst" type="number" min="1" max="365"></label>
+            <label class="ld-field"><span>Second follow-up after (days)</span><input id="plLdSecond" type="number" min="1" max="365"></label>
+            <label class="ld-field"><span>Then every (days)</span><input id="plLdWeekly" type="number" min="1" max="365"></label>
+            <label class="ld-field"><span>Attempts while they have sent no load</span><input id="plLdBudgetNo" type="number" min="1" max="20"></label>
+            <label class="ld-field"><span>Attempts once they have sent a load</span><input id="plLdBudgetEng" type="number" min="1" max="20"></label>
+          </div>
+          <div class="settings-stack-sm">
+            <div class="settings-toggle-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">More patience at WARM and HOT</div>
+                <div class="settings-toggle-sub">On = the larger number of attempts above. Off = WARM and HOT get the same attempts as COLD and NEUTRAL.</div>
+              </div>
+              <input id="plLdPatience" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+            </div>
+            <div class="settings-toggle-row">
+              <div class="settings-toggle-copy">
+                <div class="settings-toggle-title">HOT contacts are followed up weekly</div>
+                <div class="settings-toggle-sub">On = a HOT contact is touched every "Then every" days from the start. Off = it follows the same first, second, then weekly rhythm as the others.</div>
+              </div>
+              <input id="plLdHotWeekly" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+            </div>
+          </div>
           <div class="settings-toggle-row" style="margin-top:10px">
             <div class="settings-toggle-copy">
               <div class="settings-toggle-title">Weekly digest email</div>
@@ -6044,6 +6115,11 @@ async function loadSettings() {
   await loadPipelineConfig();
   renderPipelineConfigEditor();
   renderTimezonePicker();
+  await loadLadderCopy();
+  if (_ladderJumpTo) {
+    const target = document.getElementById(_ladderJumpTo); _ladderJumpTo = '';
+    target?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  }
 
   // Handle ?gmail_connected=1 redirect from OAuth callback
   const params = new URLSearchParams(window.location.search);
@@ -6852,6 +6928,10 @@ let pipelineDigest = true;        // weekly digest email on Mondays
 let pipelineDripAuto = true;      // scheduler auto-sends the FU1–FU3 drip sequence
 let pipelineAutoSend = true;      // master switch over every automatic send path
 let pipelineAutoPreview = { drip: 0, touches: 0, scheduled: 0 };   // due in next 24h, per path
+let pipelineLadder = { first_touch_days: 1, second_touch_days: 3, weekly_days: 7, budget_no_load: 3,
+                       budget_engaged: 5, hot_weekly: true, higher_rung_patience: true };   // cadence + patience (server is the truth)
+let pipelineLadderAuto = false;   // the warmth ladder's own switch: off until the owner turns it on
+let pipelineLadderDue = 0;        // contacts it would email in the next 24 h if it were on
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
 let _fuPipelineConfigLoaded = false;
 let _fuDragContactId = null;
@@ -7399,6 +7479,9 @@ async function loadPipelineConfig() {
     pipelineDripAuto = data.drip_auto_enabled !== false;
     pipelineAutoSend = data.auto_send_enabled !== false;
     pipelineAutoPreview = data.auto_send_preview || pipelineAutoPreview;
+    pipelineLadder = data.ladder || pipelineLadder;
+    pipelineLadderAuto = data.ladder_auto_enabled === true;
+    pipelineLadderDue = data.ladder_due_24h || 0;
     pipelineTimezone = data.timezone || '';
     // Server preference is authoritative; localStorage is only an instant fallback.
     fuViewMode = data.view_mode || localStorage.getItem('followup_view_mode') || 'table';
@@ -7801,7 +7884,34 @@ function renderPipelineCadenceEditor() {
   setChk('plDigest', pipelineDigest);
   setChk('plAutoSend', pipelineAutoSend);
   setChk('plDripAuto', pipelineDripAuto);
+  setChk('plLadderAuto', pipelineLadderAuto);
+  renderLadderKnobs();
   renderAutoSendBanner();
+}
+
+const LADDER_KNOBS = { plLdFirst: 'first_touch_days', plLdSecond: 'second_touch_days', plLdWeekly: 'weekly_days',
+                       plLdBudgetNo: 'budget_no_load', plLdBudgetEng: 'budget_engaged' };
+const LADDER_FLAGS = { plLdPatience: 'higher_rung_patience', plLdHotWeekly: 'hot_weekly' };
+function renderLadderKnobs() {
+  for (const [id, key] of Object.entries(LADDER_KNOBS)) {
+    const el = document.getElementById(id); if (el) el.value = pipelineLadder[key];
+  }
+  for (const [id, key] of Object.entries(LADDER_FLAGS)) {
+    const el = document.getElementById(id); if (el) el.checked = !!pipelineLadder[key];
+  }
+}
+// A blank or non-numeric box is left out, so the server keeps what it has; the server clamps the rest.
+function readLadderKnobs() {
+  const out = {};
+  for (const [id, key] of Object.entries(LADDER_KNOBS)) {
+    const el = document.getElementById(id);
+    const n = el ? parseInt(el.value, 10) : NaN;
+    if (!isNaN(n)) out[key] = n;
+  }
+  for (const [id, key] of Object.entries(LADDER_FLAGS)) {
+    const el = document.getElementById(id); if (el) out[key] = !!el.checked;
+  }
+  return out;
 }
 
 // Banner over the Automation tab: is anything going out on its own, and how much.
@@ -7811,17 +7921,23 @@ function renderAutoSendBanner(live) {
   if (!box) return;
   const master = document.getElementById('plAutoSend');
   const drip = document.getElementById('plDripAuto');
+  const lad = document.getElementById('plLadderAuto');
   const on = master ? master.checked : pipelineAutoSend;
   const dripOn = drip ? drip.checked : pipelineDripAuto;
+  const ladOn = lad ? lad.checked : pipelineLadderAuto;
   if (drip) drip.disabled = !on;
+  if (lad) lad.disabled = !on;
   drip?.closest('.settings-toggle-row')?.classList.toggle('is-off', !on);
+  lad?.closest('.settings-toggle-row')?.classList.toggle('is-off', !on);
   const p = pipelineAutoPreview || {};
+  // ladder touches follow the switches as they sit now, not as they were saved
+  const touches = ladOn && dripOn ? pipelineLadderDue : 0;
   const parts = [];
   if (dripOn && p.drip) parts.push(`${p.drip} FU1–FU3`);
-  if (p.touches) parts.push(`${p.touches} auto touch${p.touches === 1 ? '' : 'es'}`);
+  if (touches) parts.push(`${touches} ladder touch${touches === 1 ? '' : 'es'}`);
   if (p.scheduled) parts.push(`${p.scheduled} scheduled/recurring`);
-  const n = (dripOn ? (p.drip || 0) : 0) + (p.touches || 0) + (p.scheduled || 0);
-  const unsaved = live && (on !== pipelineAutoSend || dripOn !== pipelineDripAuto)
+  const n = (dripOn ? (p.drip || 0) : 0) + touches + (p.scheduled || 0);
+  const unsaved = live && (on !== pipelineAutoSend || dripOn !== pipelineDripAuto || ladOn !== pipelineLadderAuto)
     ? ' <span class="auto-banner-unsaved">— not saved yet</span>' : '';
   let head, sub;
   if (!on) {
@@ -7895,8 +8011,8 @@ function setSettingsTab(tab) {
 }
 
 async function saveAutomationTab() {
-  const [a, b] = await Promise.all([saveFollowupDefaults(true), savePipelineConfig(true, 'automation')]);
-  if (a && b) toast('Automation saved');
+  const [a, b, c] = await Promise.all([saveFollowupDefaults(true), savePipelineConfig(true, 'automation'), saveLadderCopy()]);
+  if (a && b && c) toast('Automation saved');
 }
 
 // scope 'pipeline' = stages + reply filters (Pipeline tab);
@@ -7929,7 +8045,9 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
         touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
         digest_enabled: !!document.getElementById('plDigest')?.checked,
         drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked,
-        auto_send_enabled: !!document.getElementById('plAutoSend')?.checked }
+        auto_send_enabled: !!document.getElementById('plAutoSend')?.checked,
+        ladder_auto_enabled: !!document.getElementById('plLadderAuto')?.checked,
+        ladder: readLadderKnobs() }
     : { stages, reply_filters };
   try {
     const res = await fetch('/api/followups/pipeline-config', {
@@ -7947,6 +8065,9 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
     pipelineDripAuto = data.drip_auto_enabled !== false;
     pipelineAutoSend = data.auto_send_enabled !== false;
     pipelineAutoPreview = data.auto_send_preview || pipelineAutoPreview;
+    pipelineLadder = data.ladder || pipelineLadder;
+    pipelineLadderAuto = data.ladder_auto_enabled === true;
+    pipelineLadderDue = data.ladder_due_24h || 0;
     pipelineTimezone = data.timezone || pipelineTimezone;
     if (scope === 'pipeline') renderPipelineConfigEditor();
     else renderPipelineCadenceEditor();
@@ -7956,6 +8077,141 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
     }
     return true;
   } catch(e) { toast('Error: ' + e.message, true); return false; }
+}
+
+// ── Ladder emails (Settings): the per-rung copy, readable and editable ────────
+let ladderCopy = { rungs: [], variables: [] };
+let _ladderJumpTo = '';
+async function loadLadderCopy() {
+  const box = document.getElementById('ladderCopyEditor');
+  if (!box) return;
+  try {
+    const r = await fetch('/api/followups/ladder-copy');
+    if (!r.ok) throw new Error(r.status);
+    ladderCopy = await r.json();
+    renderLadderCopy();
+  } catch (e) {
+    box.innerHTML = '<div class="fu-fn-error">Could not load the emails' +
+      '<button class="btn btn-secondary btn-sm" onclick="loadLadderCopy()">Try again</button></div>';
+  }
+}
+function renderLadderCopy() {
+  const box = document.getElementById('ladderCopyEditor');
+  if (!box) return;
+  const open = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.rung));
+  box.innerHTML = ladderCopy.rungs.map(r =>
+    `<details class="ld-copy" data-rung="${esc(r.rung)}"${open.has(r.rung) ? ' open' : ''}><summary>` +
+      `<span class="ld-copy-name">${esc(r.rung.toUpperCase())}</span><span>${esc(FU_RUNG_DESC[r.rung] || '')} · ${r.bodies.length} email${r.bodies.length === 1 ? '' : 's'}</span>` +
+      `<span class="ld-copy-badge${r.custom ? ' custom' : ''}">${r.custom ? 'Edited' : 'Built-in'}</span></summary>` +
+      '<div class="ld-copy-body">' +
+        r.bodies.map((b, i) =>
+          `<label class="ld-copy-lbl">Email ${i + 1} of ${r.bodies.length}</label>` +
+          `<textarea class="ld-copy-ta" maxlength="5000" spellcheck="true">${esc(b)}</textarea>`).join('') +
+        `<button type="button" class="btn btn-secondary btn-sm" onclick="resetLadderCopy('${esc(r.rung)}')">Restore the built-in text</button>` +
+      '</div></details>').join('');
+  const vars = document.getElementById('ladderCopyVars');
+  if (vars) vars.innerHTML = 'Filled in for each contact: ' +
+    (ladderCopy.variables || []).map(v => `<b>${esc(v.name)}</b> ${esc(v.means)}`).join(' · ') +
+    '. In the built-in text a line that needs a value the contact does not have is left out; in your own text the whole email falls back to the built-in one.';
+}
+function resetLadderCopy(rung) {
+  const r = ladderCopy.rungs.find(x => x.rung === rung);
+  const d = document.querySelector(`#ladderCopyEditor details[data-rung="${rung}"]`);
+  if (!r || !d) return;
+  d.querySelectorAll('textarea').forEach((t, i) => { t.value = r.defaults[i] ?? ''; });
+  toast('Built-in text restored: press Save to apply');
+}
+// Sends only the rungs whose text changed; true when there is nothing to save or the save worked.
+async function saveLadderCopy() {
+  const box = document.getElementById('ladderCopyEditor');
+  if (!box || !ladderCopy.rungs.length) return true;
+  const norm = a => a.map(v => v.replace(/\r\n?/g, '\n').trim());
+  const changed = {};
+  box.querySelectorAll('details.ld-copy').forEach(d => {
+    const cur = ladderCopy.rungs.find(x => x.rung === d.dataset.rung);
+    const vals = [...d.querySelectorAll('textarea')].map(t => t.value);
+    if (cur && JSON.stringify(norm(vals)) !== JSON.stringify(norm(cur.bodies))) changed[d.dataset.rung] = vals;
+  });
+  if (!Object.keys(changed).length) return true;
+  try {
+    const res = await fetch('/api/followups/ladder-copy', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rungs: changed })
+    });
+    const data = await res.json();
+    if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return false; }
+    ladderCopy = { rungs: data.rungs, variables: data.variables };
+    renderLadderCopy();
+    return true;
+  } catch (e) { toast('Error: ' + e.message, true); return false; }
+}
+
+// ── The ladder's switch (Follow-up page) ──────────────────────────────────────
+// Off until the owner turns it on. The label says what turning it on will do; the payload is
+// the funnel's, which also carries the other two switches every automatic send sits behind.
+let _fuSwData = null, _fuSwBusy = false;
+function renderFuLadderSwitch(d) {
+  const el = document.getElementById('fuLadderSwitch');
+  if (!el) return;
+  _fuSwData = d;
+  const on = d.ladder_auto_enabled === true, n = d.ladder_due_24h || 0, c = d.ladder || pipelineLadder;
+  const rhythm = `first follow-up after ${fuPlural(c.first_touch_days, 'day', 'days')}, second after ${fuPlural(c.second_touch_days, 'day', 'days')}, ` +
+    `then every ${fuPlural(c.weekly_days, 'day', 'days')}; ${fuPlural(c.budget_no_load, 'attempt', 'attempts')} while they have sent no load, ` +
+    `${fuPlural(c.higher_rung_patience ? c.budget_engaged : c.budget_no_load, 'attempt', 'attempts')} once they have`;
+  const due = n ? `${n} ${n === 1 ? 'contact is' : 'contacts are'} due in the next 24 hours (overdue ones first)`
+                : 'nobody is due in the next 24 hours';
+  const blocked = [];
+  if (!d.fu_auto_enabled) blocked.push('the FU1–FU3 switch is off (Settings → Automation), which stops every follow-up');
+  if (!d.auto_send_enabled) blocked.push('“Allow automatic sending” is off (Settings → Automation)');
+  const warn = blocked.length
+    ? `<div class="fu-sw-warn"><b>${on ? 'Switched on, but nothing will be sent:' : 'Turning it on will not be enough:'}</b> ${esc(blocked.join('; '))}.</div>` : '';
+  el.hidden = false;
+  el.innerHTML =
+    '<div class="fu-sw-main"><div>' +
+      `<div class="fu-sw-head${on ? ' on' : ''}" id="fuSwTitle">Automatic follow-ups are ${on ? 'ON' : 'OFF'}</div>` +
+      '<div class="fu-sw-sub">' + esc(on
+        ? `The ladder emails each contact on its own when its touch comes due; ${due}. Replies are checked right before every send. Rhythm: ${rhythm}.`
+        : `Nothing is sent on its own. Turning this on lets the ladder email contacts as their touch comes due: ${due}. Rhythm: ${rhythm}. It sends the texts under Settings → Ladder emails.`) + '</div>' +
+    '</div>' +
+    `<label class="fu-sw-toggle"><span>${on ? 'On' : 'Off'}</span>` +
+      `<input type="checkbox" role="switch" id="fuLadderAuto" aria-label="Automatic follow-ups" ${on ? 'checked' : ''} onchange="onFuLadderSwitch(this)"></label>` +
+    '</div>' + warn +
+    '<div class="fu-sw-links">' +
+      '<button type="button" class="fu-sw-link" onclick="openLadderSettings(\'ladderCopyCard\')">Read or edit the emails it sends</button>' +
+      '<button type="button" class="fu-sw-link" onclick="openLadderSettings(\'ladderKnobs\')">Change the rhythm and attempts</button>' +
+    '</div>';
+}
+function openLadderSettings(anchor) {
+  _ladderJumpTo = anchor;
+  try { localStorage.setItem('settings_tab', 'automation'); } catch (e) {}
+  navTo('settings');
+}
+async function onFuLadderSwitch(el) {
+  if (_fuSwBusy) { el.checked = !el.checked; return; }
+  const want = el.checked, d = _fuSwData || {}, n = d.ladder_due_24h || 0;
+  if (want) {
+    const ok = await showConfirm(
+      (n ? `The ladder will start emailing on its own, beginning with ${fuPlural(n, 'contact', 'contacts')} that ${n === 1 ? 'is' : 'are'} due in the next 24 hours (overdue ones first).`
+         : 'The ladder will start emailing on its own as contacts come due. Nobody is due in the next 24 hours.') +
+      '\n\nEach email is the text under Settings → Ladder emails, and replies are checked right before every send. You can switch it off here at any time.',
+      { title: 'Turn on automatic follow-ups?', okText: 'Turn on', danger: false });
+    if (!ok) { el.checked = false; return; }
+  }
+  _fuSwBusy = true; el.disabled = true;
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ladder_auto_enabled: want })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    pipelineLadderAuto = data.ladder_auto_enabled === true;
+    toast(pipelineLadderAuto ? 'Automatic follow-ups are on' : 'Automatic follow-ups are off');
+    await loadFuFunnel();                      // the activity sentence and the label follow the new state
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+    el.checked = !want;
+  } finally {
+    _fuSwBusy = false; el.disabled = false;
+  }
 }
 
 // ── Action handlers ────────────────────────────────────────────────────────────
@@ -8551,6 +8807,7 @@ async function loadFuFunnel() {
 }
 
 function renderFuFunnel(data) {
+  renderFuLadderSwitch(data);
   renderFuLadder(data.rungs || {});
   renderFuConversion(data);
 }

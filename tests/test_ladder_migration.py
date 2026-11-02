@@ -180,7 +180,7 @@ def test_a_refusal_is_parked_exactly_as_the_live_hook_parks_it(app, db, body):
     db.session.refresh(fc)
     assert (fc.rung, fc.exit_reason) == ('dormant', 'refused'), body
     assert fc.next_followup_at is None and fc.touch_enabled is False
-    assert _app._ladder_budget(fc.rung) == 0
+    assert _app._ladder_budget(fc.rung, ws) == 0
 
 
 def test_a_refusal_before_triage_shipped_is_still_read(app, db):

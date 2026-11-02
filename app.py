@@ -1126,6 +1126,47 @@ def _at_touch_hour(nxt, ws, uid):
         return nxt
 
 
+# ── Warmth-ladder settings ────────────────────────────────────────────────────
+# The owner's cadence and patience numbers live in Workspace.pipeline_config['ladder'].
+# Every engine read goes through _ladder_cfg(ws); the code defaults in
+# ladder.LADDER_DEFAULTS are only the base it merges the saved values over.
+_LADDER_INT_MAX = {'first_touch_days': 365, 'second_touch_days': 365, 'weekly_days': 365,
+                   'budget_no_load': 20, 'budget_engaged': 20}     # every one is at least 1
+_LADDER_BOOL_KEYS = ('hot_weekly', 'higher_rung_patience')
+
+
+def _ladder_clean(raw):
+    """The valid, clamped part of a ladder settings dict: integers 1..max, real booleans,
+    known keys only. Anything else is dropped, so a bad value falls back to the default."""
+    out = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, top in _LADDER_INT_MAX.items():
+        val = raw.get(key)
+        if isinstance(val, bool) or not isinstance(val, (int, float, str)):
+            continue
+        try:
+            num = float(val)
+        except ValueError:
+            continue
+        if num != num or num in (float('inf'), float('-inf')) or num != int(num):
+            continue
+        out[key] = max(1, min(top, int(num)))
+    for key in _LADDER_BOOL_KEYS:
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    return out
+
+
+def _ladder_cfg(ws):
+    """The ladder settings in force for a workspace: the code defaults with the owner's
+    saved values on top. A missing workspace gets the defaults."""
+    merged = dict(_ladder.LADDER_DEFAULTS)
+    if ws is not None:
+        merged.update(_ladder_clean((ws.pipeline_config or {}).get('ladder')))
+    return merged
+
+
 def _schedule_touch(fc, ws=None, force=False, stagger=False):
     """Iron rule: an active contact whose FU drip is not running always carries a
     next stage-cadence touch (or touch_enabled=False when the stage mode is off).
@@ -1139,6 +1180,7 @@ def _schedule_touch(fc, ws=None, force=False, stagger=False):
     if (fc.state != 'active' or fc.is_followup_enabled
             or fc.scheduled_once or fc.recurring_enabled):
         return False
+    ws = ws or (db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None)
     if _ladder_owns_schedule(fc):
         # The warmth ladder dates this contact, not the stage cadence: a stage
         # date would be sent by the scheduler (client, dormant) or replace the
@@ -1149,14 +1191,13 @@ def _schedule_touch(fc, ws=None, force=False, stagger=False):
         if not force and fc.touch_enabled and fc.next_followup_at:
             return False
         _ladder_set_next(fc, _ladder.next_touch_at(
-            fc.rung, fc.touch_attempt or 0, _utcnow(), _ladder.LADDER_DEFAULTS), ws)
+            fc.rung, fc.touch_attempt or 0, _utcnow(), _ladder_cfg(ws)), ws)
         return fc.next_followup_at is not None
     if fc.auto_paused:
         # the owner stopped automation for this contact: no stage date either
         # (the ladder branch above is already held by _ladder_set_next)
         _ladder_set_next(fc, None)
         return False
-    ws = ws or (db.session.get(Workspace, fc.workspace_id) if fc.workspace_id else None)
     cad = _cadence_for_stage(ws, fc.pipeline_stage or 1)
     if cad.get('mode') == 'off' or not cad.get('days'):
         if fc.touch_enabled:
@@ -6010,6 +6051,9 @@ def api_followups_pipeline_config():
                    drip_auto_enabled=bool(ws.fu_auto_enabled) if ws else False,
                    auto_send_enabled=bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True)),
                    auto_send_preview=_auto_send_preview(ws),
+                   ladder=_ladder_cfg(ws),
+                   ladder_auto_enabled=bool(ws and ws.ladder_auto_enabled),
+                   ladder_due_24h=_ladder_due_count(ws),
                    timezone=_cfg.get('timezone') or '',
                    view_mode=(user.followup_view_mode or 'table') if user else 'table')
 
@@ -6228,6 +6272,14 @@ def api_followups_pipeline_config_save():
         ws.fu_auto_enabled = data['drip_auto_enabled']   # scheduler drip kill switch
     if isinstance(data.get('auto_send_enabled'), bool):
         cfg['auto_send_enabled'] = data['auto_send_enabled']   # master switch, all auto paths
+    if isinstance(data.get('ladder_auto_enabled'), bool):
+        # the warmth ladder's own consent flag (default off). Saving it only sets the flag:
+        # no date moves and nothing is sent here, the scheduler decides at its next tick
+        ws.ladder_auto_enabled = data['ladder_auto_enabled']
+    if isinstance(data.get('ladder'), dict):
+        # cadence and patience numbers, clamped; later reads re-validate (_ladder_cfg), and
+        # existing dates are left alone: the new numbers date the next touch that is set
+        cfg['ladder'] = {**_ladder_clean(cfg.get('ladder')), **_ladder_clean(data['ladder'])}
 
     ws.pipeline_config = cfg   # reassign so SQLAlchemy detects the JSON change
     db.session.commit()
@@ -6251,6 +6303,9 @@ def api_followups_pipeline_config_save():
                    drip_auto_enabled=bool(ws.fu_auto_enabled),
                    auto_send_enabled=bool((ws.pipeline_config or {}).get('auto_send_enabled', True)),
                    auto_send_preview=_auto_send_preview(ws),
+                   ladder=_ladder_cfg(ws),
+                   ladder_auto_enabled=bool(ws.ladder_auto_enabled),
+                   ladder_due_24h=_ladder_due_count(ws),
                    timezone=(ws.pipeline_config or {}).get('timezone') or '')
 
 
@@ -6958,6 +7013,8 @@ def api_followups_funnel():
     ws = Workspace.query.filter_by(owner_id=uid).first()
     data['fu_auto_enabled'] = bool(ws and ws.fu_auto_enabled)
     data['ladder_auto_enabled'] = bool(ws and ws.ladder_auto_enabled)
+    data['ladder_due_24h'] = _ladder_due_count(ws)    # what switching the ladder on would send
+    data['ladder'] = _ladder_cfg(ws)                  # the rhythm the switch's label describes
     data['auto_send_enabled'] = bool(((ws.pipeline_config or {}) if ws else {}).get('auto_send_enabled', True))
     return jsonify(data)
 
@@ -7223,6 +7280,91 @@ def api_delete_fu_template(tmpl_id):
         app.logger.error('template delete failed id=%s uid=%s: %s', tmpl_id, uid, e)
         return jsonify({'error': f'Delete failed: {e}'}), 500
     return jsonify({'ok': True, 'deleted': tmpl_id})
+
+# ── Ladder copy: the rung emails, readable and editable ──────────────────────
+# The bodies in DEFAULT_RUNG_TEMPLATES go out under the owner's name, so he reads them here
+# before the switch is on. A saved edit becomes the workspace's own Template(level=<RUNG>)
+# rows, which `_template_for_rung` already prefers; text equal to the code default is not
+# stored, so a workspace that never edits keeps following the defaults.
+_LADDER_COPY_RUNGS = ('cold', 'neutral', 'warm', 'hot')       # the rungs that are emailed
+_LADDER_COPY_MAX_BODIES = 10
+_LADDER_COPY_MAX_CHARS = 5000
+_LADDER_COPY_VARIABLES = [
+    {'name': '{origin}', 'means': 'the city of our first outreach to them'},
+    {'name': '{destination}', 'means': 'where that lane ended'},
+    {'name': '{route}', 'means': 'the whole lane, origin to destination'},
+    {'name': '{last_rate}', 'means': 'the last rate they quoted us'},
+    {'name': '{name} {company} {phone}', 'means': 'yours, from Settings'},
+]
+
+
+def _ladder_copy_norm(body):
+    return (body or '').replace('\r\n', '\n').replace('\r', '\n').strip()
+
+
+def _ladder_copy_rows(uid, rung):
+    from app.models import Template
+    return Template.query.filter(
+        Template.user_id == uid, Template.type == 'followup',
+        db.func.lower(Template.level) == rung,
+    ).order_by(Template.sort_order, Template.created_at).all()
+
+
+def _ladder_copy_payload(uid):
+    rungs = []
+    for rung in _LADDER_COPY_RUNGS:
+        defaults = list(DEFAULT_RUNG_TEMPLATES[rung])
+        own = [r.body for r in _ladder_copy_rows(uid, rung) if r.is_active and (r.body or '').strip()]
+        rungs.append({'rung': rung, 'bodies': own or defaults, 'defaults': defaults, 'custom': bool(own)})
+    return {'rungs': rungs, 'variables': _LADDER_COPY_VARIABLES}
+
+
+@app.route('/api/followups/ladder-copy', methods=['GET'])
+@login_required
+def api_ladder_copy():
+    return jsonify(_ladder_copy_payload(_current_user_id()))
+
+
+@app.route('/api/followups/ladder-copy', methods=['PUT'])
+@login_required
+@limiter.limit("30 per minute")
+@csrf_protected
+def api_ladder_copy_save():
+    """Save the bodies for one or more rungs: {rungs: {warm: [body, ...]}}. All or nothing."""
+    from app.models import Template, Workspace
+    uid = _current_user_id()
+    ws = Workspace.query.filter_by(owner_id=uid).first()
+    data = request.get_json(silent=True) or {}
+    rungs = data.get('rungs')
+    if not isinstance(rungs, dict) or not rungs:
+        return jsonify(error='Nothing to save'), 400
+    clean = {}
+    for rung, bodies in rungs.items():
+        if rung not in _LADDER_COPY_RUNGS:
+            return jsonify(error=f'{rung or "(none)"} has no email copy: only '
+                                 + ', '.join(_LADDER_COPY_RUNGS) + ' are emailed'), 400
+        if not isinstance(bodies, list) or len(bodies) > _LADDER_COPY_MAX_BODIES \
+                or not all(isinstance(b, str) for b in bodies):
+            return jsonify(error=f'{rung}: send up to {_LADDER_COPY_MAX_BODIES} email texts'), 400
+        texts = [_ladder_copy_norm(b) for b in bodies]
+        if any(len(t) > _LADDER_COPY_MAX_CHARS for t in texts):
+            return jsonify(error=f'{rung}: an email is longer than {_LADDER_COPY_MAX_CHARS} characters'), 400
+        texts = [t for t in texts if t]
+        if not texts:
+            return jsonify(error=f'{rung} needs at least one email text'), 400
+        clean[rung] = texts
+    for rung, texts in clean.items():
+        for row in _ladder_copy_rows(uid, rung):
+            db.session.delete(row)
+        if texts == [_ladder_copy_norm(b) for b in DEFAULT_RUNG_TEMPLATES[rung]]:
+            continue                       # the code default: store nothing, keep following it
+        for i, text in enumerate(texts):
+            db.session.add(Template(user_id=uid, workspace_id=ws.id if ws else None, type='followup',
+                                    level=rung.upper(), name=rung.upper(), body=text,
+                                    sort_order=i, is_active=True))
+    db.session.commit()
+    return jsonify(ok=True, **_ladder_copy_payload(uid))
+
 
 # ── PIPELINE ──────────────────────────────────────────────────────────────────
 STAGES = ['new_lead', 'contacted', 'replied', 'interested', 'deal', 'lost']
@@ -7609,7 +7751,7 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
                       from_state=fc.rung, to_state=fc.rung,
                       notes=f'unrecognised rung {fc.rung!r}')
         return 'unknown'
-    cfg = _ladder.LADDER_DEFAULTS
+    cfg = _ladder_cfg(ws)
     category, filter_key = _ladder_reply_triage(reply, ws)
     kind, resume_at = _ladder.interpret_reply(category, _strip_quoted(reply.body), now,
                                               filter_key=filter_key)
@@ -7677,10 +7819,10 @@ _RESCHEDULING_EVENTS = ('touch_sent', 'free_send', 'manual_send', 'touch_snoozed
                         'manual_unexclude')
 
 
-def _ladder_budget(rung):
-    """Attempts the contact's rung allows; 0 for a rung the ladder does not know."""
+def _ladder_budget(rung, ws):
+    """Attempts the contact's rung allows in this workspace; 0 for a rung the ladder does not know."""
     try:
-        return _ladder.budget_for(rung, _ladder.LADDER_DEFAULTS)
+        return _ladder.budget_for(rung, _ladder_cfg(ws))
     except ValueError:
         return 0
 
@@ -7725,7 +7867,7 @@ def _ladder_deferred_ids(uid, contacts):
     return out
 
 
-def _ladder_next_reason(fc, deferred=False):
+def _ladder_next_reason(fc, deferred=False, ws=None):
     """One line saying why the contact's next touch is (or is not) what it is."""
     rung = fc.rung or 'cold'
     if rung == 'excluded':
@@ -7758,18 +7900,21 @@ def _ladder_next_reason(fc, deferred=False):
         return 'they asked us to come back later'
     if not _ladder_owns_schedule(fc):
         return 'follow-up cadence of its stage'
-    budget = _ladder_budget(rung)
+    budget = _ladder_budget(rung, ws)
     if (fc.touch_attempt or 0) >= budget:
         return 'attempts used up'
     return f'touch {(fc.touch_attempt or 0) + 1} of {budget}'
 
 
-def _fu_row(fc, deferred=False):
+def _fu_row(fc, deferred=False, ws=None):
     """A contact as the Follow-up table shows it: its fields plus the ladder's budget
-    and the reason for its next touch."""
+    and the reason for its next touch, both under its workspace's settings."""
+    from app.models import Workspace
+    if ws is None and fc.workspace_id:
+        ws = db.session.get(Workspace, fc.workspace_id)      # the session caches it: one read per list
     row = fc.to_dict()
-    row['budget'] = _ladder_budget(fc.rung)
-    row['next_touch_reason'] = _ladder_next_reason(fc, deferred)
+    row['budget'] = _ladder_budget(fc.rung, ws)
+    row['next_touch_reason'] = _ladder_next_reason(fc, deferred, ws)
     return row
 
 
@@ -7800,7 +7945,7 @@ def _ladder_redate(fc, ws, now):
             _restore_contact_schedule(fc, now)
         return
     _ladder_set_next(fc, _ladder.next_touch_at(
-        fc.rung, fc.touch_attempt or 0, now, _ladder.LADDER_DEFAULTS), ws)
+        fc.rung, fc.touch_attempt or 0, now, _ladder_cfg(ws)), ws)
 
 
 def _ladder_parse_rung(raw):
@@ -8250,9 +8395,35 @@ _LADDER_SENDABLE = ('cold', 'neutral', 'warm', 'hot')   # client/dormant/exclude
 def _ladder_would_send(fc, ws):
     """True if the ladder scheduler would email this contact once it is due, with
     nobody clicking: both gates on, a sendable rung, not paused, budget left."""
-    return bool(ws and ws.fu_auto_enabled and ws.ladder_auto_enabled
-                and fc.rung in _LADDER_SENDABLE and not fc.auto_paused
-                and (fc.touch_attempt or 0) < _ladder.budget_for(fc.rung, _ladder.LADDER_DEFAULTS))
+    return bool(ws and ws.fu_auto_enabled and ws.ladder_auto_enabled and _ladder_sendable(fc, ws))
+
+
+def _ladder_sendable(fc, ws):
+    """The part of `_ladder_would_send` that belongs to the contact and the owner's
+    budget setting rather than to the switches: a sendable rung, not paused, budget left."""
+    return bool(fc.rung in _LADDER_SENDABLE and not fc.auto_paused
+                and (fc.touch_attempt or 0) < _ladder.budget_for(fc.rung, _ladder_cfg(ws)))
+
+
+def _ladder_due_count(ws, hours=24):
+    """How many contacts the ladder would email in the next `hours` (overdue included)
+    if its switch were on, whatever the switch says now: the figure that tells the owner
+    what turning it on will do. It never sends or changes anything."""
+    from app.models import FollowupContact
+    if not ws:
+        return 0
+    horizon = _utcnow() + timedelta(hours=hours)
+    due = FollowupContact.query.filter(
+        FollowupContact.workspace_id == ws.id,
+        FollowupContact.state == 'active',
+        FollowupContact.touch_enabled == True,
+        FollowupContact.is_followup_enabled == False,
+        FollowupContact.scheduled_once == False,
+        FollowupContact.recurring_enabled == False,
+        FollowupContact.next_followup_at.isnot(None),
+        FollowupContact.next_followup_at <= horizon,
+    ).all()
+    return sum(1 for fc in due if _ladder_sendable(fc, ws))
 
 
 def _ladder_flag(fc, now, event_type, notes):
@@ -8299,7 +8470,6 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
     pre-send reply check failed; `skip_ids` are contacts another path already sent.
     """
     from app.models import FollowupContact, EmailAccount, Workspace
-    cfg = _ladder.LADDER_DEFAULTS
     gate = {}
     try:
         # The drip, one-time and recurring paths own the contacts flagged for them.
@@ -8338,6 +8508,7 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
                     db.session.commit()
                 continue
             ws = db.session.get(Workspace, fc.workspace_id)
+            cfg = _ladder_cfg(ws)         # each contact under its own workspace's settings
             if (fc.touch_attempt or 0) >= _ladder.budget_for(fc.rung, cfg):
                 _ladder_exhaust(fc, now, ws)
                 db.session.commit()

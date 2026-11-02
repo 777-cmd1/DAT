@@ -126,18 +126,20 @@ URL: `/admin`
   нормалізація при старті/лістингу, ручна відправка).
 - **Вимикачі (усі три + ліміт)**: `Workspace.fu_auto_enabled` (кілл-свіч усіх автоматичних follow-up),
   `Workspace.ladder_auto_enabled` (згода драбини, дефолт OFF) і `pipeline_config.auto_send_enabled`
-  (майстер); плюс `ladder.daily_cap` (дефолт 25/день на воркспейс, рахується від локальної півночі з подій
-  `touch_sent`). Шедулер перед відправкою пересканує відповіді (`_prefetch_replies_before_sending`).
+  (майстер); плюс `ladder.daily_cap` (дефолт 25/день на воркспейс, від локальної півночі): ОДИН ліміт на всі автоматичні
+  відправки — дотики драбини, разові й повторювані (`_auto_sent_today` рахує події `touch_sent`/`scheduled_once_sent`/
+  `recurring_sent` з нотатками «ladder touch»/«one-time send»/«recurring send»; Path 0/2 витрачають ліміт першими). Шедулер перед відправкою пересканує відповіді (`_prefetch_replies_before_sending`).
 - **Шляхи відправки** (`_run_scheduled_followups`, кожні 15 хв): Path 0 — разова відправка, яку власник
   призначив (`scheduled_once`), Path 2 — повторювана (`recurring_enabled`), Path 3 — драбина
   (`_run_ladder_touches`), Path 4 — тижневий дайджест. Path 0/2 теж за `fu_auto_enabled` + майстром і
-  ніколи не пишуть excluded/refused. Стадійного дріпу (колишній Path 1) **немає**.
+  ніколи не пишуть excluded/refused; 5 невдалих відправок поспіль паркують контакта (`auto_paused`,
+  `exit_reason='send_failed'`) на всіх шляхах. Стадійного дріпу (колишній Path 1) **немає**.
 - **Ручні відправки**: `send-now` (дотик для живого щабля) і `free-send` (свідомий разовий лист, може піти
   й dormant/client, але не excluded/refused) — обидва шлють текст щабля, не витрачають спробу, перераховують дату.
   Один текст для всіх: `_followup_copy` → `_template_for_rung`; один payload: `_followup_send_args`.
 - **Стара інфраструктура**: `stage` / `fu1_sent_at`… / `completed_fu3_at` лишаються як ІСТОРІЯ (ніхто їх
   більше не рухає), `is_followup_enabled=True` означає лише «ще не розміщений на драбині» — такого контакта
-  не шле жоден шлях; розміщення робить `scripts/migrate_to_ladder.py` (спершу dry run). Нові контакти
+  не шле жоден шлях (`schedule-once`/`set-recurring` знімають прапорець — власник узяв розклад на себе); розміщення робить `scripts/migrate_to_ladder.py` (спершу dry run). Нові контакти
   народжуються на драбині (`rung='cold'`, `is_followup_enabled=False`). Стадійний каденс
   (`get_cadence`, FU-затримки) вимкнено — значення в БД ігноруються.
 - UI: «Follow-up» = рядок щаблів + «Needs you» + воронка + «що система зробила за добу»; клік на щабель —

@@ -3348,7 +3348,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
                 <button class="fu-segment-btn" id="fuf-special-touches" onclick="setFuSpecialFilter('touches')" title="Overdue, due today and 🔥 hot replies">Today's touches <span id="fuTouchesCount"></span></button>
                 <button class="fu-segment-btn" id="fuf-special-overdue" onclick="setFuSpecialFilter('overdue')" title="Past due — needs action now">Overdue <span id="fuOverdueCount"></span></button>
                 <button class="fu-segment-btn" id="fuf-special-due_today" onclick="setFuSpecialFilter('due_today')" title="Due later today">Today <span id="fuTodayCount"></span></button>
-                <button class="fu-segment-btn" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')" title="FU1–FU3 sequence finished">Needs Action <span id="fuNeedsActionCount"></span></button>
+                <button class="fu-segment-btn" id="fuf-special-needs_action" onclick="setFuSpecialFilter('needs_action')" title="Finished the old FU1–FU3 sequence (history)">Needs Action <span id="fuNeedsActionCount"></span></button>
                 <button class="fu-segment-btn" id="fuf-special-scheduled" onclick="setFuSpecialFilter('scheduled')" title="One-time future sends">Scheduled <span id="fuScheduledCount"></span></button>
               </div>
             </div>
@@ -3426,7 +3426,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
                     <input type="checkbox" id="fuMasterCheckbox" onclick="fuMasterCheckboxChange(this)">
                   </th>
                   <th>Contact</th>
-                  <th title="Pipeline stage; FU1–FU3 step while the sequence runs; state when not active">Stage</th>
+                  <th title="Pipeline stage; the old FU1–FU3 step is shown as history; state when not active">Stage</th>
                   <th class="fu-th-sort" onclick="setFuSort('next_followup_at')" title="Sort by next touch">Next touch <span class="fu-sort-arrow" id="fuSortArrow-next_followup_at"></span></th>
                   <th class="fu-th-sort" onclick="setFuSort('last_activity_at')" title="Sort by last activity">Last Activity <span class="fu-sort-arrow" id="fuSortArrow-last_activity_at"></span></th>
                   <th>Route</th>
@@ -3645,7 +3645,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
             <div class="tmpl-panel-head">
               <div>
                 <div class="tmpl-panel-title">Follow-up Templates</div>
-                <div class="tmpl-panel-sub">Keep the core FU1/FU2/FU3 sequence clean and manage the extra active pool</div>
+                <div class="tmpl-panel-sub">Legacy texts. The FU1/FU2/FU3 sequence is retired, so these are kept for reference and are no longer sent: follow-ups use the per-rung emails under Settings → Automation → Ladder emails.</div>
               </div>
               <button class="btn btn-secondary btn-sm" onclick="toggleAddFuTmplForm()">Add Pool Template</button>
             </div>
@@ -3902,71 +3902,23 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
             <div class="settings-toggle-row auto-master-row">
               <div class="settings-toggle-copy">
                 <div class="settings-toggle-title">Allow automatic sending</div>
-                <div class="settings-toggle-sub">Master switch. Off = nothing is sent on its own (FU1–FU3, auto touches, scheduled, recurring) — everything waits for your click.</div>
+                <div class="settings-toggle-sub">Master switch. Off = nothing is sent on its own (ladder follow-ups, scheduled, recurring) — everything waits for your click.</div>
               </div>
               <input id="plAutoSend" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
             </div>
             <div class="settings-toggle-row auto-sub-row">
               <div class="settings-toggle-copy">
-                <div class="settings-toggle-title">Include FU1–FU3 sequence</div>
-                <div class="settings-toggle-sub">Off = due FU1–FU3 wait in Overdue / Today's touches for a manual send. Touches per stage are set under Touch cadence below.</div>
+                <div class="settings-toggle-title">Follow-ups on their own</div>
+                <div class="settings-toggle-sub">The kill switch for every follow-up the system sends by itself: the warmth ladder and the one-time and recurring sends you schedule. Off = they all wait, still due, for your click. Timing is set under Follow-up rhythm below.</div>
               </div>
               <input id="plDripAuto" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
             </div>
             <div class="settings-toggle-row auto-sub-row">
               <div class="settings-toggle-copy">
                 <div class="settings-toggle-title">Warmth-ladder follow-ups</div>
-                <div class="settings-toggle-sub">Off until you switch it on. On = the ladder emails each contact when its touch comes due, using the texts under Ladder emails below. It also needs the FU1–FU3 switch above, which is the kill switch for every follow-up. The same switch sits on the Follow-up page.</div>
+                <div class="settings-toggle-sub">Off until you switch it on. On = the ladder emails each contact when its touch comes due, using the texts under Ladder emails below. It also needs the follow-up switch above, which is the kill switch for every follow-up. The same switch sits on the Follow-up page.</div>
               </div>
               <input id="plLadderAuto" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
-            </div>
-          </div>
-        </section>
-
-        <section class="settings-card" data-stab="automation">
-          <div class="settings-card-head">
-            <div>
-              <div class="settings-title">Follow-up Defaults</div>
-              <div class="settings-sub">Control default timing and reply behavior for the Follow-up system across this workspace.</div>
-            </div>
-          </div>
-          <div class="settings-followup-grid">
-            <div class="settings-mini">
-              <div class="settings-mini-label">FU1 Delay</div>
-              <div class="field" style="margin-bottom:0">
-                <label>Days after first reply</label>
-                <input id="fuDelay1" type="number" min="1" max="60">
-              </div>
-            </div>
-            <div class="settings-mini">
-              <div class="settings-mini-label">FU2 Delay</div>
-              <div class="field" style="margin-bottom:0">
-                <label>Days after FU1</label>
-                <input id="fuDelay2" type="number" min="1" max="60">
-              </div>
-            </div>
-            <div class="settings-mini">
-              <div class="settings-mini-label">FU3 Delay</div>
-              <div class="field" style="margin-bottom:0">
-                <label>Days after FU2</label>
-                <input id="fuDelay3" type="number" min="1" max="60">
-              </div>
-            </div>
-          </div>
-          <div class="settings-stack-sm">
-            <div class="settings-toggle-row">
-              <div class="settings-toggle-copy">
-                <div class="settings-toggle-title">Auto-stop when a reply arrives</div>
-                <div class="settings-toggle-sub">Recommended for clean follow-up automation when a contact answers.</div>
-              </div>
-              <input id="fuAutoStop" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
-            </div>
-            <div class="settings-toggle-row">
-              <div class="settings-toggle-copy">
-                <div class="settings-toggle-title">New contacts start the FU1–FU3 sequence</div>
-                <div class="settings-toggle-sub">Gives new pipeline contacts their FU1 date. Whether it is sent automatically is decided by the switches above.</div>
-              </div>
-              <input id="fuDefaultEnabled" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
             </div>
           </div>
         </section>
@@ -4003,11 +3955,11 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
         <section class="settings-card" data-stab="automation">
           <div class="settings-card-head">
             <div>
-              <div class="settings-title">Touch cadence</div>
-              <div class="settings-sub">How often to re-touch contacts in each stage once the FU1–FU3 sequence is done. Manual = lands in Today's touches for a one-click send; Auto = a template is sent automatically (only while automatic sending is allowed).</div>
+              <div class="settings-title">Follow-up rhythm</div>
+              <div class="settings-sub">When the warmth ladder follows up, and the hour its emails go out. The old FU1–FU3 sequence and the per-stage cadence are retired; their history stays on each contact.</div>
             </div>
           </div>
-          <div id="pipelineCadenceEditor" class="pl-cfg-list"></div>
+          <div id="touchHourEditor" class="pl-cfg-list"></div>
           <div class="pl-cfg-subhead" id="ladderKnobs" style="margin-top:18px">Warmth ladder <span class="pl-cfg-hint">when the ladder follows up with a contact, and how many tries it gets. Only touches dated from now on use new numbers; dates already set stay.</span></div>
           <div class="ld-grid">
             <label class="ld-field"><span>First follow-up after (days)</span><input id="plLdFirst" type="number" min="1" max="365"></label>
@@ -4055,7 +4007,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
         </section>
         <section class="settings-savebar" data-stab="automation">
           <div class="settings-savecopy"><div class="settings-title">Save automation</div>
-            <div class="settings-sub">Automatic sending, follow-up timing, touch cadence and digest — saved together.</div></div>
+            <div class="settings-sub">Automatic sending, follow-up rhythm, ladder emails and digest — saved together.</div></div>
           <div class="settings-actions"><button class="btn btn-primary" onclick="saveAutomationTab()">Save</button></div>
         </section>
         <section class="settings-savebar" data-stab="pipeline">
@@ -6081,10 +6033,7 @@ async function loadSettings() {
     }
     setSettingsTab(tab);
   }
-  const [cfg, fu] = await Promise.all([
-    (await fetch('/api/config')).json(),
-    (await fetch('/api/settings/followup')).json(),
-  ]);
+  const cfg = await (await fetch('/api/config')).json();
   // Gmail OAuth status
   const connected = cfg.gmail_connected;
   document.getElementById('gmailConnected').style.display    = connected ? '' : 'none';
@@ -6109,11 +6058,6 @@ async function loadSettings() {
   document.getElementById('cfgDelayMax').value = cfg.delay_max || 45;
   document.getElementById('cfgDailyTarget').value = cfg.daily_target || 100;
   dailyTarget = parseInt(cfg.daily_target || 100);
-  document.getElementById('fuDelay1').value = fu.fu1_delay_days || 3;
-  document.getElementById('fuDelay2').value = fu.fu2_delay_days || 5;
-  document.getElementById('fuDelay3').value = fu.fu3_delay_days || 7;
-  document.getElementById('fuAutoStop').checked = fu.auto_stop_on_reply !== false;
-  document.getElementById('fuDefaultEnabled').checked = fu.default_followup_enabled !== false;
   renderSettingsPreview();
 
   await loadPipelineConfig();
@@ -6212,7 +6156,7 @@ async function saveAccountTab() {
   const tz = document.getElementById('cfgTimezone')?.value;
   const okTz = !tz || tz === pipelineTimezone || await saveTimezone(tz);
   if (!okTz) return;
-  if (await saveSettings()) { renderTimezonePicker(); renderPipelineCadenceEditor(); }
+  if (await saveSettings()) { renderTimezonePicker(); renderTouchHourEditor(); }
 }
 
 // Account + Sending tabs (one /api/config record).
@@ -6238,27 +6182,6 @@ async function saveSettings() {
   toast('Settings saved');
   loadDailyStats();
   renderSettingsPreview();
-  return true;
-}
-
-// Follow-up Defaults card (Automation tab).
-async function saveFollowupDefaults(quiet) {
-  const num = id => parseInt(document.getElementById(id).value);
-  const fuData = {
-    fu1_delay_days: num('fuDelay1'),
-    fu2_delay_days: num('fuDelay2'),
-    fu3_delay_days: num('fuDelay3'),
-    auto_stop_on_reply: document.getElementById('fuAutoStop').checked,
-    default_followup_enabled: document.getElementById('fuDefaultEnabled').checked,
-  };
-  if (![fuData.fu1_delay_days, fuData.fu2_delay_days, fuData.fu3_delay_days].every(v => Number.isFinite(v) && v >= 1)) {
-    toast('FU1–FU3 delays must be at least 1 day', true); return false;
-  }
-  try {
-    const res = await fetch('/api/settings/followup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fuData)});
-    if (!res.ok) { toast('Error: follow-up defaults not saved', true); return false; }
-  } catch (e) { toast('Error: ' + e.message, true); return false; }
-  if (!quiet) toast('Follow-up defaults saved');
   return true;
 }
 
@@ -6925,13 +6848,12 @@ let pipelineStages = [];          // [{id,name,color}, ...]
 let pipelineReplyFilters = [];    // [{key,label,color,emoji,is_custom,auto_advance_to}, ...]
 let pipelineFilterKeywords = {};  // {key: {keywords:[...], confidence}}
 let pipelineTriageModes = {};     // {category: 'off'|'suggest'|'auto'}
-let pipelineCadence = {};         // {stage_id(str): {days, mode:'manual'|'auto'|'off'}}
 let pipelineTouchHour = 'auto';   // 'auto' | 0..23 (hour in the user's time zone for cadence touches)
 let pipelineTimezone = '';        // IANA zone from Settings ('' = not set yet → browser zone is saved)
 let pipelineDigest = true;        // weekly digest email on Mondays
-let pipelineDripAuto = true;      // scheduler auto-sends the FU1–FU3 drip sequence
+let pipelineDripAuto = true;      // the follow-up kill switch (Workspace.fu_auto_enabled): off = nothing follows up on its own
 let pipelineAutoSend = true;      // master switch over every automatic send path
-let pipelineAutoPreview = { drip: 0, touches: 0, scheduled: 0 };   // due in next 24h, per path
+let pipelineAutoPreview = { touches: 0, scheduled: 0 };   // due in next 24h, per path
 let pipelineLadder = { first_touch_days: 1, second_touch_days: 3, weekly_days: 7, budget_no_load: 3,
                        budget_engaged: 5, hot_weekly: true, higher_rung_patience: true, daily_cap: 25 };   // cadence + patience (server is the truth)
 let pipelineLadderAuto = false;   // the warmth ladder's own switch: off until the owner turns it on
@@ -7238,16 +7160,16 @@ function getFuPrimaryActionButton(c) {
   if (!label) return '';
   if (label === 'Resume') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','resume')">Resume</button>`;
   if (label === 'Mark Booked') return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','loads')">Mark booked</button>`;
-  return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','send-now')">Send now</button>`;
+  return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','free-send')">Send now</button>`;
 }
 
 // Due rows: send the touch, or push it (the old Today's touches panel actions).
 function fuDueActions(c) {
-  const send = /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send';
+  const send = 'free-send';
   return `<button class="fu-btn-primary" onclick="fuAction('${c.id}','${send}')" title="Send the touch now">Send</button>` +
     `<span class="fu-qa-group" role="group" aria-label="Snooze or skip">` +
     [1, 3, 7].map(d => `<button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',${d})" title="Snooze ${d} day${d > 1 ? 's' : ''}">+${d}d</button>`).join('') +
-    `<button class="fu-qa-btn" onclick="fuTouch('${c.id}','skip')" title="Skip — reschedule by stage cadence" aria-label="Skip"><i class="ph-bold ph-arrow-bend-up-right"></i></button></span>`;
+    `<button class="fu-qa-btn" onclick="fuTouch('${c.id}','skip')" title="Skip — push to the next ladder date" aria-label="Skip"><i class="ph-bold ph-arrow-bend-up-right"></i></button></span>`;
 }
 
 // What happened last: their reply or our email (the subject repeated the route).
@@ -7281,17 +7203,13 @@ function fuPipelineStage(c) {
 // What the next dated step is and whether it goes out on its own
 // (mirrors the scheduler's _would_auto_send + the Settings switches).
 function fuNextKind(c) {
-  let label, auto;
-  const fu = /^fu([123])_scheduled$/.exec(c.stage || '');
-  if (c.scheduled_once) { label = 'Scheduled send'; auto = true; }
-  else if (c.recurring_enabled) { label = 'Recurring'; auto = true; }
-  else if (fu) { label = 'FU' + fu[1]; auto = !!c.is_followup_enabled && pipelineDripAuto; }
-  else {
-    label = 'Touch';
-    auto = !c.is_followup_enabled && !!c.touch_enabled &&
-      (pipelineCadence[String(c.pipeline_stage || 1)] || {}).mode === 'auto';
-  }
-  return { label, auto: auto && pipelineAutoSend };
+  // what the next dated step is and whether it goes out on its own
+  // (mirrors the scheduler: master switch + follow-up kill switch, and the ladder's own switch)
+  const live = pipelineAutoSend && pipelineDripAuto;
+  if (c.scheduled_once) return { label: 'Scheduled send', auto: live };
+  if (c.recurring_enabled) return { label: 'Recurring', auto: live };
+  if (c.is_followup_enabled) return { label: 'Not placed on the ladder yet', auto: false };
+  return { label: 'Touch', auto: live && pipelineLadderAuto && !!c.touch_enabled };
 }
 function fuNextTouch(c) {
   if (['warm','loads','blocked','closed'].includes(c.state)) return { text: '—', sub: '', cls: '' };
@@ -7477,7 +7395,6 @@ async function loadPipelineConfig() {
     pipelineReplyFilters = data.reply_filters || [];
     pipelineFilterKeywords = data.filter_keywords || {};
     pipelineTriageModes = data.triage_modes || {};
-    pipelineCadence = data.cadence || {};
     pipelineTouchHour = data.touch_hour ?? 'auto';
     pipelineDigest = data.digest_enabled !== false;
     pipelineDripAuto = data.drip_auto_enabled !== false;
@@ -7544,10 +7461,10 @@ function renderDashboard() {
     <div class="dash-card"><div class="dash-k">No next step</div>
       <div class="dash-big">${h.no_next_step} ${h.no_next_step === 0 ? '<span class="dash-pill good">all scheduled</span>' : ''}</div>
       <div class="dash-hint">active contacts without a next date</div></div>
-    <div class="dash-card click" onclick="navTo('followup')">
-      <div class="dash-k">Rotting warm (14d+)</div>
+    <div class="dash-card click" onclick="navTo('followup'); setFuViewMode('kanban')">
+      <div class="dash-k">Stalled in the pipeline (14d+)</div>
       <div class="dash-big" style="color:${h.rotting ? 'var(--yellow)' : 'var(--text)'}">${h.rotting} ${h.rotting ? '<span class="dash-pill warn">review</span>' : ''}</div>
-      <div class="dash-hint">stage ≥ Got info, no activity 14+ days</div></div>
+      <div class="dash-hint">Kanban stage ≥ Got info, no activity 14+ days · opens the Kanban view</div></div>
     <div class="dash-card"><div class="dash-k">Avg touches → booked</div>
       <div class="dash-big">${h.avg_touches_to_booked ?? '—'}</div>
       <div class="dash-hint">emails sent before a contact booked</div></div>`;
@@ -7640,7 +7557,7 @@ async function openTimeline(id) {
     `</div>` +
     (d.notes ? `<div class="fu-tl-notes"><i class="ph-bold ph-note"></i> ${esc(d.notes)}</div>` : '') +
     `<div style="display:flex;gap:6px;margin-bottom:10px">` +
-      `<button class="fu-btn-primary" onclick="closeTimeline();fuAction('${c.id}','${/^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send'}')"><i class="ph-bold ph-paper-plane-tilt"></i> Send touch</button>` +
+      `<button class="fu-btn-primary" onclick="closeTimeline();fuAction('${c.id}','free-send')"><i class="ph-bold ph-paper-plane-tilt"></i> Send touch</button>` +
       `<button class="fu-qa-btn" onclick="closeTimeline();fuTouch('${c.id}','snooze',3)">+3d</button>` +
       `<button class="fu-qa-btn" onclick="closeTimeline();fuTouch('${c.id}','snooze',7)">+7d</button>` +
     `</div>` + items + `</div>`;
@@ -7719,7 +7636,7 @@ function fuKanbanCard(c) {
     ${c.state !== 'active' || sentBadge ? `<div class="fu-kanban-card-meta">${c.state !== 'active' ? `<span class="fu-state-badge ${sti.cls}">${sti.label}</span>` : ''}${sentBadge}</div>` : ''}
     <div class="fu-kanban-card-foot"><i class="ph-bold ph-clock"></i> ${lastAct}${route}</div>
     <div class="fu-kanban-qa" onclick="event.stopPropagation()">
-      <button class="fu-qa-btn fu-qa-send" onclick="fuAction('${c.id}','${/^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send'}')" title="Send touch now"><i class="ph-bold ph-paper-plane-tilt"></i> Send</button>
+      <button class="fu-qa-btn fu-qa-send" onclick="fuAction('${c.id}','free-send')" title="Send touch now"><i class="ph-bold ph-paper-plane-tilt"></i> Send</button>
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',1)" title="Snooze 1 day">+1</button>
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',3)" title="Snooze 3 days">+3</button>
       <button class="fu-qa-btn" onclick="fuTouch('${c.id}','snooze',7)" title="Snooze 7 days">+7</button>
@@ -7862,24 +7779,13 @@ function renderPipelineConfigEditor() {
   sBox.innerHTML = ''; fBox.innerHTML = '';
   pipelineStages.forEach(addPipelineStageRow);
   pipelineReplyFilters.forEach(addPipelineFilterRow);
-  renderPipelineCadenceEditor();
+  renderTouchHourEditor();
 }
 
-function renderPipelineCadenceEditor() {
-  const box = document.getElementById('pipelineCadenceEditor');
+function renderTouchHourEditor() {
+  const box = document.getElementById('touchHourEditor');
   if (!box) return;
-  box.innerHTML = (pipelineStages || []).map(s => {
-    const c = pipelineCadence[String(s.id)] || { days: 0, mode: 'off' };
-    return `<div class="pl-cad-row" data-sid="${s.id}">` +
-      `<span class="pl-cad-name">${esc(s.name)}</span>` +
-      `every <input type="number" class="pl-cad-days" min="1" max="60" value="${c.days || 3}"> days` +
-      `<select class="pl-cad-mode">` +
-        `<option value="off" ${c.mode === 'off' ? 'selected' : ''}>Off</option>` +
-        `<option value="manual" ${c.mode === 'manual' ? 'selected' : ''}>Manual — Today's touches</option>` +
-        `<option value="auto" ${c.mode === 'auto' ? 'selected' : ''}>Auto-send template</option>` +
-      `</select></div>`;
-  }).join('') +
-  `<div class="pl-cad-row"><span class="pl-cad-name">Touch send hour (${esc(pipelineTimezone || 'UTC')})</span>` +
+  box.innerHTML = `<div class="pl-cad-row"><span class="pl-cad-name">Touch send hour (${esc(pipelineTimezone || 'UTC')})</span>` +
     `<select id="plTouchHour"><option value="auto" ${pipelineTouchHour === 'auto' ? 'selected' : ''}>Auto — best reply hour</option>` +
     Array.from({length: 24}, (_, h) =>
       `<option value="${h}" ${String(pipelineTouchHour) === String(h) ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('') +
@@ -7936,11 +7842,11 @@ function renderAutoSendBanner(live) {
   const p = pipelineAutoPreview || {};
   // ladder touches follow the switches as they sit now, not as they were saved
   const touches = ladOn && dripOn ? pipelineLadderDue : 0;
+  const sched = dripOn ? (p.scheduled || 0) : 0;          // scheduled sends sit behind the same kill switch
   const parts = [];
-  if (dripOn && p.drip) parts.push(`${p.drip} FU1–FU3`);
   if (touches) parts.push(`${touches} ladder touch${touches === 1 ? '' : 'es'}`);
-  if (p.scheduled) parts.push(`${p.scheduled} scheduled/recurring`);
-  const n = (dripOn ? (p.drip || 0) : 0) + touches + (p.scheduled || 0);
+  if (sched) parts.push(`${sched} scheduled/recurring`);
+  const n = touches + sched;
   const unsaved = live && (on !== pipelineAutoSend || dripOn !== pipelineDripAuto || ladOn !== pipelineLadderAuto)
     ? ' <span class="auto-banner-unsaved">— not saved yet</span>' : '';
   let head, sub;
@@ -7956,7 +7862,7 @@ function renderAutoSendBanner(live) {
   } else {
     box.className = 'auto-banner on idle';
     head = 'Auto-send ON: nothing due in the next 24 h';
-    sub = 'Due FU1–FU3, auto touches and scheduled emails will go out on their own.';
+    sub = 'Due ladder touches and scheduled emails will go out on their own.';
   }
   box.innerHTML = `<div class="auto-banner-head">${head}${unsaved}</div><div class="auto-banner-sub">${esc(sub)}</div>`;
 }
@@ -7976,8 +7882,8 @@ const TERMS_GLOSSARY = [
     ['Blocked', 'never email again (added to the Stop List)'],
   ]],
   ['Where the contact is', 'Follow-up page', [
-    ['FU1–FU3', 'the automatic follow-up sequence after a reply'],
-    ['Touch', 'a repeat email to a contact sitting in a pipeline stage (Touch cadence in Settings)'],
+    ['FU1–FU3', 'the old automatic sequence, retired: shown on older contacts as history only'],
+    ['Touch', 'a follow-up email the warmth ladder sends when a contact\'s next date comes due (Follow-up rhythm in Settings)'],
     ['Pipeline stage', 'your Kanban columns — names are yours (Settings → Pipeline)'],
     ['Active / Paused', 'in the queue / on hold'],
     ['Warm', 'a hot lead handed to you for a personal answer'],
@@ -8015,12 +7921,12 @@ function setSettingsTab(tab) {
 }
 
 async function saveAutomationTab() {
-  const [a, b, c] = await Promise.all([saveFollowupDefaults(true), savePipelineConfig(true, 'automation'), saveLadderCopy()]);
-  if (a && b && c) toast('Automation saved');
+  const [b, c] = await Promise.all([savePipelineConfig(true, 'automation'), saveLadderCopy()]);
+  if (b && c) toast('Automation saved');
 }
 
 // scope 'pipeline' = stages + reply filters (Pipeline tab);
-// scope 'automation' = cadence, touch hour, digest and the auto-send switches.
+// scope 'automation' = touch hour, digest, the ladder numbers and the auto-send switches.
 async function savePipelineConfig(quiet, scope = 'pipeline') {
   const stages = [...document.querySelectorAll('#pipelineStagesEditor .pl-row')].map(r => ({
     id: r.dataset.id ? parseInt(r.dataset.id) : null,
@@ -8036,23 +7942,8 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
     auto_advance_to: r.querySelector('.pl-filter-adv').value ? parseInt(r.querySelector('.pl-filter-adv').value) : null,
     keywords: r.querySelector('.pl-filter-kw').value.split(',').map(s => s.trim()).filter(Boolean),
   })).filter(f => f.label);
-  const cadence = {};
-  document.querySelectorAll('#pipelineCadenceEditor .pl-cad-row').forEach(r => {
-    if (!r.dataset.sid) return;   // skip the touch-hour row
-    cadence[r.dataset.sid] = {
-      days: parseInt(r.querySelector('.pl-cad-days')?.value) || 3,
-      mode: r.querySelector('.pl-cad-mode')?.value || 'off',
-    };
-  });
-  // The same numbers sent again would re-date contacts, so send them only when they changed:
-  // the switch must do the same thing wherever it is flipped.
-  const cadenceSame = Object.keys(cadence).every(sid => {
-    const was = pipelineCadence[sid] || { days: 0, mode: 'off' }, now = cadence[sid];
-    return was.mode === now.mode && (now.mode === 'off' || was.days === now.days);
-  });
   const body = scope === 'automation'
-    ? { ...(cadenceSame ? {} : { cadence }),
-        touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
+    ? { touch_hour: document.getElementById('plTouchHour')?.value ?? 'auto',
         digest_enabled: !!document.getElementById('plDigest')?.checked,
         drip_auto_enabled: !!document.getElementById('plDripAuto')?.checked,
         auto_send_enabled: !!document.getElementById('plAutoSend')?.checked,
@@ -8069,7 +7960,6 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
     pipelineStages = data.stages || [];
     pipelineReplyFilters = data.reply_filters || [];
     pipelineFilterKeywords = data.filter_keywords || {};
-    pipelineCadence = data.cadence || {};
     pipelineTouchHour = data.touch_hour ?? 'auto';
     pipelineDigest = data.digest_enabled !== false;
     pipelineDripAuto = data.drip_auto_enabled !== false;
@@ -8080,7 +7970,7 @@ async function savePipelineConfig(quiet, scope = 'pipeline') {
     pipelineLadderDue = data.ladder_due_24h || 0;
     pipelineTimezone = data.timezone || pipelineTimezone;
     if (scope === 'pipeline') renderPipelineConfigEditor();
-    else renderPipelineCadenceEditor();
+    else renderTouchHourEditor();
     if (!quiet) toast('Pipeline saved');
     if (fuViewMode === 'kanban' && document.getElementById('page-followup')?.classList.contains('active')) {
       await loadPipelineStats(); renderFuKanban();
@@ -8162,7 +8052,7 @@ let _fuSwData = null, _fuSwBusy = false;
 // The other two gates every automatic send sits behind; `why` names one in a sentence, `fix` says what to do.
 function fuLadderGates(d) {
   const g = [];
-  if (!d.fu_auto_enabled) g.push({ why: 'the FU1–FU3 switch is off', fix: 'turn on the FU1–FU3 switch in Settings → Automation (it stops every follow-up)' });
+  if (!d.fu_auto_enabled) g.push({ why: 'the follow-up switch is off', fix: 'turn on “Follow-ups on their own” in Settings → Automation (it stops every follow-up)' });
   if (!d.auto_send_enabled) g.push({ why: 'automatic sending is off', fix: 'turn on “Allow automatic sending” in Settings → Automation' });
   return g;
 }
@@ -8267,9 +8157,10 @@ async function fuAction(id, action, reason, extraPayload, opts) {
     }
     const contextualMsgs = {
       'send-now':'Follow-up sent',
+      'free-send':'Follow-up sent',
       'cancel-schedule':'Schedule cancelled',
       'stop-recurring':'Recurring stopped',
-      'restart-fu1':'Moved back to FU1',
+      'restart-fu1':'Follow-up restarted',
     };
     let msg = contextualMsgs[action] || (action.charAt(0).toUpperCase()+action.slice(1).replace(/-/g,' ')+' done');
     if (action === 'warm') {
@@ -8628,7 +8519,7 @@ function toggleFuDropdown(event, contactId) {
 
   let items = '';
   if (isNeedsAction || isTerminal) {
-    items += `<button class="fu-dd-item" onclick="fuDropdownAction('restart-fu1')"><i class="ph-bold ph-arrow-counter-clockwise"></i> Restart at FU1</button>`;
+    items += `<button class="fu-dd-item" onclick="fuDropdownAction('restart-fu1')"><i class="ph-bold ph-arrow-counter-clockwise"></i> Restart follow-up</button>`;
     items += `<div class="fu-dd-sep"></div>`;
   }
   if (isActive && !isNeedsAction)  items += `<button class="fu-dd-item" onclick="fuDropdownAction('pause')"><i class="ph-bold ph-pause"></i> Pause</button>`;
@@ -9235,7 +9126,7 @@ function renderFuTierSelection() {
 // Send now: the same pair the Queue uses (drip step → send-now, anything else → free-send).
 function fuTierSend(id) {
   const c = fuTierRows.find(x => x.id === id); if (!c) return;
-  return fuAction(id, /^fu[123]_scheduled$/.test(c.stage || '') ? 'send-now' : 'free-send');
+  return fuAction(id, 'free-send');
 }
 
 async function fuLadderCall(id, action, rung) {

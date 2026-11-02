@@ -109,16 +109,43 @@ URL: `/admin`
   `_strip_quoted` = свій текст для тріажу/рейтів; `_quote_split` → `quote_at/quote_from/quote_mine` у /api/replies —
   картка показує текст відповіді, процитований лист згорнутий («Your email» / «Quoted email · адреса»).
 
-## Follow-up каденс — додано 2026-07
-- Залізне правило: активний контакт завжди має next_followup_at (`_schedule_touch`,
-  хуки в reply-stop / stage-move / normalize-sweep). Лічильники Overdue/Today рахують
-  БУДЬ-ЯКИЙ активний контакт з датою (enabled-прапорці гейтять лише авто-відправку).
-- `Workspace.get_cadence()`: {stage_id: {days, mode}}; touch_hour ('auto' = найкраща
-  година відповідей); шедулер Path 3 = авто-дотики, Path 4 = тижневий дайджест (Пн).
-- 🔥 attention_at: відповідь від контакта стадії ≥2; OOO-автопауза: +7 днів.
-- UI: Today's touches — сегмент-фільтр (`filter=touches`, бакет у `_fu_urgency`: due до локальної
-  півночі + 🔥) і блок угорі таблиці з Send/+1d/+3d/+7d/Skip; швидкі дії на канбані; таймлайн
-  (`/api/followups/timeline`). Окремої панелі більше нема.
+## Follow-up: драбина теплоти (warmth ladder) — 2026-11, замінила стадійний дріп FU1→FU2→FU3
+Спека: `docs/superpowers/specs/2026-10-30-followup-warmth-ladder-design.md`; план:
+`docs/superpowers/plans/2026-10-30-followup-warmth-ladder.md`; движок правил — `app/ladder.py`.
+- **Щабель** (`FollowupContact.rung`): cold → neutral → warm → hot → client; поза драбиною — dormant
+  (`exit_reason`: exhausted/refused/manual/stale/send_failed) і excluded (назавжди, тільки руками).
+  Щабель піднімає лише **лід**: брокер надіслав інформацію про вантаж (одна сходинка на розмову, не на
+  лист; `ladder_load` у подіях). Будь-яка відповідь піднімає cold до neutral. Відмова → dormant/refused;
+  «напишіть пізніше» → дата від брокера (deferral). Client — поза автоматикою.
+- **Ритм** (`LADDER_DEFAULTS`, усе — налаштування в `pipeline_config['ladder']`): дотик 1 — наступного дня,
+  2 — через 3 дні, далі щотижня; hot — щотижня з першого.
+- **Бюджет спроб**: 3 без ліда, 5 з лідом (`budget_no_load`/`budget_engaged`, «більше терпіння» для warm/hot
+  вимикається). Лише лід обнуляє бюджет; відповідь — ні. Вичерпано → dormant, лист не йде.
+- **Одна дата**: `_ladder_set_next` — єдине місце, яке пише `next_followup_at` драбини; `_schedule_touch` —
+  залізне правило «активний контакт на драбині має дату своєї ступені» (хуки: відповідь, перенос на канбані,
+  нормалізація при старті/лістингу, ручна відправка).
+- **Вимикачі (усі три + ліміт)**: `Workspace.fu_auto_enabled` (кілл-свіч усіх автоматичних follow-up),
+  `Workspace.ladder_auto_enabled` (згода драбини, дефолт OFF) і `pipeline_config.auto_send_enabled`
+  (майстер); плюс `ladder.daily_cap` (дефолт 25/день на воркспейс, рахується від локальної півночі з подій
+  `touch_sent`). Шедулер перед відправкою пересканує відповіді (`_prefetch_replies_before_sending`).
+- **Шляхи відправки** (`_run_scheduled_followups`, кожні 15 хв): Path 0 — разова відправка, яку власник
+  призначив (`scheduled_once`), Path 2 — повторювана (`recurring_enabled`), Path 3 — драбина
+  (`_run_ladder_touches`), Path 4 — тижневий дайджест. Path 0/2 теж за `fu_auto_enabled` + майстром і
+  ніколи не пишуть excluded/refused. Стадійного дріпу (колишній Path 1) **немає**.
+- **Ручні відправки**: `send-now` (дотик для живого щабля) і `free-send` (свідомий разовий лист, може піти
+  й dormant/client, але не excluded/refused) — обидва шлють текст щабля, не витрачають спробу, перераховують дату.
+  Один текст для всіх: `_followup_copy` → `_template_for_rung`; один payload: `_followup_send_args`.
+- **Стара інфраструктура**: `stage` / `fu1_sent_at`… / `completed_fu3_at` лишаються як ІСТОРІЯ (ніхто їх
+  більше не рухає), `is_followup_enabled=True` означає лише «ще не розміщений на драбині» — такого контакта
+  не шле жоден шлях; розміщення робить `scripts/migrate_to_ladder.py` (спершу dry run). Нові контакти
+  народжуються на драбині (`rung='cold'`, `is_followup_enabled=False`). Стадійний каденс
+  (`get_cadence`, FU-затримки) вимкнено — значення в БД ігноруються.
+- UI: «Follow-up» = рядок щаблів + «Needs you» + воронка + «що система зробила за добу»; клік на щабель —
+  таблиця-деталь (`rung_counts`, `/api/followups/funnel|needs-you|activity`); Today's touches — сегмент
+  `filter=touches` (бакет `_fu_urgency`: due до локальної півночі + 🔥); ручні дії власника — pause-auto /
+  resume-auto / set-rung / exclude / unexclude (події `manual_*`); таймлайн `/api/followups/timeline`.
+  Settings → Automation: «Follow-ups on their own» (кілл-свіч), «Warmth-ladder follow-ups», ритм/бюджети/ліміт,
+  «Ladder emails» (текст кожного щабля).
 
 ## Insights (замість Dashboard / Analytics / Intelligence) — 2026-10
 Стартова сторінка — **Send** (над чергою — тонкий рядок «Today X of N sent · replies · quota»).

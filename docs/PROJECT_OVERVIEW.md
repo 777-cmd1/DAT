@@ -46,6 +46,11 @@ tests/              — pytest: test_parser, test_triage, test_touch, test_pipel
 - OOO-автопауза: auto_reply від контакта пайплайна → next touch +7 днів, 🔥 знімається.
 
 ### 3. Follow-up — каденс-двигун («залізне правило»)
+> **Оновлення 2026-11:** стадійний дріп FU1→FU3 і стадійний каденс вилучено — їх замінила драбина теплоти
+> (щаблі cold→client, лід піднімає, бюджет спроб, три вимикачі + денний ліміт). Актуальний опис — розділ
+> «Follow-up: драбина теплоти» в CLAUDE.md і спека `docs/superpowers/specs/2026-10-30-followup-warmth-ladder-design.md`.
+> Нижче — історичний опис старого двигуна; `stage`/`fu*_sent_at` лишаються в БД як історія.
+
 - Модель `FollowupContact`: стадії дрипа `fu1..fu3` + kanban `pipeline_stage` (1-5:
   Follow Pending / Got info (1st) / Got info 2 / Regular info / Booked; конфігурується).
 - **Залізне правило: активний контакт завжди має `next_followup_at`** або терміналь.

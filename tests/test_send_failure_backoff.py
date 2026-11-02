@@ -30,11 +30,13 @@ def _mk(db, fu_auto=True):
     return user, ws
 
 
-def _due(db, user, ws, stage='fu1_scheduled'):
+def _due(db, user, ws, stage='completed_fu3'):
+    """A due one-time send (the stage drip that used to own such contacts is retired)."""
     from app.models import FollowupContact
     fc = FollowupContact(user_id=user.id, workspace_id=ws.id,
                          contact_email=f'{uuid.uuid4().hex[:8]}@x.com',
-                         state='active', stage=stage, is_followup_enabled=True,
+                         state='active', stage=stage, is_followup_enabled=False,
+                         scheduled_once=True,
                          next_followup_at=_app._utcnow() - timedelta(hours=2))
     db.session.add(fc); db.session.commit()
     return fc
@@ -118,4 +120,4 @@ def test_success_resets_the_counter(app, db, monkeypatch):
     _app._run_scheduled_followups()
     db.session.expire_all()
     assert fc.send_fail_count == 0
-    assert fc.stage == 'fu2_scheduled'            # normal progression resumed
+    assert fc.scheduled_once is False             # normal delivery resumed: the one-time date is spent

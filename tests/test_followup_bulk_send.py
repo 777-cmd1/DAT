@@ -40,12 +40,11 @@ def _mk_user(db, client):
     return user, ws
 
 
-def _contact(db, user, ws, stage='fu1_scheduled', state='active'):
+def _contact(db, user, ws, stage='fu1_scheduled', state='active', rung='cold'):
     from app.models import FollowupContact
     fc = FollowupContact(user_id=user.id, workspace_id=ws.id,
                          contact_email=f'{uuid.uuid4().hex[:8]}@x.com',
-                         state=state, stage=stage,
-                         is_followup_enabled=(stage.endswith('_scheduled')))
+                         state=state, stage=stage, rung=rung, is_followup_enabled=False)
     db.session.add(fc); db.session.commit()
     return fc
 
@@ -59,7 +58,7 @@ def test_bulk_send_job_processes_contacts(app, db, client, monkeypatch):
     user, ws = _mk_user(db, client)
     ok1 = _contact(db, user, ws)
     ok2 = _contact(db, user, ws)
-    done = _contact(db, user, ws, stage='completed_fu3')   # not eligible → skip
+    done = _contact(db, user, ws, rung='dormant')   # off the ladder: a scheduled send skips it
 
     sent_to = []
     monkeypatch.setattr(_app, 'send_followup_email',
@@ -79,8 +78,12 @@ def test_bulk_send_job_processes_contacts(app, db, client, monkeypatch):
     assert len(sent_to) == 2
 
     db.session.expire_all()
-    assert db.session.get(FollowupContact, ok1.id).stage == 'fu2_scheduled'
-    assert db.session.get(FollowupContact, ok2.id).stage == 'fu2_scheduled'
+    for c in (ok1, ok2):
+        row = db.session.get(FollowupContact, c.id)
+        assert row.stage == 'fu1_scheduled'            # the retired drip's history is not advanced
+        assert row.last_followup_sent_at is not None   # but the send is recorded
+        assert row.touch_attempt == 0                  # and a manual send spends no ladder attempt
+        assert row.next_followup_at is not None        # and the ladder re-dates the next touch
 
     s = client.get('/api/followups/bulk-send/status').get_json()
     assert s['done'] is True and s['running'] is False

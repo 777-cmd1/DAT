@@ -16,7 +16,8 @@ def _mk(db, client=None, fu_auto=True, auto_send=None, oauth=False):
                 password=_bcrypt.hashpw(b'pass', _bcrypt.gensalt()).decode())
     db.session.add(user); db.session.flush()
     cfg = {} if auto_send is None else {'auto_send_enabled': auto_send}
-    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto, pipeline_config=cfg)
+    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto, ladder_auto_enabled=True,
+                   pipeline_config=cfg)
     db.session.add(ws); db.session.flush()
     db.session.add(EmailAccount(user_id=user.id, workspace_id=ws.id, gmail_address='me@test.com',
                                 your_name='Me', google_refresh_token='tok' if oauth else None))
@@ -31,8 +32,8 @@ def _due(db, user, ws, **kw):
     from app.models import FollowupContact
     fields = dict(user_id=user.id, workspace_id=ws.id,
                   contact_email=f'{uuid.uuid4().hex[:8]}@carrier.com', state='active',
-                  stage='fu2_scheduled', is_followup_enabled=True,
-                  next_followup_at=_app._utcnow() - timedelta(hours=1))
+                  stage='completed_fu3', is_followup_enabled=False, rung='neutral',
+                  touch_enabled=True, next_followup_at=_app._utcnow() - timedelta(hours=1))
     fields.update(kw)
     fc = FollowupContact(**fields)
     db.session.add(fc); db.session.commit()
@@ -54,13 +55,13 @@ def test_master_switch_off_blocks_every_auto_path(app, db, monkeypatch):
     db.session.add(Template(user_id=user.id, workspace_id=ws.id, type='followup',
                             level='FU1', name='FU1', body='hi', is_active=True))
     db.session.commit()
-    drip = _due(db, user, ws)
-    once = _due(db, user, ws, stage='completed_fu3', is_followup_enabled=False, scheduled_once=True)
+    touch = _due(db, user, ws)
+    once = _due(db, user, ws, touch_enabled=False, scheduled_once=True)
     sent = _capture_sends(monkeypatch)
     _app._run_scheduled_followups()
     db.session.expire_all()
-    assert drip.contact_email not in sent and once.contact_email not in sent
-    assert drip.stage == 'fu2_scheduled' and once.scheduled_once is True
+    assert touch.contact_email not in sent and once.contact_email not in sent
+    assert touch.touch_attempt == 0 and once.scheduled_once is True
 
 
 def test_master_switch_default_on_keeps_existing_behavior(app, db, monkeypatch):
@@ -82,7 +83,7 @@ def test_master_switch_roundtrips_through_pipeline_config(app, db, client):
 
 # ── Pre-send reply check ──────────────────────────────────────────────────────
 
-def test_replier_is_stopped_before_the_drip_emails_them(app, db, monkeypatch):
+def test_replier_is_stopped_before_the_ladder_emails_them(app, db, monkeypatch):
     user, ws = _mk(db, fu_auto=True, oauth=True)
     replier = _due(db, user, ws)
     quiet = _due(db, user, ws)
@@ -100,7 +101,7 @@ def test_replier_is_stopped_before_the_drip_emails_them(app, db, monkeypatch):
     assert quiet.contact_email in sent
     assert replier.contact_email not in sent      # the replier got nothing
     db.session.expire_all()
-    assert replier.is_followup_enabled is False
+    assert replier.touch_attempt == 0 and replier.next_followup_at > _app._utcnow()   # re-based, not due
 
 
 def test_failed_reply_check_holds_that_users_auto_sends(app, db, monkeypatch):
@@ -113,7 +114,7 @@ def test_failed_reply_check_holds_that_users_auto_sends(app, db, monkeypatch):
     assert fc.contact_email not in sent
     # held, not dropped: still due for the next run
     db.session.expire_all()
-    assert fc.stage == 'fu2_scheduled' and fc.next_followup_at is not None
+    assert fc.touch_attempt == 0 and fc.next_followup_at is not None
 
 
 def test_not_connected_gmail_does_not_hold_sends(app, db, monkeypatch):
@@ -127,7 +128,7 @@ def test_not_connected_gmail_does_not_hold_sends(app, db, monkeypatch):
 
 
 def test_no_reply_check_when_nothing_would_auto_send(app, db, monkeypatch):
-    user, ws = _mk(db, fu_auto=False)             # drip off → due drip contacts wait for a click
+    user, ws = _mk(db, fu_auto=False)             # kill switch off → due contacts wait for a click
     _due(db, user, ws)
     calls = []
     monkeypatch.setattr(_app, 'fetch_replies_from_gmail',

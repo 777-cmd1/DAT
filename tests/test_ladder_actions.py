@@ -223,14 +223,16 @@ def test_pausing_twice_writes_one_event(app, db, client, me):
     assert len(_events(fc, 'manual_pause_auto')) == 1
 
 
-def test_pause_stops_a_running_drip_too(app, db, client, me):
+def test_pause_and_resume_leave_an_unplaced_contact_unsent(app, db, client, me):
+    # a contact still carrying the retired drip flag is owned by no engine: pausing clears
+    # its leftover date and resuming does not bring the drip back or hand it to the ladder
     fc = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True,
              next_followup_at=_app._utcnow() + timedelta(days=1))
     _act(client, fc, 'pause-auto')
     assert _reload(db, fc).next_followup_at is None
     _act(client, fc, 'resume-auto')
     fc = _reload(db, fc)
-    assert fc.is_followup_enabled and fc.next_followup_at is not None   # the drip is back
+    assert fc.is_followup_enabled and fc.next_followup_at is None and fc.touch_enabled is False
 
 
 def test_resume_auto_reschedules_from_the_current_rung(app, db, client, me):
@@ -687,24 +689,20 @@ def _due(): return _app._utcnow() - timedelta(hours=2)
 
 def test_the_scheduler_never_sends_to_a_paused_contact_on_any_engine(app, db, client, me, sent_log):
     _arm_scheduler(db, me)
-    drip = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True, next_followup_at=_due())
     once = _fc(db, me, 'cold', scheduled_once=True, next_followup_at=_due())
     rec = _fc(db, me, 'cold', recurring_enabled=True, recurring_days='0,1,2,3,4,5,6',
               recurring_time='10:00', next_followup_at=_due())
-    # control: unpaused, every engine does send
+    # control: unpaused, both engines do send
     assert _run_drip() >= 1
-    assert drip.contact_email in sent_log and once.contact_email in sent_log \
-        and rec.contact_email in sent_log
+    assert once.contact_email in sent_log and rec.contact_email in sent_log
 
     sent_log.clear()
     db.session.expire_all()
-    for fc in (drip, once, rec):                   # make them all due again, then pause by data
+    for fc in (once, rec):                         # make them all due again, then pause by data
         fc.auto_paused = True
         fc.next_followup_at = _due()
-        fc.stage = 'fu1_scheduled'
         fc.state = 'active'
-    drip.is_followup_enabled = True       # the control run spent each engine's state: re-arm it
-    once.scheduled_once = True
+    once.scheduled_once = True             # the control run spent each engine's state: re-arm it
     rec.recurring_enabled = True
     db.session.commit()
     _run_drip()
@@ -713,22 +711,19 @@ def test_the_scheduler_never_sends_to_a_paused_contact_on_any_engine(app, db, cl
 
 def test_the_scheduler_never_sends_to_an_excluded_contact_on_any_engine(app, db, client, me, sent_log):
     _arm_scheduler(db, me)
-    drip = _fc(db, me, 'cold', stage='fu1_scheduled', is_followup_enabled=True, next_followup_at=_due())
     once = _fc(db, me, 'cold', scheduled_once=True, next_followup_at=_due())
     rec = _fc(db, me, 'cold', recurring_enabled=True, recurring_days='0,1,2,3,4,5,6',
               recurring_time='10:00', next_followup_at=_due())
-    # control: before the exclusion every engine does send to these contacts
+    # control: before the exclusion both engines do send to these contacts
     assert _run_drip() >= 1
-    assert {drip.contact_email, once.contact_email, rec.contact_email} <= set(sent_log)
+    assert {once.contact_email, rec.contact_email} <= set(sent_log)
 
     sent_log.clear()
     db.session.expire_all()
-    for fc in (drip, once, rec):             # excluded, with every engine re-armed and due again
+    for fc in (once, rec):                   # excluded, with every engine re-armed and due again
         fc.rung = 'excluded'
         fc.state = 'active'
-        fc.stage = 'fu1_scheduled'
         fc.next_followup_at = _due()
-    drip.is_followup_enabled = True
     once.scheduled_once = True
     rec.recurring_enabled = True
     db.session.commit()
@@ -969,7 +964,11 @@ def test_restarting_the_sequence_still_works_for_an_exhausted_contact(app, db, c
     fc = _fc(db, me, 'dormant', exit_reason='exhausted')
     assert _act(client, fc, 'restart-fu1').status_code == 200
     fc = _reload(db, fc)
-    assert fc.stage == 'fu1_scheduled' and fc.is_followup_enabled is True
+    # back on the ladder (no drip flag), on the rung its loads earn, with a fresh budget and a date
+    assert fc.is_followup_enabled is False and fc.rung == 'neutral'
+    assert fc.exit_reason is None and fc.touch_attempt == 0
+    assert fc.next_followup_at is not None and fc.touch_enabled
+    assert len(_events(fc, 'restarted_fu1')) == 1
 
 
 # ══ fix round 2 ══════════════════════════════════════════════════════════════

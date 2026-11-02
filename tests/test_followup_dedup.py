@@ -64,7 +64,7 @@ def test_send_now_blocks_duplicate_within_24h(app, db, client, monkeypatch):
     db.session.expire_all()
     fc = db.session.get(FollowupContact, cid)
     assert fc.last_followup_sent_at is not None
-    assert fc.stage == 'fu2_scheduled'   # advanced past FU1
+    assert fc.stage == 'fu1_scheduled'   # the retired drip's stage is not advanced
 
     # 2) Second send within 24h is rejected as a duplicate.
     r2 = client.post('/api/followups/action',

@@ -1,4 +1,7 @@
-"""Workspace kill switch for the FU1–FU3 drip scheduler (fu_auto_enabled).
+"""Workspace kill switch (fu_auto_enabled) over every scheduled send; the FU1–FU3 drip it
+once guarded is retired.
+
+History: the switch was added for the drip path.
 
 Incident 2026-07-25: the scheduler's drip path had no auto-send gate — 249
 FU2 emails went out automatically on a Saturday even though the user believed
@@ -42,45 +45,105 @@ def _due_drip_contact(db, user, ws, stage='fu2_scheduled'):
     return fc
 
 
-def test_drip_scheduler_respects_kill_switch_off(app, db, monkeypatch):
-    user, ws = _mk(db, fu_auto=False)
-    fc = _due_drip_contact(db, user, ws)
+def _capture_sends(monkeypatch):
     sent = []
     monkeypatch.setattr(_app, 'send_followup_email',
                         lambda fu, tpl, cfg, uid=None: (sent.append(fu['contact_email']), (True, None))[1])
-    _app._run_scheduled_followups()
-    db.session.expire_all()
-    assert sent == []                                  # nothing emailed
-    assert fc.stage == 'fu2_scheduled'                 # no progression
-    assert fc.next_followup_at is not None             # stays visible in Overdue/Today
+    return sent
 
 
-def test_drip_scheduler_sends_when_enabled(app, db, monkeypatch):
+def test_the_stage_drip_is_retired_and_sends_nothing(app, db, monkeypatch):
+    """A due FU2 contact used to be emailed and moved to FU3. Nothing owns it now:
+    it is unplaced (no migration has put it on a rung), so no path sends it."""
     user, ws = _mk(db, fu_auto=True)
     fc = _due_drip_contact(db, user, ws)
-    sent = []
-    monkeypatch.setattr(_app, 'send_followup_email',
-                        lambda fu, tpl, cfg, uid=None: (sent.append(fu['contact_email']), (True, None))[1])
-    _app._run_scheduled_followups()
+    sent = _capture_sends(monkeypatch)
+    assert _app._run_scheduled_followups() == 0
     db.session.expire_all()
-    assert sent == [fc.contact_email]
-    assert fc.stage == 'fu3_scheduled'                 # advanced FU2 → FU3
+    assert sent == []
+    assert fc.stage == 'fu2_scheduled'                 # the history is not advanced
+    assert fc.fu2_sent_at is None and fc.fu3_sent_at is None
+    assert fc.is_followup_enabled is True              # and the flag still marks it unplaced
 
 
-def test_scheduled_once_unaffected_by_kill_switch(app, db, monkeypatch):
-    """Explicit one-time schedules are user-initiated — they still send."""
-    from app.models import Template
+def test_scheduled_once_respects_the_kill_switch(app, db, monkeypatch):
+    """A one-time date used to ignore the owner's switch (it was 'user-initiated'). It no
+    longer does: with follow-up automation off it waits, still due, for a click."""
     user, ws = _mk(db, fu_auto=False)
-    db.session.add(Template(user_id=user.id, workspace_id=ws.id, type='followup',
-                            level='FU1', name='FU1', body='hello', is_active=True))
     fc = _due_drip_contact(db, user, ws, stage='completed_fu3')
+    fc.is_followup_enabled = False
     fc.scheduled_once = True
     db.session.commit()
-    sent = []
-    monkeypatch.setattr(_app, 'send_followup_email',
-                        lambda fu, tpl, cfg, uid=None: (sent.append(fu['contact_email']), (True, None))[1])
+    sent = _capture_sends(monkeypatch)
     _app._run_scheduled_followups()
-    assert sent == [fc.contact_email]
+    db.session.expire_all()
+    assert sent == []
+    assert fc.scheduled_once is True and fc.next_followup_at is not None   # still waiting, still visible
+
+
+def test_recurring_respects_the_kill_switch(app, db, monkeypatch):
+    user, ws = _mk(db, fu_auto=False)
+    fc = _due_drip_contact(db, user, ws, stage='completed_fu3')
+    fc.is_followup_enabled = False
+    fc.recurring_enabled, fc.recurring_days, fc.recurring_time = True, '0,1,2,3,4,5,6', '09:00'
+    db.session.commit()
+    sent = _capture_sends(monkeypatch)
+    _app._run_scheduled_followups()
+    assert sent == []
+
+
+def test_scheduled_once_and_recurring_send_when_the_switch_is_on(app, db, monkeypatch):
+    user, ws = _mk(db, fu_auto=True)
+    once = _due_drip_contact(db, user, ws, stage='completed_fu3')
+    once.is_followup_enabled, once.scheduled_once = False, True
+    rec = _due_drip_contact(db, user, ws, stage='completed_fu3')
+    rec.is_followup_enabled = False
+    rec.recurring_enabled, rec.recurring_days, rec.recurring_time = True, '0,1,2,3,4,5,6', '09:00'
+    db.session.commit()
+    sent = _capture_sends(monkeypatch)
+    assert _app._run_scheduled_followups() == 2
+    assert sorted(sent) == sorted([once.contact_email, rec.contact_email])
+    db.session.expire_all()
+    assert once.scheduled_once is False
+
+
+def test_scheduled_sends_obey_the_master_switch(app, db, monkeypatch):
+    user, ws = _mk(db, fu_auto=True)
+    ws.pipeline_config = {'auto_send_enabled': False}
+    fc = _due_drip_contact(db, user, ws, stage='completed_fu3')
+    fc.is_followup_enabled, fc.scheduled_once = False, True
+    db.session.commit()
+    sent = _capture_sends(monkeypatch)
+    _app._run_scheduled_followups()
+    assert sent == []
+
+
+def test_a_date_never_emails_someone_who_asked_us_to_stop(app, db, monkeypatch):
+    user, ws = _mk(db, fu_auto=True)
+    refused = _due_drip_contact(db, user, ws, stage='completed_fu3')
+    refused.is_followup_enabled, refused.scheduled_once = False, True
+    refused.rung, refused.exit_reason = 'dormant', 'refused'
+    excluded = _due_drip_contact(db, user, ws, stage='completed_fu3')
+    excluded.is_followup_enabled, excluded.recurring_enabled = False, True
+    excluded.recurring_days, excluded.recurring_time, excluded.rung = '0,1,2,3,4,5,6', '09:00', 'excluded'
+    db.session.commit()
+    sent = _capture_sends(monkeypatch)
+    _app._run_scheduled_followups()
+    assert sent == []
+
+
+def test_scheduled_sends_use_the_rung_copy_not_a_stage_template(app, db, monkeypatch):
+    user, ws = _mk(db, fu_auto=True)
+    fc = _due_drip_contact(db, user, ws, stage='completed_fu3')
+    fc.is_followup_enabled, fc.scheduled_once, fc.rung = False, True, 'warm'
+    db.session.commit()
+    bodies = []
+    monkeypatch.setattr(_app, 'send_followup_email',
+                        lambda fu, tpl, cfg, uid=None: (bodies.append(tpl), (True, None))[1])
+    expected = _app._template_for_rung(user.id, 'warm', fc)
+    _app._run_scheduled_followups()
+    assert bodies == [expected] and expected
+    assert expected != _app.DEFAULT_FU_TEMPLATES['FU1']
 
 
 def test_pipeline_config_toggles_drip_auto(app, db, client):

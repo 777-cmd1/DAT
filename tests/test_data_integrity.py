@@ -125,18 +125,19 @@ def test_dashboard_and_intelligence_use_the_same_rate(app, db, client):
     assert b['replies'] == 1 and b['reply_rate'] == 50.0          # used to be 5 replies / 250%
 
 
-# ── Auto FU3 hands the contact to the cadence immediately ─────────────────────
+# ── A spent one-time send hands the contact straight back to the ladder ──────
 
-def test_auto_fu3_schedules_next_touch(app, db, monkeypatch):
+def test_a_spent_one_time_send_schedules_the_next_touch(app, db, monkeypatch):
     from datetime import timedelta
     from app.models import Workspace, EmailAccount, FollowupContact
     u = _user(db)
     ws = Workspace.query.filter_by(owner_id=u.id).first()
     ws.fu_auto_enabled = True
-    ws.pipeline_config = {'cadence': {'1': {'days': 3, 'mode': 'manual'}}, 'touch_hour': 'auto'}
+    ws.pipeline_config = {'touch_hour': 'auto'}
     db.session.add(EmailAccount(user_id=u.id, workspace_id=ws.id, gmail_address='me@test.com', your_name='Me'))
     fc = FollowupContact(user_id=u.id, workspace_id=ws.id, contact_email=f'{uuid.uuid4().hex[:8]}@c.com',
-                         state='active', stage='fu3_scheduled', is_followup_enabled=True, pipeline_stage=1,
+                         state='active', stage='completed_fu3', is_followup_enabled=False, pipeline_stage=1,
+                         rung='neutral', scheduled_once=True,
                          next_followup_at=_app._utcnow() - timedelta(hours=1))
     db.session.add(fc); db.session.commit()
     monkeypatch.setattr(_app, 'send_followup_email', lambda fu, tpl, cfg, uid=None: (True, None))
@@ -144,9 +145,9 @@ def test_auto_fu3_schedules_next_touch(app, db, monkeypatch):
     _app._run_scheduled_followups()
     db.session.expire_all()
     fc = db.session.get(FollowupContact, fc.id)
-    assert fc.stage == 'completed_fu3' and not fc.is_followup_enabled
+    assert fc.scheduled_once is False and not fc.is_followup_enabled
     assert fc.touch_enabled and fc.next_followup_at is not None        # used to be None until a sweep
-    assert fc.next_followup_at > _app._utcnow() + timedelta(days=2)
+    assert fc.next_followup_at > _app._utcnow()                        # the neutral rung's first touch
 
 
 def test_insights_month_period_and_matching_funnel(app, db, client):

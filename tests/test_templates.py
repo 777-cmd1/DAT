@@ -104,9 +104,9 @@ def test_add_allows_same_name_different_body(app, db, client):
     assert Template.query.filter_by(user_id=user.id, type='followup').count() == 2
 
 
-def test_deleted_template_not_used_for_sends(app, db, client, monkeypatch):
-    """After deleting the only custom FU1 template, sends fall back to defaults
-    (no crash, no stale text)."""
+def test_stage_templates_are_not_sent_a_manual_send_uses_the_rung_copy(app, db, client, monkeypatch):
+    """The FU1-FU3 stage drip is retired, so a custom FU1 template is never sent: a manual
+    send uses the contact's rung copy, whether or not the FU1 text still exists."""
     from app.models import EmailAccount, FollowupContact
     user, ws = _mk_user(db, client)
     db.session.add(EmailAccount(user_id=user.id, workspace_id=ws.id,
@@ -117,11 +117,17 @@ def test_deleted_template_not_used_for_sends(app, db, client, monkeypatch):
                          stage='fu1_scheduled', is_followup_enabled=True)
     db.session.add(fc); db.session.commit()
 
-    assert client.delete(f'/api/fu-templates/{custom.id}').status_code == 200
-
     used = {}
     monkeypatch.setattr(_app, 'send_followup_email',
                         lambda fu, tpl, cfg, uid=None: (used.setdefault('tpl', tpl), (True, None))[1])
     res = client.post('/api/followups/action', json={'id': fc.id, 'action': 'send-now'})
     assert res.status_code == 200, res.get_json()
-    assert used['tpl'] == _app.DEFAULT_FU_TEMPLATES['FU1']   # default, not the deleted text
+    assert 'CUSTOM FU1 TEXT' not in used['tpl']
+    assert used['tpl'] == _app._template_for_rung(user.id, 'cold', fc) != _app.DEFAULT_FU_TEMPLATES['FU1']
+
+    assert client.delete(f'/api/fu-templates/{custom.id}').status_code == 200   # and deleting it changes nothing
+    fc.last_followup_sent_at = None
+    db.session.commit()
+    used.clear()
+    assert client.post('/api/followups/action', json={'id': fc.id, 'action': 'send-now'}).status_code == 200
+    assert used['tpl'] == _app._template_for_rung(user.id, 'cold', fc)

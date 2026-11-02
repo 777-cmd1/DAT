@@ -254,7 +254,7 @@ def test_cancel_schedule_restores_recurring_next_followup(app, db):
         assert refreshed.next_followup_at is not None
 
 
-def test_stop_recurring_restores_sequence_schedule(app, db):
+def test_stop_recurring_hands_the_date_back_to_the_ladder(app, db):
     from app.models import FollowupContact
 
     client, user_id, ws_id = _create_auth_client(app, db, 'stop_recurring_user@test.com')
@@ -266,7 +266,7 @@ def test_stop_recurring_restores_sequence_schedule(app, db):
             contact_email='stop_recurring@example.com',
             state='active',
             stage='fu2_scheduled',
-            is_followup_enabled=True,
+            is_followup_enabled=False,
             recurring_enabled=True,
             recurring_days='1,3,5',
             recurring_time='12:30',
@@ -287,7 +287,8 @@ def test_stop_recurring_restores_sequence_schedule(app, db):
         assert refreshed.recurring_enabled is False
         assert refreshed.recurring_days is None
         assert refreshed.recurring_time is None
-        assert refreshed.next_followup_at is not None
+        assert refreshed.next_followup_at is not None      # the rung's next touch
+        assert refreshed.touch_enabled is True
 
 
 def test_save_fu_templates_preserves_extra_pool_templates(app, db):
@@ -322,27 +323,6 @@ def test_save_fu_templates_preserves_extra_pool_templates(app, db):
         assert 'General' in levels
 
 
-def test_stage_template_selection_randomizes_within_stage_and_general_pool(app, db):
-    from app.models import Template
-
-    with app.app_context():
-        user, _ws = _create_user_with_workspace(db, 'fu_rotation_user@test.com')
-        db.session.add_all([
-            Template(user_id=user.id, type='followup', level='FU1', name='FU1 A', body='FU1 A body', is_active=True),
-            Template(user_id=user.id, type='followup', level='FU1', name='FU1 B', body='FU1 B body', is_active=True),
-            Template(user_id=user.id, type='followup', level='General', name='General', body='General body', is_active=True),
-        ])
-        db.session.commit()
-
-        with patch.object(_m.random, 'choice', side_effect=lambda seq: seq[-1]):
-            picked = _m._get_fu_template_for_stage(user.id, 'fu1_scheduled', allow_random_fallback=True)
-            assert picked in {'FU1 B body', 'General body'}
-
-        with patch.object(_m.random, 'choice', side_effect=lambda seq: seq[0]):
-            picked_stage_only = _m._get_fu_template_for_stage(user.id, 'fu1_scheduled', allow_random_fallback=False)
-            assert picked_stage_only in {'FU1 A body', 'FU1 B body'}
-
-
 def test_restart_fu1_from_completed_sequence(app, db):
     from app.models import FollowupContact
 
@@ -371,8 +351,9 @@ def test_restart_fu1_from_completed_sequence(app, db):
     with app.app_context():
         refreshed = db.session.get(FollowupContact, fc_id)
         assert refreshed.state == 'active'
-        assert refreshed.stage == 'fu1_scheduled'
-        assert refreshed.is_followup_enabled is True
+        assert refreshed.stage == 'completed_fu3'            # the drip's history is kept, not rewound
+        assert refreshed.is_followup_enabled is False        # restarted on the ladder, not the drip
+        assert refreshed.rung == 'cold' and refreshed.touch_attempt == 0
         assert refreshed.next_followup_at is not None
 
 
@@ -408,8 +389,8 @@ def test_restart_fu1_from_terminal_state(app, db):
     with app.app_context():
         refreshed = db.session.get(FollowupContact, fc_id)
         assert refreshed.state == 'active'
-        assert refreshed.stage == 'fu1_scheduled'
-        assert refreshed.is_followup_enabled is True
+        assert refreshed.stage == 'fu3_sent'                 # history kept
+        assert refreshed.is_followup_enabled is False
         assert refreshed.scheduled_once is False
         assert refreshed.recurring_enabled is False
         assert refreshed.recurring_days is None

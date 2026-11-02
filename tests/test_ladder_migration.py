@@ -715,9 +715,8 @@ def test_the_drip_stops_owning_a_placed_contact(app, db):
     db.session.refresh(fc)
     assert fc.is_followup_enabled is False         # the drip scheduler needs this True
     assert fc.stage == 'fu1_scheduled'             # ...but the stage, and its history, stay
-    assert _app._ladder_owns_schedule(fc) is True
     assert fc.next_followup_at is not None and fc.touch_enabled is True
-    assert _app._ladder_next_reason(fc, False, ws) != 'first follow-up sequence'
+    assert _app._ladder_next_reason(fc, False, ws) != 'not yet placed on the ladder'
 
 
 def test_a_schedule_the_owner_set_by_hand_keeps_its_date(app, db):

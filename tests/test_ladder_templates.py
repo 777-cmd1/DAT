@@ -152,11 +152,9 @@ def test_a_blank_rendering_falls_through_to_the_next_source(app, db):
 def test_a_rung_template_is_not_part_of_the_general_pool(app, db):
     fc = _contact(db, rung='cold')
     _tmpl(db, fc, 'WARM', 'WARM ONLY')
-    # the legacy general-pool picker (drip / manual paths)
-    seen = {_app._get_random_fu_template(fc.user_id) for _ in range(30)}
-    assert 'WARM ONLY' not in seen
-    # and the ladder: a cold contact never gets the warm copy
+    # a cold contact never gets the warm copy, from the ladder or from a manual send
     assert 'WARM ONLY' not in _body(fc)
+    assert 'WARM ONLY' not in {_app._followup_copy(fc.user_id, fc) for _ in range(30)}
 
 
 def test_a_rung_template_does_not_stand_in_for_the_general_pool(app, db):

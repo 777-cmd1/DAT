@@ -156,17 +156,15 @@ def test_ladder_settings_are_the_callers_own_workspace(app, db, client, me):
     assert _reload(db, other_ws).ladder_auto_enabled is False
 
 
-def test_existing_cadence_and_digest_settings_still_round_trip(app, db, client, me):
-    stage = str(_reload(db, me[1]).get_stages()[0]['id'])
+def test_existing_touch_hour_and_digest_settings_still_round_trip(app, db, client, me):
     out = _put(client, touch_hour=9, digest_enabled=False, drip_auto_enabled=False,
-               cadence={stage: {'days': 4, 'mode': 'manual'}},
                ladder={'budget_no_load': 2}).get_json()
     assert out['touch_hour'] == 9 and out['digest_enabled'] is False
-    assert out['drip_auto_enabled'] is False and out['cadence'][stage] == {'days': 4, 'mode': 'manual'}
+    assert out['drip_auto_enabled'] is False and 'cadence' not in out   # the stage cadence is retired
     # a ladder-only save leaves all of that alone
     again = _put(client, ladder={'weekly_days': 9}).get_json()
     assert again['touch_hour'] == 9 and again['digest_enabled'] is False
-    assert again['drip_auto_enabled'] is False and again['cadence'][stage]['days'] == 4
+    assert again['drip_auto_enabled'] is False
     assert again['ladder']['budget_no_load'] == 2 and again['ladder']['weekly_days'] == 9
     # and a save without a ladder object leaves the ladder alone
     assert _put(client, touch_hour=10).get_json()['ladder']['budget_no_load'] == 2
@@ -642,18 +640,14 @@ def test_the_label_for_nobody_due_and_for_a_set_that_fits(app, db, client, me):
 
 # ── the same numbers sent again move nothing ────────────────────────────────
 
-def test_a_cadence_sent_unchanged_does_not_redate_anyone(app, db, client, me):
+def test_a_save_never_redates_anyone_and_the_retired_cadence_is_ignored(app, db, client, me):
     stage = str(_reload(db, me[1]).get_stages()[0]['id'])
-    cad = {stage: {'days': 3, 'mode': 'manual'}}
-    _put(client, cadence=cad)
     sentinel = _app._utcnow() + timedelta(days=40)
     fc = _fc(db, me, 'cold', touch_attempt=0, pipeline_stage=int(stage), next_followup_at=sentinel)
-    # what the Automation Save does, every time, with ladder_auto_enabled flipped alongside
-    assert _put(client, cadence=cad, ladder_auto_enabled=True).status_code == 200
-    assert _reload(db, fc).next_followup_at == sentinel
-    # a real change still re-bases the stage cadence
-    assert _put(client, cadence={stage: {'days': 5, 'mode': 'manual'}}).status_code == 200
-    assert _reload(db, fc).next_followup_at != sentinel
+    # what the Automation Save does, with a per-stage cadence the old UI used to send
+    for cad in ({stage: {'days': 3, 'mode': 'manual'}}, {stage: {'days': 5, 'mode': 'manual'}}):
+        assert _put(client, cadence=cad, ladder_auto_enabled=True).status_code == 200
+        assert _reload(db, fc).next_followup_at == sentinel
 
 
 def test_the_engine_reads_need_a_workspace_argument(app, db, me):

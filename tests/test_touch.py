@@ -65,10 +65,13 @@ def test_schedule_touch_sets_next_for_warm_stage(app, db):
     assert fc.touch_enabled is True
     assert fc.next_followup_at is not None
 
-def test_schedule_touch_off_stage_disables(app, db):
+def test_schedule_touch_follows_the_rung_not_the_kanban_stage(app, db):
+    # the per-stage "off" cadence is retired: a Booked-column contact on a live rung is
+    # dated by the ladder, and a client (a rung that is never scheduled) gets no date
     user, ws = _mk(db)
-    fc = _fc(db, user, ws, stage=5)          # Booked: off by default
-    fc.touch_enabled = True
+    fc = _fc(db, user, ws, stage=5)
+    assert _app._schedule_touch(fc, ws, force=True) is True and fc.touch_enabled
+    fc.rung = 'client'
     assert _app._schedule_touch(fc, ws, force=True) is False
     assert fc.touch_enabled is False and fc.next_followup_at is None
 
@@ -108,16 +111,17 @@ def test_cold_reply_no_attention(app, db):
     assert fc.attention_at is None
     assert fc.is_followup_enabled is False
 
-def test_stage_move_reschedules_cadence(app, db):
+def test_stage_move_rebases_on_the_ladder_rhythm(app, db):
     user, ws = _mk(db)
     fc = _fc(db, user, ws, stage=2)
     _app._schedule_touch(fc, ws, force=True)
+    fc.next_followup_at = _app._utcnow() + timedelta(days=20)
     ok, err = _app._apply_pipeline_stage(fc, 3, actor_user_id=user.id)
     assert ok
     db.session.commit(); db.session.refresh(fc)
-    # stage 3 default cadence = 7d → next pushed further out than stage 2's 3d
+    # the old stage-3 cadence was 7 days; the ladder's first touch is the next day
     assert fc.touch_enabled is True
-    assert fc.next_followup_at > _app._utcnow() + timedelta(days=5)
+    assert fc.next_followup_at < _app._utcnow() + timedelta(days=3)
 
 def test_normalize_sweep_fills_missing_touch(app, db):
     user, ws = _mk(db)
@@ -199,20 +203,19 @@ def test_todays_touches_bucket_is_due_plus_hot(app, db, client):
 
 # ── Config endpoint round-trip + sweep on save ────────────────────────────────
 
-def test_put_cadence_roundtrip_and_sweep(app, db, client):
+def test_put_cadence_is_ignored_and_redates_nobody(app, db, client):
     user, ws = _mk(db, client)
     fc = _fc(db, user, ws, stage=2)
+    fc.next_followup_at = _app._utcnow() + timedelta(days=9)
+    db.session.commit()
+    before = fc.next_followup_at
     res = client.put('/api/followups/pipeline-config',
-                     json={'cadence': {'2': {'days': 2, 'mode': 'auto'},
-                                       '99': {'days': 3, 'mode': 'manual'},   # unknown stage ignored
-                                       '3': {'days': 4, 'mode': 'nope'}}})    # bad mode ignored
+                     json={'cadence': {'2': {'days': 2, 'mode': 'auto'}}})
     assert res.status_code == 200
-    cad = res.get_json()['cadence']
-    assert cad['2'] == {'days': 2, 'mode': 'auto'}
-    assert '99' not in cad
-    assert cad['3'] == {'days': 7, 'mode': 'manual'}
-    db.session.refresh(fc)
-    assert fc.touch_enabled is True and fc.next_followup_at is not None   # sweep ran
+    assert 'cadence' not in res.get_json()                 # the stage cadence is retired
+    db.session.refresh(fc); db.session.refresh(ws)
+    assert fc.next_followup_at == before                  # and no sweep re-dates anyone
+    assert 'cadence' not in (ws.pipeline_config or {})
 
 
 # ── Dashboard endpoint ────────────────────────────────────────────────────────

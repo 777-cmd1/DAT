@@ -40,8 +40,8 @@ _CADENCE = {'1': {'days': 3, 'mode': 'auto'}, '2': {'days': 3, 'mode': 'manual'}
 
 def test_preview_counts_each_auto_path_within_24h(app, db):
     user, ws = _mk(db, cfg={'cadence': _CADENCE})
-    _fc(db, user, ws, in_hours=-5)                                   # overdue drip
-    _fc(db, user, ws, in_hours=20, stage='fu3_scheduled')            # drip later today
+    _fc(db, user, ws, in_hours=-5)                                   # overdue, unplaced: nothing sends it
+    _fc(db, user, ws, in_hours=20, stage='fu3_scheduled')            # unplaced, later today
     _fc(db, user, ws, in_hours=30)                                   # beyond 24h
     _fc(db, user, ws, state='paused')                                # not active
     _fc(db, user, ws, stage='completed_fu3')                         # drip finished
@@ -51,7 +51,7 @@ def test_preview_counts_each_auto_path_within_24h(app, db):
         stage='completed_fu3', pipeline_stage=1)                     # auto touch
     _fc(db, user, ws, in_hours=3, is_followup_enabled=False, touch_enabled=True,
         stage='completed_fu3', pipeline_stage=2)                     # "manual" stage: the ladder sends it too
-    assert _app._auto_send_preview(ws) == {'drip': 2, 'touches': 2, 'scheduled': 2}
+    assert _app._auto_send_preview(ws) == {'touches': 2, 'scheduled': 2}
 
 
 def _touch(db, user, ws, **kw):
@@ -96,18 +96,18 @@ def test_preview_ignores_switch_positions_and_other_workspaces(app, db):
     _fc(db, other_user, other_ws)
     _fc(db, other_user, other_ws)
     # counted "as if on" so the banner can update live while the user flips switches
-    assert _app._auto_send_preview(ws) == {'drip': 1, 'touches': 0, 'scheduled': 0}
-    assert _app._auto_send_preview(None) == {'drip': 0, 'touches': 0, 'scheduled': 0}
+    assert _app._auto_send_preview(ws) == {'touches': 0, 'scheduled': 0}   # the unplaced one is no path
+    assert _app._auto_send_preview(None) == {'touches': 0, 'scheduled': 0}
 
 
 def test_pipeline_config_get_and_put_return_preview(app, db, client):
     user, ws = _mk(db, client)
     _fc(db, user, ws)
     got = client.get('/api/followups/pipeline-config').get_json()
-    assert got['auto_send_preview'] == {'drip': 1, 'touches': 0, 'scheduled': 0}
+    assert got['auto_send_preview'] == {'touches': 0, 'scheduled': 0}
     put = client.put('/api/followups/pipeline-config', json={'auto_send_enabled': False}).get_json()
     assert put['auto_send_enabled'] is False
-    assert put['auto_send_preview']['drip'] == 1
+    assert 'drip' not in put['auto_send_preview']
 
 
 def test_pipeline_tab_save_leaves_automation_untouched(app, db, client):
@@ -128,14 +128,13 @@ def test_automation_tab_save_leaves_stages_untouched(app, db, client):
     user, ws = _mk(db, client, fu_auto=False)
     before = ws.get_stages()
     res = client.put('/api/followups/pipeline-config', json={
-        'cadence': {'1': {'days': 4, 'mode': 'manual'}}, 'touch_hour': 9,
+        'touch_hour': 9,
         'digest_enabled': True, 'drip_auto_enabled': True, 'auto_send_enabled': True})
     assert res.status_code == 200
     db.session.refresh(ws)
     assert ws.get_stages() == before
     assert ws.fu_auto_enabled is True
     assert ws.pipeline_config['touch_hour'] == 9
-    assert ws.get_cadence()['1'] == {'days': 4, 'mode': 'manual'}
 
 
 def test_new_workspace_gets_calm_stage_colors_existing_untouched(app, db):

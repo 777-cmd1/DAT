@@ -138,23 +138,55 @@ def test_a_contact_already_over_budget_is_parked_without_a_send(app, db, sent):
     assert (fc.rung, fc.exit_reason, fc.next_followup_at) == ('dormant', 'exhausted', None)
 
 
-def test_a_load_refills_the_budget_but_replies_do_not(app, db, sent):
-    fc = _contact(db, rung='neutral', touch_attempt=3)
-    assert _run() == 0 and fc.rung == 'dormant'
+def _reply_to(db, fc, category, body, thread=None):
+    from app.models import Reply
+    r = Reply(user_id=fc.user_id, msg_id=f'<{uuid.uuid4().hex}@m>', thread_id=thread,
+              from_email=fc.contact_email, subject='Re: lane', body=body,
+              triage_category=category)
+    db.session.add(r); db.session.commit()
+    _app._check_reply_stops_followup(fc.contact_email, fc.user_id, r)
+    db.session.commit(); db.session.refresh(fc)
 
-    def reply(category, body, thread):
-        from app.models import Reply
-        r = Reply(user_id=fc.user_id, msg_id=f'<{uuid.uuid4().hex}@m>', thread_id=thread,
-                  from_email=fc.contact_email, subject='Re: lane', body=body, triage_category=category)
-        db.session.add(r); db.session.commit()
-        _app._check_reply_stops_followup(fc.contact_email, fc.user_id, r)
-        db.session.commit(); db.session.refresh(fc)
 
-    reply('negative', 'nothing this week, try next week', 't1')      # a reply is not a load
+def test_a_live_contacts_reply_does_not_refill_its_budget(app, db, sent):
+    """The rule's own case: a contact still on the ladder cannot buy touches by
+    answering. Two touches left, a "maybe later", still two touches left."""
+    fc = _contact(db, rung='neutral', touch_attempt=1)
+    _reply_to(db, fc, 'negative', 'nothing this week, try next week', 't1')
+    assert (fc.rung, fc.touch_attempt) == ('neutral', 1)
     fc.next_followup_at = past(); fc.touch_enabled = True; db.session.commit()
+    assert _run() == 1 and fc.touch_attempt == 2
+    fc.next_followup_at = past(); db.session.commit()
+    assert _run() == 1 and fc.touch_attempt == 3
+    fc.next_followup_at = past(); db.session.commit()
+    assert _run() == 0 and fc.rung == 'dormant'      # spent, and the reply bought nothing
+
+
+def test_a_parked_contact_that_writes_in_is_sent_to_again(app, db, sent):
+    """And the other half: once it is parked, writing in brings it back with a
+    fresh budget — the premise of the budget is that they never answer."""
+    fc = _contact(db, rung='neutral', touch_attempt=3)
     assert _run() == 0 and fc.rung == 'dormant' and sent == []
 
-    reply('gave_info', 'we have a load Laredo to Dallas', 't2')      # a load is
+    _reply_to(db, fc, 'negative', 'nothing this week, try next week', 't1')
+    assert (fc.rung, fc.touch_attempt, fc.exit_reason) == ('neutral', 0, None)
+    fc.next_followup_at = past(); db.session.commit()
+    assert _run() == 1 and fc.touch_attempt == 1
+
+
+def test_an_out_of_office_does_not_bring_a_parked_contact_back(app, db, sent):
+    fc = _contact(db, rung='neutral', touch_attempt=3)
+    assert _run() == 0 and fc.rung == 'dormant'
+    _reply_to(db, fc, 'auto_reply', 'I am out of office until Monday', 't1')
+    assert fc.rung == 'dormant'
+    fc.next_followup_at = past(); fc.touch_enabled = True; db.session.commit()
+    assert _run() == 0 and sent == []
+
+
+def test_a_load_revives_a_parked_contact_too(app, db, sent):
+    fc = _contact(db, rung='neutral', touch_attempt=3)
+    assert _run() == 0 and fc.rung == 'dormant'
+    _reply_to(db, fc, 'gave_info', 'we have a load Laredo to Dallas', 't2')
     assert (fc.rung, fc.touch_attempt) == ('warm', 0)
     fc.next_followup_at = past(); db.session.commit()
     assert _run() == 1 and fc.touch_attempt == 1

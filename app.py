@@ -7478,6 +7478,55 @@ def _ladder_refresh_route(fc, reply, now):
         fc.current_route = f'{chosen[0]} \u2192 {chosen[1]}'
 
 
+def _ladder_revive(fc, now, ws, cfg):
+    """The contact is back in play: the rung its loads earn, a clean slate, a date.
+
+    Used wherever a dormant contact comes back — a load, or simply writing in.
+
+    On the attempt budget, which looks like a contradiction and is not. The spec
+    says replies never refill the budget; only a load does. That rule is about a
+    contact who is still LIVE: without it a broker could buy himself unlimited
+    touches by answering "maybe later" forever, and a live deferral still refills
+    nothing. But the budget exists to stop us chasing someone who never answers,
+    and a contact we parked for silence has just answered — the premise is gone
+    and the rule has done its job. Reviving without a fresh budget would put them
+    on a live rung with nothing left to spend, so the next tick would park them
+    again: churn that helps nobody. So the reset belongs to the revival, not to
+    the reply.
+    """
+    _ladder_raise_rung(fc)          # dormant is not a rung, so this takes the derived one
+    fc.exit_reason = None
+    fc.touch_attempt = 0
+    _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, 0, now, cfg), ws)
+
+
+def _ladder_back_in_play(fc, category, now, ws, cfg):
+    """Apply a non-load reply's effect on where the contact stands. Returns True
+    if it brought a dormant contact back.
+
+    A contact that goes quiet is parked, and writing in brings it back — so any
+    reply revives a dormant contact. What does not revive one is anything that
+    is not the contact choosing to write to us:
+
+      * an automatic reply — the mailbox is talking, not the broker;
+      * a refusal — a decision, not silence (it never reaches here; it has its
+        own branch, which parks the contact rather than reviving it);
+      * the owner having parked them by hand (`exit_reason == 'manual'`) — also
+        a decision, and his beats the machine's. A load still overrides it,
+        because new business overrides everything and that is the ladder's
+        existing hierarchy; a mere reply is not strong enough to undo his call.
+
+    A contact that is still live only gets the usual lift out of cold.
+    """
+    if fc.rung != 'dormant':
+        _ladder_lift_cold(fc)
+        return False
+    if category == 'auto_reply' or fc.exit_reason == 'manual':
+        return False
+    _ladder_revive(fc, now, ws, cfg)
+    return True
+
+
 def _ladder_reply_triage(reply, ws):
     """(category, filter_key) for one stored reply, as the ladder must read it.
 
@@ -7504,14 +7553,17 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
     """Move a contact on the warmth ladder because of an inbound reply.
 
     A broker sending load information is the only thing that raises the rung
-    past neutral (one step per load conversation) and the only thing that
-    refills the attempt budget. Any reply lifts cold to neutral. A refusal parks
-    the contact as dormant, a deferral keeps its place and comes back on their
-    date, anything else asks for a human.
+    past neutral (one step per load conversation). Any reply lifts cold to
+    neutral. A refusal parks the contact as dormant, a deferral keeps its place
+    and comes back on their date, anything else asks for a human.
+
+    A contact goes quiet and is parked; if it writes in, it comes back. What is
+    not the contact writing in does not revive one: a refusal, an automatic
+    reply, or the owner having parked them by hand — see `_ladder_back_in_play`.
 
     Returns the kind applied: 'load' | 'refusal' | 'deferral' | 'unknown'.
-    Returns None when nothing was applied: an excluded contact, a load already
-    counted, or a deferral from a dormant contact.
+    Returns None when nothing was applied: an excluded contact, or a load whose
+    conversation was already counted.
     """
     if fc.rung == 'excluded':
         return None
@@ -7535,10 +7587,7 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
             return None
         fc.load_count = (fc.load_count or 0) + 1
         fc.last_load_at = now
-        _ladder_raise_rung(fc)
-        fc.exit_reason = None
-        fc.touch_attempt = 0
-        _ladder_set_next(fc, _ladder.next_touch_at(fc.rung, 0, now, cfg), ws)
+        _ladder_revive(fc, now, ws, cfg)
         _ladder_record_load(fc, conv_key, old_rung, notes=f'load #{fc.load_count} received')
         try:
             with db.session.begin_nested():     # a failed lookup rolls back to here, not the load
@@ -7552,27 +7601,22 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
         _record_event(fc, 'ladder_refusal', actor_type='system',
                       from_state=old_rung, to_state='dormant', notes='refused')
     elif kind == 'deferral':
-        if fc.rung == 'dormant':
-            # attempts are spent and only a load refills them: nothing to schedule
-            _record_event(fc, 'ladder_deferral', actor_type='system',
-                          from_state=old_rung, to_state=old_rung,
-                          notes='asked to come back later; contact is dormant')
-            return None
-        _ladder_lift_cold(fc)
-        # no stated date: the contact keeps its place in the normal rhythm
+        revived = _ladder_back_in_play(fc, category, now, ws, cfg)
+        # a date they stated wins; otherwise they keep their place in the rhythm
         _ladder_set_next(fc, resume_at or _ladder.next_touch_at(
             fc.rung, fc.touch_attempt or 0, now, cfg), ws)
         _record_event(fc, 'ladder_deferral', actor_type='system',
                       from_state=old_rung, to_state=fc.rung,
                       notes='asked to come back ' + (resume_at.strftime('%Y-%m-%d')
-                                                     if resume_at else 'later'))
+                                                     if resume_at else 'later')
+                            + (' — back on the ladder' if revived else ''))
     else:
-        if fc.rung != 'dormant':
-            _ladder_lift_cold(fc)
+        revived = _ladder_back_in_play(fc, category, now, ws, cfg)
         fc.attention_at = now
         _record_event(fc, 'ladder_unknown', actor_type='system',
                       from_state=old_rung, to_state=fc.rung,
-                      notes='reply needs a human look')
+                      notes='reply needs a human look'
+                            + (' — back on the ladder' if revived else ''))
     return kind
 
 

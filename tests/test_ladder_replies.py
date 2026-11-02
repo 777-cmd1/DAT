@@ -147,11 +147,14 @@ def test_dormant_contact_returns_on_an_inbound_reply(app, db):
     assert fc.next_followup_at is not None
 
 
-def test_dormant_contact_stays_dormant_on_a_deferral(app, db):
-    # An exhausted budget is only refilled by a load, so a polite "later" changes nothing.
-    fc = _contact(db, rung='dormant', exit_reason='exhausted')
+def test_a_dormant_contact_that_writes_in_comes_back(app, db):
+    # "затихає, але якщо напише сам — повертається": a polite "later" is still the
+    # broker writing in, so it revives them. The budget reset belongs to the
+    # revival — see _ladder_revive on why that is not "a reply refills the budget".
+    fc = _contact(db, rung='dormant', exit_reason='exhausted', touch_attempt=3)
     _reply(db, fc, category='negative', body='nothing this week, try next week')
-    assert (fc.rung, fc.exit_reason, fc.next_followup_at) == ('dormant', 'exhausted', None)
+    assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('neutral', None, 0)
+    assert fc.next_followup_at is not None
 
 
 def test_load_for_a_paused_contact_counts_but_schedules_nothing(app, db):
@@ -289,7 +292,8 @@ def test_return_value_is_the_kind_applied_or_none_for_a_no_op(app, db):
     assert apply(_contact(db, rung='neutral'), 'negative', 'nothing right now') == 'deferral'
     assert apply(_contact(db, rung='neutral'), None, 'ok') == 'unknown'
     assert apply(_contact(db, rung='excluded'), 'gave_info', 'load', 't1') is None
-    assert apply(_contact(db, rung='dormant'), 'negative', 'nothing right now') is None
+    # a dormant contact that writes in is revived, so the kind really was applied
+    assert apply(_contact(db, rung='dormant'), 'negative', 'nothing right now') == 'deferral'
     fc = _contact(db, rung='neutral')
     assert apply(fc, 'gave_info', 'load', 'same') == 'load'
     assert apply(fc, 'gave_info', 'load again', 'same') is None     # duplicate: nothing applied
@@ -481,3 +485,86 @@ def test_an_mc_request_that_also_asks_us_to_stop_is_a_refusal(app, db):
     _reply(db, fc, category='negative', reply_filter_key='mc_request',
            body='send me your mc — actually, take me off this list')
     assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+
+
+# ══ fix round 4 ══════════════════════════════════════════════════════════════
+# "затихає, але якщо напише сам — повертається." A contact we parked for silence
+# comes back the moment it writes in — not only on a load. The two things that
+# are not the contact writing in are a refusal (a decision) and an automatic
+# reply (the mailbox talking), and neither revives one.
+
+def _parked(db, **kw):
+    """A dormant contact with its budget spent, as the scheduler leaves one."""
+    kw.setdefault('exit_reason', 'exhausted')
+    kw.setdefault('touch_attempt', 3)
+    return _contact(db, rung='dormant', **kw)
+
+
+def test_a_vague_reply_revives_a_parked_contact_with_a_fresh_budget(app, db):
+    fc = _parked(db)
+    _reply(db, fc, category=None, body='been slammed, what do you have?')
+    assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('neutral', None, 0)
+    assert fc.next_followup_at is not None and fc.next_followup_at > _app._utcnow()
+    assert fc.attention_at is not None                 # and it asks for a human
+
+
+def test_a_revived_contact_returns_to_the_rung_its_loads_earn(app, db):
+    fc = _parked(db, load_count=2)                     # two loads in its history
+    _reply(db, fc, category=None, body='sorry for the delay, still hauling?')
+    assert (fc.rung, fc.load_count, fc.touch_attempt) == ('hot', 2, 0)
+    assert fc.next_followup_at is not None
+
+
+def test_a_packet_ask_revives_a_parked_contact_and_still_asks_for_a_human(app, db):
+    fc = _parked(db, load_count=1)
+    _reply(db, fc, category='negative', reply_filter_key='mc_request',
+           body='Sure, send me your MC and insurance')
+    assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('warm', None, 0)
+    assert fc.next_followup_at is not None
+    assert fc.attention_at is not None
+    assert _events(fc, 'ladder_refusal') == []
+
+
+def test_a_refusal_leaves_a_parked_contact_parked(app, db):
+    fc = _parked(db)
+    _reply(db, fc, category='negative', body='please remove me from your list')
+    assert (fc.rung, fc.exit_reason) == ('dormant', 'refused')
+    assert fc.next_followup_at is None and fc.touch_enabled is False
+
+
+def test_an_out_of_office_does_not_revive_a_parked_contact(app, db):
+    # the mailbox is talking, not the broker
+    fc = _parked(db)
+    _reply(db, fc, category='auto_reply', body='I am out of office until Monday')
+    assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('dormant', 'exhausted', 3)
+    assert fc.next_followup_at is None
+
+
+def test_a_contact_the_owner_parked_by_hand_is_not_revived_by_a_reply(app, db):
+    # his decision beats the machine's; a load still overrides it (below)
+    fc = _parked(db, exit_reason='manual')
+    _reply(db, fc, category=None, body='been slammed, what do you have?')
+    assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('dormant', 'manual', 3)
+    assert fc.next_followup_at is None
+
+
+def test_a_load_still_revives_a_contact_the_owner_parked_by_hand(app, db):
+    fc = _parked(db, exit_reason='manual')
+    _reply(db, fc, category='gave_info', body='we have a load', thread='t1')
+    assert (fc.rung, fc.exit_reason, fc.touch_attempt) == ('warm', None, 0)
+    assert fc.next_followup_at is not None
+
+
+def test_a_live_contacts_deferral_still_refills_nothing(app, db):
+    # Review Focus: the budget reset belongs to the revival, not to the reply —
+    # otherwise a broker buys unlimited touches by saying "maybe later" forever
+    fc = _contact(db, rung='neutral', touch_attempt=2)
+    _reply(db, fc, category='negative', body='nothing this week, try next week')
+    assert (fc.rung, fc.touch_attempt, fc.exit_reason) == ('neutral', 2, None)
+    assert fc.next_followup_at is not None
+
+
+def test_a_live_contacts_vague_reply_still_refills_nothing(app, db):
+    fc = _contact(db, rung='warm', touch_attempt=4)
+    _reply(db, fc, category=None, body='ok, noted')
+    assert (fc.rung, fc.touch_attempt) == ('warm', 4)

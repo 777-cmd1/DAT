@@ -314,3 +314,18 @@ expects sends with its default OFF. Left this for the whole-branch review, not s
 changed in the scoped patch: cost if section 5 is intended literally is sending while
 the ladder switch is OFF. Whole-branch review remains undone; this pass is not it.
 Sections 8 items, production/PostgreSQL validation, merge, push and deploy remain undone.
+
+
+**2026-11-05 — Codex, whole-branch review started; consent finding fixed (`789c3af`).**
+Reviewed rules/model changes and migration implementation, then traced the previously
+logged Path 0/2 consent discrepancy. Applied section 5 literally: all automatic paths
+need ladder consent. Existing test fixture now grants consent explicitly. Reason:
+a documented OFF switch must stop automated mail; cost if this interpretation is
+wrong is that manually dated schedules wait until ladder consent is enabled.
+Regression reproduced two sends with consent OFF. Separate diff/caller inspection
+confirmed the shared query covers both paths; mutation removed only the new gate,
+failed with 2 != 0, then restored. Gate file: 9 passed; retired-drip file: 47 passed;
+diff check clean. This supersedes the unresolved gate finding in the previous entry.
+Whole-branch review is IN PROGRESS, not complete: remaining app/API/reply/UI diff and
+broader regression checks still need review. No production DB access, merge, push or
+deploy; section 8 remains deferred.

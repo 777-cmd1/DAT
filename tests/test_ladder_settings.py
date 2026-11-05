@@ -482,6 +482,81 @@ def test_the_shape_of_the_request_is_checked(app, db, client, me):
     assert client.put(RUNG_COPY, json={'rungs': []}).status_code == 400
 
 
+# ── Adding, deleting and parking a rung's emails ─────────────────────────────
+# The owner writes his own variants, and parks the ones he is not using rather than
+# losing their wording. A parked email must stay visible to him and invisible to a broker.
+
+def test_the_payload_says_which_emails_are_on_and_how_many_attempts_the_rung_has(app, db, client, me):
+    got = client.get(RUNG_COPY).get_json()
+    for row in got['rungs']:
+        assert row['active'] == [True] * len(row['bodies'])
+        assert row['attempts'] == ladder.budget_for(row['rung'], ladder.LADDER_DEFAULTS)
+    assert got['max_bodies'] == _app._LADDER_COPY_MAX_BODIES
+
+
+def test_an_email_can_be_switched_off_without_losing_its_text(app, db, client, me):
+    user, _ = me
+    sent = [{'body': 'Hi,\n\nONE\n\n{name}', 'active': True},
+            {'body': 'Hi,\n\nTWO parked\n\n{name}', 'active': False},
+            {'body': 'Hi,\n\nTHREE\n\n{name}', 'active': True}]
+    assert client.put(RUNG_COPY, json={'rungs': {'warm': sent}}).status_code == 200
+    rows = sorted(_own(db, user, 'warm'), key=lambda t: t.sort_order)
+    assert [r.is_active for r in rows] == [True, False, True]
+    warm = next(r for r in client.get(RUNG_COPY).get_json()['rungs'] if r['rung'] == 'warm')
+    assert warm['active'] == [True, False, True]            # the owner still sees the parked one
+    assert 'TWO parked' in warm['bodies'][1]
+
+
+def test_a_parked_email_is_never_sent(app, db, client, me):
+    user, _ = me
+    client.put(RUNG_COPY, json={'rungs': {'warm': [
+        {'body': 'Hi,\n\nLIVE ONE\n\n{name}', 'active': True},
+        {'body': 'Hi,\n\nPARKED\n\n{name}', 'active': False},
+        {'body': 'Hi,\n\nLIVE TWO\n\n{name}', 'active': True}]}})
+    fc = _fc(db, me, 'warm', touch_attempt=0, load_count=1)
+    seen = []
+    for attempt in range(4):
+        fc.touch_attempt = attempt
+        seen.append(_app._template_for_rung(user.id, 'warm', fc))
+    assert not any('PARKED' in (t or '') for t in seen)
+    assert any('LIVE ONE' in (t or '') for t in seen) and any('LIVE TWO' in (t or '') for t in seen)
+
+
+def test_a_rung_with_every_email_switched_off_is_refused(app, db, client, me):
+    resp = client.put(RUNG_COPY, json={'rungs': {'cold': [
+        {'body': 'Hi,\n\nOFF\n\n{name}', 'active': False}]}})
+    assert resp.status_code == 400
+    assert _own(db, me[0], 'cold') == []                    # all or nothing, as with blank text
+
+
+def test_added_emails_beyond_the_defaults_are_stored_in_order(app, db, client, me):
+    bodies = [f'Hi,\n\nMINE {i}\n\n{{name}}' for i in range(6)]
+    assert client.put(RUNG_COPY, json={'rungs': {'warm': bodies}}).status_code == 200
+    rows = sorted(_own(db, me[0], 'warm'), key=lambda t: t.sort_order)
+    assert [r.body for r in rows] == bodies and [r.sort_order for r in rows] == list(range(6))
+
+
+def test_the_built_in_text_with_one_email_parked_is_stored_not_skipped(app, db, client, me):
+    # text equal to the default is normally stored as "follow the built-in", but a parked
+    # email is a decision of the owner's and would be lost by that shortcut
+    default = list(_app.DEFAULT_RUNG_TEMPLATES['cold'])
+    sent = [{'body': b, 'active': i != 1} for i, b in enumerate(default)]
+    assert client.put(RUNG_COPY, json={'rungs': {'cold': sent}}).status_code == 200
+    rows = sorted(_own(db, me[0], 'cold'), key=lambda t: t.sort_order)
+    assert [r.is_active for r in rows] == [True, False, True]
+
+
+def test_a_plain_list_of_strings_still_means_every_email_is_on(app, db, client, me):
+    assert client.put(RUNG_COPY, json={'rungs': {'hot': ['Hi,\n\nPLAIN\n\n{name}']}}).status_code == 200
+    assert [r.is_active for r in _own(db, me[0], 'hot')] == [True]
+
+
+def test_a_malformed_email_entry_is_refused(app, db, client, me):
+    for bad in ([{'active': True}], [{'body': 7}], [None], [['x']]):
+        assert client.put(RUNG_COPY, json={'rungs': {'cold': bad}}).status_code == 400
+    assert _own(db, me[0], 'cold') == []
+
+
 def test_copy_is_never_shared_between_users(app, db, client, me):
     other_user, other_ws = _user(db)
     client.put(RUNG_COPY, json={'rungs': {'warm': ['MINE ONLY\n\n{name}']}})

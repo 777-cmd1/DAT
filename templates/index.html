@@ -2741,6 +2741,21 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 .ld-copy-ta { width: 100%; min-height: 140px; resize: vertical; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; font-size: 13px; line-height: 1.55; }
 .ld-copy-body .btn { align-self: flex-start; margin-top: 6px; }
+.ld-copy-list { display: flex; flex-direction: column; gap: 6px; }
+.ld-copy-row { display: flex; flex-direction: column; gap: 4px; }
+.ld-copy-rowhead { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.ld-copy-lbl { display: flex; align-items: center; gap: 7px; cursor: pointer; margin-top: 0; }
+.ld-copy-on { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.ld-copy-x { margin-left: auto; background: none; border: 0; padding: 2px 4px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--text3); border-radius: 6px; }
+.ld-copy-x:hover { color: var(--red); }
+/* A parked email stays readable but stops looking like something that will be sent. */
+.ld-copy-row.is-off .ld-copy-ta { opacity: .55; }
+.ld-copy-warn { font-size: 12px; line-height: 1.5; color: var(--text2); background: var(--yellow-dim);
+  border: 1px solid color-mix(in srgb, var(--yellow) 35%, var(--border));
+  border-radius: 9px; padding: 8px 11px; margin-top: 8px; }
+.ld-copy-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ld-copy-actions .btn { margin-top: 10px; }
 @media (max-width: 560px) { .fu-sw-main { flex-direction: column; align-items: flex-start; } }
 </style>
   <!-- Phosphor Icons -->
@@ -3930,7 +3945,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
               <div class="settings-sub">What each rung sends, under your name. This is the built-in wording until you change it: read it here before you switch automatic follow-ups on. A rung with several emails uses them in turn, so two touches in a row never read the same. Saved with the Save button below.</div>
             </div>
           </div>
-          <div class="settings-note" id="ladderCopyNote" style="margin-bottom:12px">Changing any one email saves the whole rung as your own text: it then stops following wording changes made to the built-in emails, until you press Restore the built-in text. A blank box is dropped when you save, so the rung ends up with one email fewer. Keep at least as many emails as the attempts a rung is allowed (3 or 5 by default), or an email will be sent twice.</div>
+          <div class="settings-note" id="ladderCopyNote" style="margin-bottom:12px">Add an email, delete one, or untick it to park it without losing the wording — a parked email is kept here and never sent. Changing anything saves the whole rung as your own text: it then stops following wording changes made to the built-in emails, until you press Restore the built-in text. Each rung warns you when the emails switched on do not match the attempts it is allowed.</div>
           <div id="ladderCopyEditor"></div>
           <div class="settings-note" id="ladderCopyVars"></div>
         </section>
@@ -8001,20 +8016,96 @@ async function loadLadderCopy() {
       '<button class="btn btn-secondary btn-sm" onclick="loadLadderCopy()">Try again</button></div>';
   }
 }
+// One email in a rung: the switch that decides whether it is ever sent, the text, and
+// the button that throws it away. The checkbox parks an email without losing it, which is
+// what an owner wants while trying wording out.
+function ladderEmailHtml(body, active) {
+  return '<div class="ld-copy-row' + (active ? '' : ' is-off') + '">' +
+      '<div class="ld-copy-rowhead">' +
+        '<label class="ld-copy-lbl"><input type="checkbox" class="ld-copy-on"' +
+          (active ? ' checked' : '') + ' onchange="syncLadderRung(this)"> ' +
+          '<span class="ld-copy-num"></span></label>' +
+        '<button type="button" class="ld-copy-x" onclick="removeLadderEmail(this)">Delete</button>' +
+      '</div>' +
+      '<textarea class="ld-copy-ta" maxlength="5000" spellcheck="true">' + esc(body) + '</textarea>' +
+    '</div>';
+}
+
+// Everything that depends on how many emails a rung has and how many are switched on:
+// the numbering, the count in the header, and the warning. Called after every change.
+function syncLadderRung(el) {
+  const d = el.closest ? el.closest('details.ld-copy') : el;
+  if (!d) return;
+  const cur = ladderCopy.rungs.find(x => x.rung === d.dataset.rung) || {};
+  const attempts = cur.attempts || 0;
+  const rows = [...d.querySelectorAll('.ld-copy-row')];
+  const on = rows.filter(r => r.querySelector('.ld-copy-on').checked);
+  rows.forEach((r, i) => {
+    const live = r.querySelector('.ld-copy-on').checked;
+    r.classList.toggle('is-off', !live);
+    r.querySelector('.ld-copy-num').textContent =
+      'Email ' + (i + 1) + ' of ' + rows.length + (live ? '' : ' · off, never sent');
+    r.querySelector('.ld-copy-x').style.display = rows.length > 1 ? '' : 'none';
+  });
+  const count = d.querySelector('.ld-copy-count');
+  if (count) count.textContent = rows.length + ' email' + (rows.length === 1 ? '' : 's') +
+    (on.length === rows.length ? '' : ', ' + on.length + ' on');
+  const add = d.querySelector('.ld-copy-add');
+  if (add) add.style.display = rows.length >= (ladderCopy.max_bodies || 10) ? 'none' : '';
+  const warn = d.querySelector('.ld-copy-warn');
+  if (!warn) return;
+  // Both ways of getting it wrong are worth saying out loud, and they are opposites:
+  // too few and a broker reads the same email twice; too many and the ones past the
+  // attempt budget are never reached (only HOT walks further down the list, because
+  // every extra load shifts where that contact starts).
+  let msg = '';
+  if (!on.length) msg = 'Nothing is switched on: this rung cannot be saved until one email is.';
+  else if (on.length < attempts) msg = 'Only ' + on.length + ' switched on for ' + attempts +
+    ' attempts: a contact will read the same email twice.';
+  else if (on.length > attempts && d.dataset.rung !== 'hot') msg = attempts + ' attempts on this rung, ' +
+    'so only the first ' + attempts + ' switched-on emails are ever sent. The rest sit unused.';
+  warn.textContent = msg;
+  warn.style.display = msg ? '' : 'none';
+}
+
+function addLadderEmail(rung) {
+  const d = document.querySelector('#ladderCopyEditor details[data-rung="' + rung + '"]');
+  if (!d) return;
+  const list = d.querySelector('.ld-copy-list');
+  if (!list || list.querySelectorAll('.ld-copy-row').length >= (ladderCopy.max_bodies || 10)) return;
+  list.insertAdjacentHTML('beforeend', ladderEmailHtml('', true));
+  syncLadderRung(list.lastElementChild);
+  list.lastElementChild.querySelector('.ld-copy-ta').focus();
+}
+
+function removeLadderEmail(btn) {
+  const row = btn.closest('.ld-copy-row'), d = btn.closest('details.ld-copy');
+  if (!row || !d || d.querySelectorAll('.ld-copy-row').length <= 1) return;
+  const list = row.parentElement;
+  row.remove();
+  syncLadderRung(list);
+}
+
 function renderLadderCopy() {
   const box = document.getElementById('ladderCopyEditor');
   if (!box) return;
   const open = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.rung));
   box.innerHTML = ladderCopy.rungs.map(r =>
     `<details class="ld-copy" data-rung="${esc(r.rung)}"${open.has(r.rung) ? ' open' : ''}><summary>` +
-      `<span class="ld-copy-name">${esc(r.rung.toUpperCase())}</span><span>${esc(FU_RUNG_DESC[r.rung] || '')} · ${r.bodies.length} email${r.bodies.length === 1 ? '' : 's'}</span>` +
+      `<span class="ld-copy-name">${esc(r.rung.toUpperCase())}</span>` +
+      `<span>${esc(FU_RUNG_DESC[r.rung] || '')} · <span class="ld-copy-count"></span></span>` +
       `<span class="ld-copy-badge${r.custom ? ' custom' : ''}">${r.custom ? 'Edited' : 'Built-in'}</span></summary>` +
       '<div class="ld-copy-body">' +
-        r.bodies.map((b, i) =>
-          `<label class="ld-copy-lbl">Email ${i + 1} of ${r.bodies.length}</label>` +
-          `<textarea class="ld-copy-ta" maxlength="5000" spellcheck="true">${esc(b)}</textarea>`).join('') +
-        `<button type="button" class="btn btn-secondary btn-sm" onclick="resetLadderCopy('${esc(r.rung)}')">Restore the built-in text</button>` +
+        `<div class="ld-copy-warn" style="display:none"></div>` +
+        '<div class="ld-copy-list">' +
+          r.bodies.map((b, i) => ladderEmailHtml(b, (r.active || [])[i] !== false)).join('') +
+        '</div>' +
+        '<div class="ld-copy-actions">' +
+          `<button type="button" class="btn btn-secondary btn-sm ld-copy-add" onclick="addLadderEmail('${esc(r.rung)}')">Add an email</button>` +
+          `<button type="button" class="btn btn-secondary btn-sm" onclick="resetLadderCopy('${esc(r.rung)}')">Restore the built-in text</button>` +
+        '</div>' +
       '</div></details>').join('');
+  box.querySelectorAll('details.ld-copy').forEach(d => syncLadderRung(d));
   const vars = document.getElementById('ladderCopyVars');
   if (vars) vars.innerHTML = 'Filled in for each contact: ' +
     (ladderCopy.variables || []).map(v => `<b>${esc(v.name)}</b> ${esc(v.means)}`).join(' · ') +
@@ -8024,20 +8115,33 @@ function resetLadderCopy(rung) {
   const r = ladderCopy.rungs.find(x => x.rung === rung);
   const d = document.querySelector(`#ladderCopyEditor details[data-rung="${rung}"]`);
   if (!r || !d) return;
-  d.querySelectorAll('textarea').forEach((t, i) => { t.value = r.defaults[i] ?? ''; });
+  const list = d.querySelector('.ld-copy-list');
+  list.innerHTML = r.defaults.map(b => ladderEmailHtml(b, true)).join('');
+  syncLadderRung(list);
   toast('Built-in text restored: press Save to apply');
 }
-// Sends only the rungs whose text changed; true when there is nothing to save or the save worked.
+// Sends only the rungs whose emails changed; true when there is nothing to save or the save worked.
 async function saveLadderCopy() {
   const box = document.getElementById('ladderCopyEditor');
   if (!box || !ladderCopy.rungs.length) return true;
-  const norm = a => a.map(v => v.replace(/\r\n?/g, '\n').trim());
+  const norm = a => a.map(v => ({ body: v.body.replace(/\r\n?/g, '\n').trim(), active: v.active }));
   const changed = {};
+  let blocked = '';
   box.querySelectorAll('details.ld-copy').forEach(d => {
     const cur = ladderCopy.rungs.find(x => x.rung === d.dataset.rung);
-    const vals = [...d.querySelectorAll('textarea')].map(t => t.value);
-    if (cur && JSON.stringify(norm(vals)) !== JSON.stringify(norm(cur.bodies))) changed[d.dataset.rung] = vals;
+    const vals = [...d.querySelectorAll('.ld-copy-row')].map(r => ({
+      body: r.querySelector('.ld-copy-ta').value,
+      active: r.querySelector('.ld-copy-on').checked,
+    }));
+    const live = vals.filter(v => v.active && v.body.trim());
+    if (!live.length) { blocked = d.dataset.rung; return; }
+    const was = (cur ? cur.bodies : []).map((b, i) => ({ body: b, active: (cur.active || [])[i] !== false }));
+    if (cur && JSON.stringify(norm(vals)) !== JSON.stringify(norm(was))) changed[d.dataset.rung] = vals;
   });
+  if (blocked) {
+    toast(blocked.toUpperCase() + ' needs at least one email switched on', true);
+    return false;
+  }
   if (!Object.keys(changed).length) return true;
   try {
     const res = await fetch('/api/followups/ladder-copy', {
@@ -8045,7 +8149,7 @@ async function saveLadderCopy() {
     });
     const data = await res.json();
     if (!res.ok) { toast('Error: ' + (data.error || 'save failed'), true); return false; }
-    ladderCopy = { rungs: data.rungs, variables: data.variables };
+    ladderCopy = { rungs: data.rungs, variables: data.variables, max_bodies: data.max_bodies };
     renderLadderCopy();
     return true;
   } catch (e) { toast('Error: ' + e.message, true); return false; }

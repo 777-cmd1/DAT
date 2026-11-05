@@ -7204,13 +7204,42 @@ def _ladder_copy_rows(uid, rung):
     ).order_by(Template.sort_order, Template.created_at).all()
 
 
-def _ladder_copy_payload(uid):
+def _ladder_copy_items(bodies):
+    """(body, active) pairs from what the editor sent: a plain string is an active email,
+    a dict carries the checkbox. Returns None if any entry is neither."""
+    items = []
+    for b in bodies:
+        if isinstance(b, str):
+            items.append((b, True))
+        elif isinstance(b, dict) and isinstance(b.get('body'), str):
+            items.append((b['body'], b.get('active', True) is not False))
+        else:
+            return None
+    return items
+
+
+def _ladder_copy_payload(uid, ws=None):
+    """What the editor shows per rung: the texts, which of them are switched on, the
+    built-in texts to restore, and how many attempts the rung is allowed — the editor
+    warns when fewer emails are on than the rung will send, because one then goes twice.
+
+    Switched-off texts are listed here (the owner parked them and must see them) but are
+    never sent: `_template_for_rung` reads active rows only.
+    """
+    from app.models import Workspace
+    if ws is None:
+        ws = Workspace.query.filter_by(owner_id=uid).first()
+    cfg = _ladder_cfg(ws)
     rungs = []
     for rung in _LADDER_COPY_RUNGS:
         defaults = list(DEFAULT_RUNG_TEMPLATES[rung])
-        own = [r.body for r in _ladder_copy_rows(uid, rung) if r.is_active and (r.body or '').strip()]
-        rungs.append({'rung': rung, 'bodies': own or defaults, 'defaults': defaults, 'custom': bool(own)})
-    return {'rungs': rungs, 'variables': _LADDER_COPY_VARIABLES}
+        rows = [r for r in _ladder_copy_rows(uid, rung) if (r.body or '').strip()]
+        bodies = [r.body for r in rows] if rows else defaults
+        active = [bool(r.is_active) for r in rows] if rows else [True] * len(defaults)
+        rungs.append({'rung': rung, 'bodies': bodies, 'active': active, 'defaults': defaults,
+                      'custom': bool(rows), 'attempts': _ladder.budget_for(rung, cfg)})
+    return {'rungs': rungs, 'variables': _LADDER_COPY_VARIABLES,
+            'max_bodies': _LADDER_COPY_MAX_BODIES}
 
 
 @app.route('/api/followups/ladder-copy', methods=['GET'])
@@ -7224,7 +7253,14 @@ def api_ladder_copy():
 @limiter.limit("30 per minute")
 @csrf_protected
 def api_ladder_copy_save():
-    """Save the bodies for one or more rungs: {rungs: {warm: [body, ...]}}. All or nothing."""
+    """Save the emails for one or more rungs. Each entry is a body, or
+    {body, active} when the owner has switched one off. All or nothing.
+
+    A switched-off email is kept, not deleted: the owner parked it and expects to find
+    it again. Fewer active emails than the rung has attempts is allowed — one is then
+    sent twice, which the editor says out loud — but a rung with nothing active is not,
+    since the sender would silently fall through to a different pool of text.
+    """
     from app.models import Template, Workspace
     uid = _current_user_id()
     ws = Workspace.query.filter_by(owner_id=uid).first()
@@ -7237,27 +7273,30 @@ def api_ladder_copy_save():
         if rung not in _LADDER_COPY_RUNGS:
             return jsonify(error=f'{rung or "(none)"} has no email copy: only '
                                  + ', '.join(_LADDER_COPY_RUNGS) + ' are emailed'), 400
-        if not isinstance(bodies, list) or len(bodies) > _LADDER_COPY_MAX_BODIES \
-                or not all(isinstance(b, str) for b in bodies):
+        items = _ladder_copy_items(bodies) if isinstance(bodies, list) else None
+        if items is None or len(items) > _LADDER_COPY_MAX_BODIES:
             return jsonify(error=f'{rung}: send up to {_LADDER_COPY_MAX_BODIES} email texts'), 400
-        texts = [_ladder_copy_norm(b) for b in bodies]
-        if any(len(t) > _LADDER_COPY_MAX_CHARS for t in texts):
+        items = [(_ladder_copy_norm(b), act) for b, act in items]
+        if any(len(t) > _LADDER_COPY_MAX_CHARS for t, _ in items):
             return jsonify(error=f'{rung}: an email is longer than {_LADDER_COPY_MAX_CHARS} characters'), 400
-        texts = [t for t in texts if t]
-        if not texts:
+        items = [(t, act) for t, act in items if t]          # a box left empty is dropped
+        if not items:
             return jsonify(error=f'{rung} needs at least one email text'), 400
-        clean[rung] = texts
-    for rung, texts in clean.items():
+        if not any(act for _, act in items):
+            return jsonify(error=f'{rung} needs at least one email switched on'), 400
+        clean[rung] = items
+    for rung, items in clean.items():
         for row in _ladder_copy_rows(uid, rung):
             db.session.delete(row)
-        if texts == [_ladder_copy_norm(b) for b in DEFAULT_RUNG_TEMPLATES[rung]]:
-            continue                       # the code default: store nothing, keep following it
-        for i, text in enumerate(texts):
+        if [t for t, _ in items] == [_ladder_copy_norm(b) for b in DEFAULT_RUNG_TEMPLATES[rung]] \
+                and all(act for _, act in items):
+            continue                       # the code default, untouched: store nothing, keep following it
+        for i, (text, act) in enumerate(items):
             db.session.add(Template(user_id=uid, workspace_id=ws.id if ws else None, type='followup',
                                     level=rung.upper(), name=rung.upper(), body=text,
-                                    sort_order=i, is_active=True))
+                                    sort_order=i, is_active=act))
     db.session.commit()
-    return jsonify(ok=True, **_ladder_copy_payload(uid))
+    return jsonify(ok=True, **_ladder_copy_payload(uid, ws))
 
 
 # ── PIPELINE ──────────────────────────────────────────────────────────────────

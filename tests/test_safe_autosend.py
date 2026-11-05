@@ -145,8 +145,13 @@ def test_reply_rebases_touch_mode_contact(app, db):
               next_followup_at=_app._utcnow() + timedelta(minutes=5))
     _app._check_reply_stops_followup(fc.contact_email, user.id)
     db.session.commit(); db.session.refresh(fc)
-    # stage 2 default cadence is 3 days — the touch moved out, not minutes away
-    assert fc.next_followup_at > _app._utcnow() + timedelta(days=1)
+    # The ladder's first touch is the next day at the fixed touch hour, so the date must
+    # land on a later day than today — not minutes away, which is what this guards.
+    # Asserting "> now + 1 day" was wrong: run after the touch hour, tomorrow's slot is
+    # under 24h away and the test failed on the clock rather than on a regression.
+    now = _app._utcnow()
+    assert fc.next_followup_at.date() > now.date()
+    assert fc.next_followup_at > now + timedelta(hours=12)
 
 
 # ── Auto-drip default ─────────────────────────────────────────────────────────

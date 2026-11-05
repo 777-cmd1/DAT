@@ -432,3 +432,25 @@ Sections 8 items now implemented (300-char preview, not full body; no historical
 backfill); legacy Analytics API fields retained only for compatibility. Remaining:
 owner-approved release/rollback branch, production dry run/refused-list review/apply,
 and first scheduler tick. No merge/push/deploy.
+
+
+**2026-11-05 — Claude (Opus 5), verification of Codex's work.** Verified rather than
+accepted: all 36 test files run separately, 842 passed, 0 failed; extracted JS passes
+`node --check`; divs 761/761. Read the four section-3 fixes in the code and confirmed
+each (bulk validation before mutation, `order_by(next_followup_at)` on both queries,
+NULL-note events in the cap, lost one-time date cleared in `_ladder_redate`). Checked
+every caller of `send_followup_email`: all four read the second return value only
+inside the `ok` branch, so the success dict is never logged as an error.
+
+One finding, fixed here: Codex's consent change (`789c3af`) made Path 0/2 require
+`ladder_auto_enabled`, but the switch's own copy still described it as the ladder's
+engine only, and the off-explainer said "off for the ladder". A one-time send would
+silently not go out, with no screen explaining why. Kept the gate — it is the safer
+reading for deploy day, and it matches the owner's intent to hold all automatic mail
+until he has tested — and corrected the Settings copy, the off-explainer and CLAUDE.md
+instead. Cost if the gate itself is wrong: an owner who wants only hand-set schedules
+must also switch the ladder on.
+
+Section 5's "all three gates" wording is what Codex read literally; it is now true of
+the code. Section 5's count of 38 test files is stale: there are 36. Nothing merged,
+pushed or deployed; both switches still OFF; section 7 remains the release sequence.

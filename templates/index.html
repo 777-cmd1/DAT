@@ -3916,7 +3916,7 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
             <div class="settings-toggle-row auto-sub-row">
               <div class="settings-toggle-copy">
                 <div class="settings-toggle-title">Warmth-ladder follow-ups</div>
-                <div class="settings-toggle-sub">Off until you switch it on. On = the ladder emails each contact when its touch comes due, using the texts under Ladder emails below. It also needs the follow-up switch above, which is the kill switch for every follow-up. The same switch sits on the Follow-up page.</div>
+                <div class="settings-toggle-sub">Off until you switch it on. On = the ladder emails each contact when its touch comes due, using the texts under Ladder emails below. This is also the consent for every other send the system makes on its own: while it is off, the one-time and recurring sends you scheduled wait for your click too. It also needs the follow-up switch above, which is the kill switch for every follow-up. The same switch sits on the Follow-up page.</div>
               </div>
               <input id="plLadderAuto" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" onchange="renderAutoSendBanner(true)">
             </div>
@@ -8879,7 +8879,7 @@ function fuOffBlockHtml(sw, tail) {
   if (!sw.ladder_auto_enabled) why.push('The warmth ladder has not been switched on yet.');
   if (!sw.auto_send_enabled) why.push('The auto-send master switch is off.');
   return why.length
-    ? '<div class="fu-act-off"><b>Automatic sending is off for the ladder.</b> The ladder will not email anyone on its own. ' + esc(why.join(' ')) + esc(tail || '') + '</div>'
+    ? '<div class="fu-act-off"><b>Automatic sending is off.</b> Nothing goes out on its own — not a ladder touch, and not a one-time or recurring send you scheduled. ' + esc(why.join(' ')) + esc(tail || '') + '</div>'
     : '';
 }
 function renderFuActivity(a, sw) {

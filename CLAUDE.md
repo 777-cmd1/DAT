@@ -125,13 +125,15 @@ URL: `/admin`
   залізне правило «активний контакт на драбині має дату своєї ступені» (хуки: відповідь, перенос на канбані,
   нормалізація при старті/лістингу, ручна відправка).
 - **Вимикачі (усі три + ліміт)**: `Workspace.fu_auto_enabled` (кілл-свіч усіх автоматичних follow-up),
-  `Workspace.ladder_auto_enabled` (згода драбини, дефолт OFF) і `pipeline_config.auto_send_enabled`
+  `Workspace.ladder_auto_enabled` (згода на БУДЬ-ЯКУ автоматичну відправку, не лише драбину; дефолт OFF)
+  і `pipeline_config.auto_send_enabled`
   (майстер); плюс `ladder.daily_cap` (дефолт 25/день на воркспейс, від локальної півночі): ОДИН ліміт на всі автоматичні
   відправки — дотики драбини, разові й повторювані (`_auto_sent_today` рахує події `touch_sent`/`scheduled_once_sent`/
   `recurring_sent` з нотатками «ladder touch»/«one-time send»/«recurring send»; Path 0/2 витрачають ліміт першими). Шедулер перед відправкою пересканує відповіді (`_prefetch_replies_before_sending`).
 - **Шляхи відправки** (`_run_scheduled_followups`, кожні 15 хв): Path 0 — разова відправка, яку власник
   призначив (`scheduled_once`), Path 2 — повторювана (`recurring_enabled`), Path 3 — драбина
-  (`_run_ladder_touches`), Path 4 — тижневий дайджест. Path 0/2 теж за `fu_auto_enabled` + майстром і
+  (`_run_ladder_touches`), Path 4 — тижневий дайджест. Path 0/2 теж за всіма трьома вимикачами (включно з `ladder_auto_enabled` — отже після деплою
+  власні разові/повторювані розклади чекають, поки власник не ввімкне драбину) і
   ніколи не пишуть excluded/refused; 5 невдалих відправок поспіль паркують контакта (`auto_paused`,
   `exit_reason='send_failed'`) на всіх шляхах. Стадійного дріпу (колишній Path 1) **немає**.
 - **Ручні відправки**: `send-now` (дотик для живого щабля) і `free-send` (свідомий разовий лист, може піти

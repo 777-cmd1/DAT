@@ -266,3 +266,14 @@ def test_bulk_block_adds_stop_list(app, db, client):
     assert res.status_code == 200
     vals = {e.value for e in StopListEntry.query.filter_by(user_id=user.id).all()}
     assert {a.contact_email, b.contact_email} <= vals
+
+
+def test_owned_schedule_without_consent_does_not_poll_gmail(app, db, monkeypatch):
+    user, ws = _mk(db, fu_auto=True, oauth=True)
+    ws.ladder_auto_enabled = False
+    _due(db, user, ws, scheduled_once=True)
+    db.session.commit()
+    checked = []
+    monkeypatch.setattr(_app, 'fetch_replies_from_gmail', lambda **kw: checked.append(kw) or {})
+    assert _app._prefetch_replies_before_sending(_app._utcnow()) == set()
+    assert checked == []

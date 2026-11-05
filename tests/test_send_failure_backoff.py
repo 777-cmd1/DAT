@@ -20,7 +20,7 @@ def _mk(db, fu_auto=True):
     user = User(email=email, name='T', role='user',
                 password=_bcrypt.hashpw(b'p', _bcrypt.gensalt()).decode())
     db.session.add(user); db.session.flush()
-    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto)
+    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto, ladder_auto_enabled=True)
     db.session.add(ws); db.session.flush()
     db.session.add(EmailAccount(user_id=user.id, workspace_id=ws.id,
                                 gmail_address='me@test.com', your_name='Me'))

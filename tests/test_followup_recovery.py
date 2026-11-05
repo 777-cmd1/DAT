@@ -17,7 +17,7 @@ def _create_user_with_workspace(db, email, fu_auto=True):
     db.session.add(user)
     db.session.flush()
 
-    ws = Workspace(owner_id=user.id, name='WS', plan='free', fu_auto_enabled=fu_auto)
+    ws = Workspace(owner_id=user.id, name='WS', plan='free', fu_auto_enabled=fu_auto, ladder_auto_enabled=True)
     db.session.add(ws)
     db.session.flush()
 

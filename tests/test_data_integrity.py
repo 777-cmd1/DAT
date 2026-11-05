@@ -133,6 +133,7 @@ def test_a_spent_one_time_send_schedules_the_next_touch(app, db, monkeypatch):
     u = _user(db)
     ws = Workspace.query.filter_by(owner_id=u.id).first()
     ws.fu_auto_enabled = True
+    ws.ladder_auto_enabled = True
     ws.pipeline_config = {'touch_hour': 'auto'}
     db.session.add(EmailAccount(user_id=u.id, workspace_id=ws.id, gmail_address='me@test.com', your_name='Me'))
     fc = FollowupContact(user_id=u.id, workspace_id=ws.id, contact_email=f'{uuid.uuid4().hex[:8]}@c.com',

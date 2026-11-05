@@ -8128,7 +8128,7 @@ def _auto_send_on(workspace_id, cache):
 def _would_auto_send(fc, ws):
     """True if the scheduler would email this due contact without a human click."""
     if fc.scheduled_once or fc.recurring_enabled:
-        return bool(ws and ws.fu_auto_enabled)         # behind the same kill switch as the ladder
+        return bool(ws and ws.fu_auto_enabled and ws.ladder_auto_enabled)
     if fc.is_followup_enabled:
         return False                                   # unplaced: no engine sends it
     if fc.touch_enabled:

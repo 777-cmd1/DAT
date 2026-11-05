@@ -9309,10 +9309,10 @@ function fuHistRowHtml(c) {
     const shown = h.all ? h.items : h.items.slice(0, FU_HIST_SHOWN);
     inner = shown.map(it => `<div class="fu-t-hl ${esc(it.kind)}"><span class="fu-t-hd">${esc(fuStamp(it.at))}</span>` +
       `<span class="fu-t-hi"><i class="ph-bold ph-${FU_HIST_ICON[it.kind] || (/^manual_/.test(it.type || '') ? 'user' : 'gear')}"></i></span>` +
-      `<div><b>${esc(it.title)}</b>${it.detail && it.detail.toLowerCase() !== it.title.toLowerCase() ? ' <em>' + esc(it.detail) + '</em>' : ''}</div></div>`).join('') +
+      `<div><b>${esc(it.title)}</b>${it.detail && it.detail.toLowerCase() !== it.title.toLowerCase() ? ' <em>' + esc(it.detail) + '</em>' : ''}${it.sent_email ? '<details><summary>' + esc(it.sent_email.subject || 'Sent email') + '</summary><div style="white-space:pre-wrap">' + esc(it.sent_email.body || '') + '</div>' + (it.sent_email.truncated ? '<small>First 300 characters. Full email is in Gmail Sent.</small>' : '') + '</details>' : ''}</div></div>`).join('') +
       (h.items.length > shown.length ? `<button type="button" class="fu-t-hmore" onclick="fuHistAll('${c.id}')">Show all ${h.items.length}</button>` : '') +
       (h.truncated ? `<div class="fu-fn-note">Showing the latest ${h.items.length} entries. Older ones are not listed, so the first entry here may not be the start.</div>` : '') +
-      (h.items.some(it => FU_TOUCH_TYPES.includes(it.type) && !it.failed) ? '<div class="fu-fn-note">A touch shows when it went out and which attempt it was. The text of the email is not kept here; it is in your Gmail sent folder.</div>' : '');
+      (h.items.some(it => FU_TOUCH_TYPES.includes(it.type) && !it.failed) ? '<div class="fu-fn-note">A touch shows when it went out and which attempt it was. New sends include their subject and text preview. Older sends have no saved text; the full email is in Gmail Sent.</div>' : '');
   }
   return `<tr class="fu-t-hist" id="fut-hist-${c.id}"><td colspan="8"><div class="fu-t-hbox" role="region" aria-label="History of ${esc(name)}">` +
     `<div class="fu-t-hhead">History: ${esc(name)}</div>${inner}</div></td></tr>`;
@@ -9367,53 +9367,24 @@ async function loadFuAnalytics() {
 function renderFuAnalytics(data) {
   const el = document.getElementById('fuAnalyticsContent');
   if (!el) return;
-  const f = data.funnel||{}, o = data.outcomes||{}, cv = data.conversion_by_stage||{};
-  const total = f.total||1;
-
-  const funnelRows = [
-    {label:'Total', n:f.total||0, pct:100},
-    {label:'FU1 Sent', n:f.fu1_sent||0, pct:Math.round((f.fu1_sent||0)*100/total)},
-    {label:'FU2 Sent', n:f.fu2_sent||0, pct:Math.round((f.fu2_sent||0)*100/total)},
-    {label:'FU3 Sent', n:f.fu3_sent||0, pct:Math.round((f.fu3_sent||0)*100/total)},
-    {label:'Completed', n:f.completed_fu3||0, pct:Math.round((f.completed_fu3||0)*100/total)},
-  ];
-
-  const loadsTotal = (cv.fu1_to_loads||0)+(cv.fu2_to_loads||0)+(cv.fu3_to_loads||0);
-  const convRows = [
-    {label:'After FU1', n:cv.fu1_to_loads||0},
-    {label:'After FU2', n:cv.fu2_to_loads||0},
-    {label:'After FU3', n:cv.fu3_to_loads||0},
-  ];
-  const maxConv = Math.max(1, ...convRows.map(r=>r.n));
-
-  el.innerHTML = `
-    <div class="fu-analytics-section">
-      <div class="fu-analytics-title">Sequence Funnel</div>
-      ${funnelRows.map(r=>`<div class="fu-funnel-row">
-        <div class="fu-funnel-label">${r.label}</div>
-        <div class="fu-funnel-bar-wrap"><div class="fu-funnel-bar" style="width:${r.pct}%"></div></div>
-        <div class="fu-funnel-num">${r.n}</div>
-        <div class="fu-funnel-pct">${r.pct}%</div>
-      </div>`).join('')}
-    </div>
-    <div class="fu-analytics-section">
-      <div class="fu-analytics-title">Outcomes</div>
-      <div class="fu-outcomes-grid">
-        <div class="fu-outcome-card fu-outcome-loads"><div class="fu-outcome-label">Booked</div><div class="fu-outcome-num">${o.loads||0}</div></div>
-        <div class="fu-outcome-card fu-outcome-warm"><div class="fu-outcome-label">Warm</div><div class="fu-outcome-num">${o.warm||0}</div></div>
-        <div class="fu-outcome-card fu-outcome-blocked"><div class="fu-outcome-label">Blocked</div><div class="fu-outcome-num">${o.blocked||0}</div></div>
-        <div class="fu-outcome-card fu-outcome-closed"><div class="fu-outcome-label">Closed</div><div class="fu-outcome-num">${o.closed||0}</div></div>
-      </div>
-    </div>
-    <div class="fu-analytics-section">
-      <div class="fu-analytics-title">Conversion to Booked by Stage</div>
-      ${convRows.map(r=>`<div class="fu-conv-row">
-        <div class="fu-conv-label">${r.label}</div>
-        <div class="fu-conv-bar-wrap"><div class="fu-conv-bar" style="width:${Math.round(r.n*100/maxConv)}%"></div></div>
-        <div class="fu-conv-num">${r.n}</div>
-      </div>`).join('')}
-      <div style="font-size:12px;color:var(--text3);margin-top:10px">Total booked from follow-ups: <strong style="color:var(--green)">${loadsTotal}</strong></div>
-    </div>`;
+  const d = data.ladder;
+  if (!d || !d.rungs || !Array.isArray(d.conversion)) {
+    el.innerHTML = '<div class="fu-fn-error">Could not load ladder analytics.</div>';
+    return;
+  }
+  const t = d.totals || {};
+  el.innerHTML = '<div class="fu-analytics-section"><div class="fu-analytics-title">Warmth ladder analytics</div>' +
+    '<p>' + esc(d.window.cohort) + '</p>' +
+    '<div class="fu-outcomes-grid">' + [
+      [t.entered, 'Contacts in play'], [t.warm_or_better, 'Reached WARM or better'],
+      [t.loads_this_month, 'Load conversations this month'], [t.lost, 'Dropped out in cohort']
+    ].map(([n, label]) => '<div class="fu-outcome-card"><div class="fu-outcome-label">' + esc(label) + '</div><div class="fu-outcome-num">' + (n || 0) + '</div></div>').join('') + '</div></div>' +
+    '<div class="fu-analytics-section"><div class="fu-analytics-title">Current contacts by rung · whole base</div>' +
+    ['cold','neutral','warm','hot','client','dormant','excluded'].map(r => [r, d.rungs[r] || 0]).map(([r,n]) => '<div class="fu-funnel-row"><div class="fu-funnel-label">' + esc(r.toUpperCase()) + '</div><div class="fu-funnel-num">' + n + '</div></div>').join('') + '</div>' +
+    '<div class="fu-analytics-section"><div class="fu-analytics-title">Conversion · contacts in play over 30 days</div>' +
+    d.conversion.map(r => '<div class="fu-funnel-row"><div class="fu-funnel-label">' + esc(r.rung.toUpperCase()) + '</div><div class="fu-funnel-bar-wrap"><div class="fu-funnel-bar" style="width:' + (t.entered ? Math.min(100,100*r.reached/t.entered) : 0) + '%"></div></div><div class="fu-funnel-num">' + r.reached + '</div><div class="fu-funnel-pct">' + (r.pct_of_previous == null ? '—' : r.pct_of_previous + '%') + '</div></div>' +
+      (r.lost_reasons || []).map(x => '<div class="fu-fn-note">' + esc(x.reason) + ': ' + x.count + '</div>').join('')).join('') +
+    '<p class="fu-fn-note">Percentages compare with the previous rung. A load means a broker sent load information, not a booked shipment. Historical peak rungs are counted for this cohort.</p></div>';
 }
 
 // Close dropdown on outside click

@@ -549,3 +549,28 @@ def test_legacy_success_without_notes_spends_shared_cap(app, db, me, sent, event
     db.session.commit()
     assert _app._auto_sent_today(me[1]) == 1
     assert _app._run_scheduled_followups() == 0 and sent == []
+
+
+def test_all_sender_paths_keep_the_successful_email_preview(app, db, client, me, monkeypatch):
+    import json
+    from app.models import FollowupEvent
+    preview = {'subject': 'Actual subject', 'body': 'Rendered mail', 'truncated': False}
+    monkeypatch.setattr(_app, 'send_followup_email', lambda *a, **kw: (True, preview))
+    _fc(db, me, 'neutral', scheduled_once=True, next_followup_at=_due())
+    _fc(db, me, 'neutral', recurring_enabled=True, recurring_days='0,1,2,3,4,5,6', recurring_time='10:00', next_followup_at=_due())
+    _fc(db, me, 'neutral', touch_enabled=True, next_followup_at=_due())
+    assert _app._run_scheduled_followups() == 3
+    manual = _fc(db, me, 'neutral')
+    assert _act(client, manual, 'free-send').status_code == 200
+    events = FollowupEvent.query.filter(FollowupEvent.event_type.in_(
+        ['scheduled_once_sent', 'recurring_sent', 'touch_sent', 'free_send'])).all()
+    assert len(events) == 4
+    assert all(json.loads(e.metadata_json)['sent_email'] == preview for e in events)
+
+
+def test_analytics_uses_the_same_ladder_cohort_as_funnel(app, db, client, me):
+    _fc(db, me, 'warm', load_count=1)
+    d = client.get('/api/followups/analytics').get_json()['ladder']
+    f = client.get('/api/followups/funnel').get_json()
+    assert d['rungs'] == f['rungs'] and d['conversion'] == f['conversion']
+    assert d['rungs']['warm'] == 1

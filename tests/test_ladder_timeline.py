@@ -169,3 +169,24 @@ def test_history_includes_matched_colleague_reply_but_not_other_users(app, db, c
                             body=body, received_at=_app._utcnow(), status='new'))
     db.session.commit()
     assert [i['detail'] for i in _history(client, fc)] == ['Colleague load details']
+
+
+def test_sent_email_preview_is_exposed_only_for_success(app, db, client, me):
+    import json
+    fc = _contact(db, me)
+    preview = {'subject': 'Re: Lane', 'body': 'Actual rendered words', 'truncated': False}
+    _event(db, fc, 'touch_sent', _app._utcnow(), metadata_json=json.dumps({'sent_email': preview}))
+    db.session.commit()
+    assert _history(client, fc)[0]['sent_email'] == preview
+
+
+def test_sender_returns_actual_rendered_preview(app, db, me, monkeypatch):
+    captured = []
+    monkeypatch.setattr(_app, 'load_stop_list', lambda **kw: (set(), set()))
+    monkeypatch.setattr(_app, '_get_gmail_service', lambda uid: (_ for _ in ()).throw(RuntimeError('not connected')))
+    monkeypatch.setattr(_app, '_smtp_send_with_retry', lambda msg, *args: captured.append(msg))
+    ok, result = _app.send_followup_email({'contact_email': 'test@example.test'},
+                                         'Hello {name}\n' + 'x' * 400,
+                                         {'name': 'Alice', 'gmail_address': 'me@example.test'}, uid=me[0].id)
+    assert ok and result == {'subject': 'Following up', 'body': ('Hello Alice\n' + 'x' * 400)[:300], 'truncated': True}
+    assert captured

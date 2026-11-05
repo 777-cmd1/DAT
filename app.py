@@ -5018,6 +5018,13 @@ def err_500(e):
 
 # ─── FOLLOW-UPS ───────────────────────────────────────────────────────────────
 
+def _sent_email_metadata(result):
+    """Only successful sends carry the actual rendered subject and bounded body."""
+    if not isinstance(result, dict):
+        return None
+    return json.dumps({'sent_email': result})
+
+
 def send_followup_email(fu, template_text, cfg, uid=None):
     try:
         to_email = fu.get('contact_email') or fu.get('email', '')
@@ -5056,7 +5063,7 @@ def send_followup_email(fu, template_text, cfg, uid=None):
                 import base64 as _b64
                 raw = _b64.urlsafe_b64encode(mime_msg.as_bytes()).decode('utf-8')
                 _gmail_send_with_retry(service, raw, thread_id=fu.get('source_thread_id') or None)
-                return True, None
+                return True, {'subject': subject, 'body': body[:300], 'truncated': len(body) > 300}
             except RuntimeError as _e:
                 if 'not connected' not in str(_e).lower():
                     raise
@@ -5068,7 +5075,7 @@ def send_followup_email(fu, template_text, cfg, uid=None):
             msg['In-Reply-To'] = fu['reply_msg_id']; msg['References'] = fu['reply_msg_id']
         msg.attach(MIMEText(body, 'plain'))
         _smtp_send_with_retry(msg, cfg['gmail_address'], to_email, cfg.get('gmail_app_password', ''))
-        return True, None
+        return True, {'subject': subject, 'body': body[:300], 'truncated': len(body) > 300}
     except Exception as e:
         app.logger.error('send_followup_email failed (to=%s): %s',
                          fu.get('contact_email') or fu.get('email', ''), e)
@@ -5480,7 +5487,7 @@ def _followup_send_now_core(fc, uid, kind='touch'):
     _schedule_touch(fc, force=True)     # next touch from the rung; a parked contact gets none
     # no from_stage: the stage is the retired drip's record, and /api/followups/analytics
     # buckets manual_send events by it ("FU1 sent"), so writing it would invent drip history
-    _record_event(fc, event, actor_user_id=uid)
+    _record_event(fc, event, actor_user_id=uid, metadata_json=_sent_email_metadata(err))
     db.session.commit()
     return 'sent', None
 
@@ -6547,6 +6554,10 @@ def api_followups_timeline():
         # a failed send is logged under the type of the send it was meant to be, with the error in its
         # metadata (the same test the stats use): it must not read as a touch that went out
         failed = '"error"' in (e.metadata_json or '')
+        try:
+            sent_email = json.loads(e.metadata_json or '{}').get('sent_email')
+        except (ValueError, AttributeError):
+            sent_email = None
         key = e.event_at
         if e.event_type.startswith('ladder_') and e.event_at:
             for c_at in created_at:
@@ -6556,7 +6567,8 @@ def api_followups_timeline():
         items.append({'at': e.event_at.isoformat() if e.event_at else None, 'kind': 'event',
                       'type': e.event_type, '_k': key.isoformat() if key else '',
                       'title': 'Send failed' if failed else _ev_titles.get(e.event_type, e.event_type),
-                      'failed': failed, 'detail': detail[:400]})
+                      'failed': failed, 'detail': detail[:400],
+                      'sent_email': sent_email if not failed and isinstance(sent_email, dict) else None})
 
     items.sort(key=lambda x: x['_k'], reverse=True)
     for it in items:
@@ -6764,6 +6776,7 @@ def api_followups_analytics():
             elif 'fu3' in last_send.from_stage: conversion['fu3_to_loads'] += 1
 
     return jsonify(
+        ladder=_ladder_funnel(uid, _utcnow()),
         funnel={'total': total, 'fu1_sent': fu1_sent, 'fu2_sent': fu2_sent,
                 'fu3_sent': fu3_sent, 'completed_fu3': completed},
         outcomes=outcomes,
@@ -8442,7 +8455,8 @@ def _run_ladder_touches(now, hold_uids=(), skip_ids=()):
                 fc.send_fail_count = 0
                 _record_event(fc, 'touch_sent', actor_type='scheduler',
                               from_state=fc.rung, to_state=fc.rung,
-                              notes=f'ladder touch {fc.touch_attempt} on {fc.rung}')
+                              notes=f'ladder touch {fc.touch_attempt} on {fc.rung}',
+                              metadata_json=_sent_email_metadata(err))
                 sent_today[ws.id] += 1
                 if fc.touch_attempt >= _ladder.budget_for(fc.rung, cfg):
                     _ladder_exhaust(fc, now, ws)
@@ -8563,7 +8577,8 @@ def _run_scheduled_followups():
                     _restore_contact_schedule(fc, now=now)
                     fc.send_fail_count = 0
                     _record_event(fc, 'scheduled_once_sent', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage, notes='one-time send')
+                                  from_stage=fc.stage, to_stage=fc.stage, notes='one-time send',
+                                  metadata_json=_sent_email_metadata(err))
                     processed_ids.add(fc.id)
                     sched_total += 1
                 else:
@@ -8623,7 +8638,8 @@ def _run_scheduled_followups():
 
                     fc.send_fail_count = 0
                     _record_event(fc, 'recurring_sent', actor_type='scheduler',
-                                  from_stage=fc.stage, to_stage=fc.stage, notes='recurring send')
+                                  from_stage=fc.stage, to_stage=fc.stage, notes='recurring send',
+                                  metadata_json=_sent_email_metadata(err))
                     processed_ids.add(fc.id)
                     rec_total += 1
                 else:

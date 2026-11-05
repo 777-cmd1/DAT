@@ -454,3 +454,52 @@ must also switch the ladder on.
 Section 5's "all three gates" wording is what Codex read literally; it is now true of
 the code. Section 5's count of 38 test files is stale: there are 36. Nothing merged,
 pushed or deployed; both switches still OFF; section 7 remains the release sequence.
+
+**2026-11-05 — Claude (Opus 5), released and migrated production.** Verified Codex's
+work rather than accepting it: 36 test files run separately, 842 passed; the four
+section-3 fixes read in the code; every caller of `send_followup_email` checked for the
+success dict. Fixed the switch copy (`8b27313`) — Codex's `789c3af` made Path 0/2 need
+`ladder_auto_enabled`, but the switch still described itself as the ladder's engine only,
+so an owner-set one-time send would have stopped with nothing on screen saying why. Kept
+the gate (safer on deploy day, and it matches the owner's intent to hold all automatic
+mail until he has tested); corrected Settings copy, the off-explainer and CLAUDE.md.
+
+`test_safe_autosend.py::test_reply_rebases_touch_mode_contact` failed on the re-run and
+was a latent clock-dependent flake, not a regression: asserting the next touch is more
+than a day out was right under the stage cadence (stage 2 = 3 days) and wrong under the
+ladder, whose first touch is the next day at the fixed touch hour — run after that hour,
+tomorrow's slot is under 24h away. Now asserts the touch landed on a later day
+(`76aefd1`); mutation-checked by disabling `_schedule_touch`. The other 19 similar
+assertions all carry a day or more of slack; this one had none.
+
+Released on the owner's explicit approval: `rollback/pre-ladder` at `d0e07b5` pushed
+first (rollback = `git push --force origin rollback/pre-ladder:main`), then main
+fast-forwarded to `76aefd1`. Migration applied to workspace
+`9e2d2408-867d-4fee-9398-7aba48de67e3` with `--silence-days 0` after a 13 MB `pg_dump`
+(389 contact rows, all three workspaces) — 289 placed, 0 failed: neutral 27, warm 203,
+hot 43, client 10, dormant/refused 4, excluded/blocked 2. Refused was 4, not the ~50 the
+earlier estimate carried, because the MC-request fix landed. Both engine switches stayed
+OFF through the release; the owner has since turned the ladder's own switch on, and
+`fu_auto_enabled` is still off, so nothing has been emailed.
+
+Run the migration inside Railway, not from a laptop: `railway ssh --service DAT
+'DISABLE_SCHEDULER=1 /opt/venv/bin/python scripts/migrate_to_ladder.py …'`. The internal
+DATABASE_URL does not resolve outside, and importing app.py starts a second scheduler
+without that flag. Ivan Bantiuk (22 contacts) and Max Bennett (78) have NOT been
+migrated: their Follow-up pages will show an empty ladder until they are.
+
+Then, at the owner's request, the ladder-email editor gained add / delete / park
+(`43cd156`): each email carries a checkbox riding on the existing `Template.is_active`,
+which `_template_for_rung` already filters, so the sender is unchanged. A rung with
+everything switched off is refused — the sender would fall through to the general pool
+silently. Payload keeps `bodies` as plain strings and adds `active`, `attempts` and
+`max_bodies`, so the 50 existing copy tests stayed green; PUT accepts both a plain string
+and `{body, active}`. 850 tests, three mutations checked, browser round-trip verified.
+
+Found and left undone, the owner's call: `own[step % len(own)]` with
+`step = touch_attempt + max(0, load_count - first_load)` means COLD, NEUTRAL and WARM
+always start at index 0, so emails past the attempt budget are never sent there (only HOT
+walks further, as its load count grows) — and every WARM contact receives an identical
+first touch. The editor now says this out loud instead of letting the owner write copy
+that never sends. Offsetting the start by contact id would fix both; it changes existing
+behaviour, so it was not done unilaterally mid-rollout.

@@ -407,3 +407,28 @@ Analytics and rung list; pause/resume observed with restored date. Test harness 
 Prior browser failures were harness authentication/session issues, not verified app
 failures. Separate final review/browser history verification still follows. Section 8
 is no longer deferred by owner's explicit instruction. No merge/push/deploy.
+
+
+**2026-11-05 — Codex, separate final review/browser pass (`43acf92`, feature `dbf986c`, log `3c30392`).**
+Review found Queue's separate history drawer omitted the new preview; shared escaped
+renderer now serves drawer and rung expansion. Added explicit failed-event suppression
+assertion (timeline file 11 passed). Why share: one history must not silently lose
+content depending on entry point; cost if wrong: both renderers inherit a display bug.
+Final whole-branch review pass traced the changed areas against spec/handoff and
+callers: rule budget/revival/opt-outs, reply dedupe/ingest/colleague matching, runtime
+schema and placement migration, legacy recovery, manual/bulk/automatic send routes,
+settings/gates/cap/backoff, API cohorts and UI consumers. Findings/fix rounds are in
+preceding entries; no remaining confirmed blocker identified in this pass. This was
+a separate self-review, not an independent agent review; production behavior remains
+to be established through section 7, not claimed from local tests.
+All 36 test files passed individually on the feature tree: 842 tests; final subsequent
+change is shared HTML rendering plus strengthened timeline assertion. JS syntax and
+diff checks pass, divs 761/761. Browser verified funnel, Analytics, rung list,
+pause/resume date restoration, automation settings OFF, and expanded subject/body in
+both rung history and Queue drawer using synthetic data. Screenshots in /tmp:
+ladder-analytics-review.png, ladder-history-review.png, ladder-queue-history-review.png.
+No live mail, real accounts or production DB used. Local harness remains outside git.
+Sections 8 items now implemented (300-char preview, not full body; no historical
+backfill); legacy Analytics API fields retained only for compatibility. Remaining:
+owner-approved release/rollback branch, production dry run/refused-list review/apply,
+and first scheduler tick. No merge/push/deploy.

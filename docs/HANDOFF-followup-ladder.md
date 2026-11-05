@@ -329,3 +329,16 @@ diff check clean. This supersedes the unresolved gate finding in the previous en
 Whole-branch review is IN PROGRESS, not complete: remaining app/API/reply/UI diff and
 broader regression checks still need review. No production DB access, merge, push or
 deploy; section 8 remains deferred.
+
+
+**2026-11-05 — Codex, reply/API review finding (`a75f6d0`).**
+Timeline omitted colleague replies linked through matched_recipient, although live
+ladder and migration count them. Include either address under the existing user
+predicate; otherwise the owner cannot inspect the reply that earned a rung. Cost if
+wrong: an incorrectly matched reply appears in history (same matching evidence the
+engine already trusts). Regression also checks foreign-user replies stay hidden.
+Separate diff inspection preserved user filter, ordering and limits. Removing the
+fix failed the new assertion (empty history); restored timeline file: 9 passed.
+Reviewed reply transitions, manual overrides, funnel/needs-you and scheduler callers;
+no additional confirmed finding yet. Ladder regression sweep in progress; UI/full
+branch coverage still incomplete. No merge/push/deploy; deferred section 8 unchanged.

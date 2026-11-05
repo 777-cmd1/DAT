@@ -23,7 +23,7 @@ def _mk(db, client=None, fu_auto=True):
     pw = _bcrypt.hashpw(b'pass', _bcrypt.gensalt()).decode()
     user = User(email=email, name='T', password=pw, role='user')
     db.session.add(user); db.session.flush()
-    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto)
+    ws = Workspace(owner_id=user.id, name='WS', fu_auto_enabled=fu_auto, ladder_auto_enabled=True)
     db.session.add(ws); db.session.flush()
     db.session.add(EmailAccount(user_id=user.id, workspace_id=ws.id,
                                 gmail_address='me@test.com', your_name='Me'))
@@ -164,3 +164,18 @@ def test_pipeline_config_toggles_drip_auto(app, db, client):
     assert r2.get_json()['drip_auto_enabled'] is True
     db.session.expire_all()
     assert db.session.get(Workspace, ws.id).fu_auto_enabled is True
+
+
+def test_owned_schedules_wait_for_ladder_consent(app, db, monkeypatch):
+    user, ws = _mk(db, fu_auto=True)
+    ws.ladder_auto_enabled = False
+    for kind in ('once', 'recurring'):
+        fc = _due_drip_contact(db, user, ws)
+        fc.is_followup_enabled = False
+        fc.scheduled_once = kind == 'once'
+        fc.recurring_enabled = kind == 'recurring'
+        fc.recurring_days, fc.recurring_time = '0,1,2,3,4,5,6', '09:00'
+    db.session.commit()
+    sent = _capture_sends(monkeypatch)
+    assert _app._run_scheduled_followups() == 0
+    assert sent == []

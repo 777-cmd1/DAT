@@ -8506,6 +8506,7 @@ def _run_scheduled_followups():
         def _owned(q):
             return q.join(Workspace, Workspace.id == FollowupContact.workspace_id).filter(
                 Workspace.fu_auto_enabled == True,
+                Workspace.ladder_auto_enabled == True,
                 FollowupContact.state == 'active',
                 FollowupContact.auto_paused == False,
                 FollowupContact.rung != 'excluded',

@@ -355,3 +355,15 @@ Broader tests caught `_arm_scheduler` enabling only the old switch; explicitly e
 both so pause/exclude controls still send before asserting they stop (89 actions tests
 passed). Remaining ladder sweep running. Whole-branch sign-off still pending; no
 merge/push/deploy or section-8 work.
+
+
+**2026-11-05 — Codex, regression sweep after `a75f6d0` / `b1119a3` (logs `943489b`, `961bdf6`).**
+All ten ladder files passed individually: actions 89, API 90, migration 57, replies 63,
+rules 32, scheduler 56, schema 2, settings 59, templates 50, timeline 9 (507 total).
+Final extracted JS syntax passed; divs 770/770; diff check clean, working tree clean
+before this log append. Source review covered reply transitions, manual actions,
+list/funnel/needs-you/activity/timeline, copy settings, scheduler and tier UI. This is
+not a claim of exhaustive whole-diff sign-off: remaining integration/legacy paths
+and broader non-ladder regression sweep still need completion. Keep release pending;
+production/PostgreSQL dry run remains owner-approved deploy work. No new contradiction
+beyond prior entries, no merge/push/deploy.

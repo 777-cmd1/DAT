@@ -248,3 +248,36 @@ If you are both writing and reviewing, you lose that. Two ways to keep it:
 The final whole-branch review in section 4 is **not** a substitute for reviewing
 these four fixes: it is one pass over ~11 k lines and will not catch a one-line
 ordering bug in a path it is not looking at.
+
+---
+
+## 12. Work log — append here, do not rewrite
+
+This file is read first by whoever picks the branch up next, so it is also where
+you leave your trail. **After each piece of work, append one entry.** Do not edit
+earlier entries; if you were wrong, say so in a new one.
+
+What an entry needs, in a few lines:
+
+- **Date, who** (which agent or session).
+- **What changed**, with the commit SHAs. The code is in git; do not restate it.
+- **What you decided** that the next person could otherwise re-open — and *why*,
+  plus what it costs if the decision turns out wrong. A decision without its reason
+  gets re-litigated.
+- **What you left undone or deliberately did not do**, and where it now belongs.
+- **Anything you found that contradicts this document.** Sections 1-11 were written
+  on 2026-11-05 and are not re-verified by anyone; if the code has moved, the code
+  is right and this file is stale. Say so here rather than quietly working around it.
+
+Keep it short. The ground truth is `git log` and the diffs — this log exists so the
+next reader knows *why*, not *what*.
+
+### Entries
+
+**2026-11-05 — Claude (Opus 5), handing off.** Branch at `dce3bde` / `7d7906b`,
+tree clean, 12 planned tasks implemented and reviewed, nothing merged, nothing
+deployed, both engine switches OFF. Next work is section 3 (Task 12 fix round 2,
+four one-line fixes, none applied), then section 4. Decisions of record are in
+section 6; the rules in section 5 each correspond to a real production incident.
+Left undone deliberately: the Analytics rebuild and the sent-email text in history
+(section 8), both owner-visible and both sized, neither blocking deploy.

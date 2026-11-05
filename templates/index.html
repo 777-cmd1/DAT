@@ -9049,10 +9049,9 @@ function renderFuTierRow(c) {
   const budget = c.budget || 0, spent = c.touch_attempt || 0;
   const act = (icon, label, js, cls) => `<button type="button" class="fu-t-act${cls ? ' ' + cls : ''}" onclick="${js}" title="${esc(label)}" aria-label="${esc(label)}: ${esc(name)}"><i class="ph-bold ph-${icon}"></i></button>`;
   const acts = [];
-  // never to someone who asked us to stop. free-send is a one-off (the stage template, no attempt spent), so it says so
+  // A one-off uses rung copy and spends no automatic attempt.
   if (c.rung !== 'excluded' && c.state !== 'blocked' && c.state !== 'closed' && c.exit_reason !== 'refused') {
-    const drip = /^fu([123])_scheduled$/.exec(c.stage || '');
-    acts.push(act('paper-plane-tilt', drip ? `Send the scheduled FU${drip[1]} now` : 'Send a one-off email (not the ladder\'s scheduled touch)', `fuTierSend('${id}')`));
+    acts.push(act('paper-plane-tilt', 'Send a one-off email using this rung’s text', `fuTierSend('${id}')`));
   }
   if (sched && live && !c.auto_paused) acts.push(act('clock', 'Postpone', `fuTierPostpone(event,'${id}')`));
   acts.push(`<button type="button" class="fu-t-act" id="fut-hb-${id}" onclick="toggleFuHistory('${id}')" aria-expanded="${open}" title="History" aria-label="History: ${esc(name)}"><i class="ph-bold ph-clock-counter-clockwise"></i></button>`);
@@ -9169,7 +9168,7 @@ async function fuTierAct(id, action, rung) {
 }
 
 // The owner needs this where he does it: a move down brings the next touch sooner.
-const FU_MOVE_TIP = 'Starts a fresh run on this rung: attempts go back to 0 and the next touch is set for tomorrow. Moving down brings the next touch sooner, not later.';
+const FU_MOVE_TIP = 'Starts a fresh run on this rung: attempts go back to 0. The next touch follows your rung settings; an existing one-time or recurring schedule keeps its date.';
 function fuMoveTip(to) {
   return to === 'dormant' ? 'Stops automatic emails until they send a load; hand-scheduled sends are switched off.'
        : to === 'client' ? 'A client gets no automatic emails; hand-scheduled sends are switched off.' : FU_MOVE_TIP;
@@ -9182,8 +9181,8 @@ function fuMoveText(who, from, to, many) {
   const rank = r => ['cold', 'neutral', 'warm', 'hot', 'client'].indexOf(r);
   const up = from && rank(to) > rank(from);
   return `${who} ${many ? 'move' : 'moves'} ${from ? 'from ' + from.toUpperCase() + ' ' : ''}to ${T} and ${many ? 'start' : 'starts'} a fresh run there: attempts go back to 0.\n\n` +
-    'Attempt 0 is the next-day touch on every rung, so the next email is set for tomorrow.' +
-    (up ? '' : ' A move down brings the next touch sooner, not later.') + ' Nothing is sent now.';
+    'The next touch follows your rung settings. An existing one-time or recurring schedule keeps its date; paused automation stays paused.' +
+    (up ? '' : ' A move down may bring the next touch sooner.') + ' Nothing is sent now.';
 }
 
 async function fuTierMove(id, rung) {

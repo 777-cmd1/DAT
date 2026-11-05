@@ -681,6 +681,7 @@ def _run_drip():
 
 def _arm_scheduler(db, me):
     me[1].fu_auto_enabled = True
+    me[1].ladder_auto_enabled = True
     db.session.commit()
 
 

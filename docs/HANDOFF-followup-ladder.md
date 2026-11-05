@@ -281,3 +281,17 @@ four one-line fixes, none applied), then section 4. Decisions of record are in
 section 6; the rules in section 5 each correspond to a real production incident.
 Left undone deliberately: the Analytics rebuild and the sent-email text in history
 (section 8), both owner-visible and both sized, neither blocking deploy.
+
+
+**2026-11-05 — Codex, Task 12 round 2 implementation (`7a45021`, base `b7f8ad8`).**
+Validate the bulk recurring date before *any* contact mutation: section 3.1's suggested
+flag-only move is insufficient because normalisation clears that flag while recurring
+remains enabled. Cost if wrong: a rejected request can silently enrol a contact.
+Kept the existing resume guard in `_ladder_redate` (`cab67e85`) instead of duplicating
+it: section 3.4 and my initial claim that all four fixes were absent are stale; the
+caller already clears the lost one-time schedule. Cost if wrong: a resumed contact
+stays dateless. Added regression coverage for validation, both query orders and legacy
+cap events; retained the existing resume test. All five targeted mutations (each
+query separately) failed assertions, with source restored after each. Baseline fixed
+`test_drip_retired.py`: 47 passed; `test_ladder_actions.py`: 89 passed. Full covering
+sweep and separate review completion are logged next. No merge/push/deploy.

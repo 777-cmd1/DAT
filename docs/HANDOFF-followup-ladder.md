@@ -295,3 +295,22 @@ cap events; retained the existing resume test. All five targeted mutations (each
 query separately) failed assertions, with source restored after each. Baseline fixed
 `test_drip_retired.py`: 47 passed; `test_ladder_actions.py`: 89 passed. Full covering
 sweep and separate review completion are logged next. No merge/push/deploy.
+
+
+**2026-11-05 — Codex, separate scoped review and verification of `7a45021` (implementation log `9168c7e`).**
+Re-read the committed diff against section 3 and traced bulk commit/normalisation,
+query -> cap -> send, historical event writers before `08e7334`, and resume -> redate.
+No remaining finding in this scoped change. All 10 section-10 files passed separately:
+351 tests; extracted JS passed `node --check`; unchanged index divs 770/770; diff check clean.
+Mutation evidence: removing bulk validation failed 3 cases; removing each ORDER BY
+failed its own case; removing NULL-note counting failed 2; removing the existing
+resume guard failed 1. Restored code passed the subsequent full covering sweep.
+Kept Path 0 before Path 2, ordering within each path as requested; a global queue
+would change existing priority (cost of retaining priority: recurring can wait behind
+one-time sends). No new resume assignment: its existing guard is proven, not assumed.
+Additional contradiction to section 5: `_owned`/`_allowed` on Path 0/2 do not require
+`ladder_auto_enabled`; `test_drip_gate.py::test_scheduled_once_and_recurring_send_when_the_switch_is_on`
+expects sends with its default OFF. Left this for the whole-branch review, not silently
+changed in the scoped patch: cost if section 5 is intended literally is sending while
+the ladder switch is OFF. Whole-branch review remains undone; this pass is not it.
+Sections 8 items, production/PostgreSQL validation, merge, push and deploy remain undone.

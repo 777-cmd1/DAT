@@ -7528,6 +7528,12 @@ function _vizTip(e) {
 }
 
 // ── Contact timeline drawer ───────────────────────────────────────────────────
+function fuSentEmailHtml(it) {
+  if (!it.sent_email || it.failed) return '';
+  return '<details><summary>' + esc(it.sent_email.subject || 'Sent email') + '</summary><div style="white-space:pre-wrap">' + esc(it.sent_email.body || '') + '</div>' +
+    (it.sent_email.truncated ? '<small>First 300 characters. Full email is in Gmail Sent.</small>' : '') + '</details>';
+}
+
 async function openTimeline(id) {
   let d;
   try { d = await (await fetch('/api/followups/timeline?id=' + encodeURIComponent(id))).json(); }
@@ -7540,7 +7546,7 @@ async function openTimeline(id) {
     const when = (it.at || '').replace('T', ' ').slice(0, 16);
     return `<div class="fu-tl-item ${it.kind}"><span class="fu-tl-ico">${icons[it.kind] || '•'}</span>` +
       `<div class="fu-tl-body"><div class="fu-tl-title">${esc(it.title)}<span class="fu-tl-when">${esc(when)}</span></div>` +
-      (it.detail ? `<div class="fu-tl-detail">${esc(it.detail)}</div>` : '') + `</div></div>`;
+      (it.detail ? `<div class="fu-tl-detail">${esc(it.detail)}</div>` : '') + fuSentEmailHtml(it) + `</div></div>`;
   }).join('') || '<div class="dash-hint">No history yet</div>';
   const ov = document.createElement('div');
   ov.className = 'fu-tl-overlay'; ov.id = 'fuTlOverlay';
@@ -9309,7 +9315,7 @@ function fuHistRowHtml(c) {
     const shown = h.all ? h.items : h.items.slice(0, FU_HIST_SHOWN);
     inner = shown.map(it => `<div class="fu-t-hl ${esc(it.kind)}"><span class="fu-t-hd">${esc(fuStamp(it.at))}</span>` +
       `<span class="fu-t-hi"><i class="ph-bold ph-${FU_HIST_ICON[it.kind] || (/^manual_/.test(it.type || '') ? 'user' : 'gear')}"></i></span>` +
-      `<div><b>${esc(it.title)}</b>${it.detail && it.detail.toLowerCase() !== it.title.toLowerCase() ? ' <em>' + esc(it.detail) + '</em>' : ''}${it.sent_email ? '<details><summary>' + esc(it.sent_email.subject || 'Sent email') + '</summary><div style="white-space:pre-wrap">' + esc(it.sent_email.body || '') + '</div>' + (it.sent_email.truncated ? '<small>First 300 characters. Full email is in Gmail Sent.</small>' : '') + '</details>' : ''}</div></div>`).join('') +
+      `<div><b>${esc(it.title)}</b>${it.detail && it.detail.toLowerCase() !== it.title.toLowerCase() ? ' <em>' + esc(it.detail) + '</em>' : ''}${fuSentEmailHtml(it)}</div></div>`).join('') +
       (h.items.length > shown.length ? `<button type="button" class="fu-t-hmore" onclick="fuHistAll('${c.id}')">Show all ${h.items.length}</button>` : '') +
       (h.truncated ? `<div class="fu-fn-note">Showing the latest ${h.items.length} entries. Older ones are not listed, so the first entry here may not be the start.</div>` : '') +
       (h.items.some(it => FU_TOUCH_TYPES.includes(it.type) && !it.failed) ? '<div class="fu-fn-note">A touch shows when it went out and which attempt it was. New sends include their subject and text preview. Older sends have no saved text; the full email is in Gmail Sent.</div>' : '');

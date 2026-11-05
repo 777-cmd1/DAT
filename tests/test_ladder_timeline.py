@@ -178,6 +178,10 @@ def test_sent_email_preview_is_exposed_only_for_success(app, db, client, me):
     _event(db, fc, 'touch_sent', _app._utcnow(), metadata_json=json.dumps({'sent_email': preview}))
     db.session.commit()
     assert _history(client, fc)[0]['sent_email'] == preview
+    _event(db, fc, 'touch_sent', _app._utcnow() + timedelta(seconds=1),
+           metadata_json=json.dumps({'error': 'failed', 'sent_email': preview}))
+    db.session.commit()
+    assert _history(client, fc)[0]['sent_email'] is None
 
 
 def test_sender_returns_actual_rendered_preview(app, db, me, monkeypatch):

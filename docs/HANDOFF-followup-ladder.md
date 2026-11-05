@@ -342,3 +342,16 @@ fix failed the new assertion (empty history); restored timeline file: 9 passed.
 Reviewed reply transitions, manual overrides, funnel/needs-you and scheduler callers;
 no additional confirmed finding yet. Ladder regression sweep in progress; UI/full
 branch coverage still incomplete. No merge/push/deploy; deferred section 8 unchanged.
+
+
+**2026-11-05 — Codex, UI review and consent regression setup (`b1119a3`).**
+Move confirmation incorrectly promised tomorrow on every rung, ignoring hot-weekly,
+custom settings, pauses and owned schedules. Replaced promise with actual scheduling
+rules; one-off tooltip no longer claims retired FU-stage copy. Reason: owner consent
+must describe the schedule implemented by `_ladder_redate`; cost if wrong is misleading
+expectations, not a scheduling change. JS syntax passed; divs 770/770; separate diff
+inspection traced labels to backend. No mutation test for text-only changes.
+Broader tests caught `_arm_scheduler` enabling only the old switch; explicitly enable
+both so pause/exclude controls still send before asserting they stop (89 actions tests
+passed). Remaining ladder sweep running. Whole-branch sign-off still pending; no
+merge/push/deploy or section-8 work.

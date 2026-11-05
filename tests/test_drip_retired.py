@@ -506,3 +506,46 @@ def test_a_dead_token_parks_a_dated_contact_like_a_ladder_touch(app, db, me, mon
 def test_the_ladder_query_itself_skips_a_refused_contact_whatever_its_rung(app, db, me, sent):
     _fc(db, me, 'neutral', exit_reason='refused', next_followup_at=_due(), touch_enabled=True)
     assert _app._run_ladder_touches(_app._utcnow()) == 0 and sent == []
+
+
+# ══ fix round 2 ══════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize('days', ['', 'bad', '9'])
+def test_invalid_bulk_recurring_preserves_unplaced_contact_after_normalisation(app, db, client, me, days):
+    fc = _fc(db, me, 'cold', is_followup_enabled=True, next_followup_at=None, touch_enabled=False)
+    result = _bulk(client, [fc.id], 'set-recurring', recurring_days=days,
+                   recurring_time='10:00').get_json()['results'][0]
+    assert result['ok'] is False
+    fc = _reload(db, fc)
+    for _ in range(2):
+        _app._normalize_followup_contact(fc)
+        db.session.commit()
+        fc = _reload(db, fc)
+    assert fc.is_followup_enabled is True
+    assert fc.next_followup_at is None and not fc.recurring_enabled
+
+
+@pytest.mark.parametrize('kind', ['once', 'recurring'])
+def test_capped_owned_schedule_sends_oldest_due_first(app, db, me, sent, kind):
+    _cap(db, me[1], 1)
+    extra = ({'scheduled_once': True} if kind == 'once' else
+             {'recurring_enabled': True, 'recurring_days': '0,1,2,3,4,5,6', 'recurring_time': '10:00'})
+    # Insert newer first so insertion order cannot accidentally satisfy the assertion.
+    newer = _fc(db, me, 'neutral', next_followup_at=_due(), **extra)
+    oldest = _fc(db, me, 'neutral', next_followup_at=_due() - timedelta(days=2), **extra)
+    assert _app._run_scheduled_followups() == 1
+    assert [e['fu']['contact_email'] for e in sent] == [oldest.contact_email]
+    assert _reload(db, newer).next_followup_at < _app._utcnow()
+
+
+@pytest.mark.parametrize('event_type', ['scheduled_once_sent', 'recurring_sent'])
+def test_legacy_success_without_notes_spends_shared_cap(app, db, me, sent, event_type):
+    _cap(db, me[1], 1)
+    fc = _fc(db, me, 'neutral', scheduled_once=True, next_followup_at=_due())
+    _app._record_event(fc, event_type, actor_type='scheduler', notes=None)
+    _app._record_event(fc, event_type, actor_type='scheduler', notes='Send failed: revoked')
+    _app._record_event(fc, 'touch_sent', actor_type='scheduler', notes=None)
+    _app._record_event(fc, event_type, actor_type='user', notes=None)
+    db.session.commit()
+    assert _app._auto_sent_today(me[1]) == 1
+    assert _app._run_scheduled_followups() == 0 and sent == []

@@ -5716,12 +5716,13 @@ def api_followups_bulk_action():
             r_days = (data.get('recurring_days') or '').strip()
             r_time = (data.get('recurring_time') or '').strip()
             try:
+                next_recurring_at = _next_recurring_datetime(r_days, r_time)
                 fc.recurring_enabled = True
                 fc.recurring_days    = r_days
                 fc.recurring_time    = r_time
                 fc.scheduled_once    = False
                 fc.is_followup_enabled = False
-                fc.next_followup_at  = _next_recurring_datetime(r_days, r_time)
+                fc.next_followup_at  = next_recurring_at
                 fc.updated_at = _utcnow()
                 _record_event(fc, 'recurring_set', actor_user_id=uid,
                               notes=f'Recurring days={r_days} time={r_time} UTC')
@@ -8269,7 +8270,9 @@ def _auto_sent_today(ws):
         FollowupEvent.workspace_id == ws.id,
         FollowupEvent.actor_type == 'scheduler',
         FollowupEvent.event_at >= _local_day_start(_ws_tz(ws)),
-        db.or_(*[db.and_(FollowupEvent.event_type == et,
+        db.or_(db.and_(FollowupEvent.event_type.in_(['scheduled_once_sent', 'recurring_sent']),
+                       FollowupEvent.notes.is_(None)),
+               *[db.and_(FollowupEvent.event_type == et,
                          FollowupEvent.notes.startswith(prefix, autoescape=True))
                  for et, prefix in _AUTO_SEND_NOTES]),
     ).count()
@@ -8524,7 +8527,7 @@ def _run_scheduled_followups():
 
         # ── Path 0: One-time scheduled sends ────────────────────────────────
         try:
-            sq = _owned(FollowupContact.query).filter(FollowupContact.scheduled_once == True)
+            sq = _owned(FollowupContact.query).filter(FollowupContact.scheduled_once == True).order_by(FollowupContact.next_followup_at)
             try:
                 sched_contacts = sq.with_for_update(skip_locked=True, of=FollowupContact).all()
             except Exception:
@@ -8574,7 +8577,7 @@ def _run_scheduled_followups():
         # ── Path 2: Recurring sends ──────────────────────────────────────────
         # processed_ids already includes Path 0
         try:
-            rq = _owned(FollowupContact.query).filter(FollowupContact.recurring_enabled == True)
+            rq = _owned(FollowupContact.query).filter(FollowupContact.recurring_enabled == True).order_by(FollowupContact.next_followup_at)
             try:
                 recurring = rq.with_for_update(skip_locked=True, of=FollowupContact).all()
             except Exception:

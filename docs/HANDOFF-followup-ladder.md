@@ -367,3 +367,24 @@ not a claim of exhaustive whole-diff sign-off: remaining integration/legacy path
 and broader non-ladder regression sweep still need completion. Keep release pending;
 production/PostgreSQL dry run remains owner-approved deploy work. No new contradiction
 beyond prior entries, no merge/push/deploy.
+
+
+**2026-11-05 — Codex, integration review/final local regression (`ee966d0`).**
+Traced legacy recovery, state transitions, Gmail ingest/OOO, prefetch and manual bulk
+worker against the revised scheduler. Prefetch eligibility still ignored ladder
+consent for owned schedules: align it so OFF does not initiate a needless Gmail scan
+and triage. Cost if wrong: delayed reply polling until automation is enabled; ordinary
+manual Gmail checks remain available. Separate diff/caller pass confirmed no send
+eligibility is widened. Mutation restoring the old helper failed the new Gmail-poll
+assertion; restored safe-autosend file: 15 passed.
+Full non-ladder sweep exposed old consent setup in integrity/isolation/recovery/backoff
+tests; explicitly grant consent, preserving success/failure assertions. Rechecks:
+8/7/10/5 passed respectively. Combined with prior ladder sweep, all 36 current test
+files pass individually, 838 tests total. Section 5's count of 38 files is stale.
+Local source review passes are now recorded across entries, including schema/migration,
+rules, reply/API/manual actions, scheduler, copy/settings and tier UI. No additional
+confirmed blocker found in this integration pass. Limits: no production PostgreSQL
+execution, live-browser end-to-end session or deployed scheduler observation; this is
+not evidence those passed. Production dry run/refused-list owner check and first tick
+remain release steps requiring approval. Section 8 remains deferred. No merge, push,
+rollback branch or deploy performed; release remains pending owner's explicit approval.

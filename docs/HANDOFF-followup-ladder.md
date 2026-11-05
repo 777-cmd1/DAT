@@ -206,3 +206,45 @@ automation was off, an unbounded first send wave, and the MC-request misread abo
 If you continue with a different process, keep the one habit that produced those:
 **verify against the code, not against the previous agent's report.** Several
 reports on this branch asserted the opposite of what their own code did.
+
+---
+
+## 10. Which tests cover Task 12, and how to know a fix is real
+
+Covering files for the four pending fixes, run one at a time with
+`.venv/bin/python -m pytest tests/<file> -q`:
+
+```
+tests/test_drip_retired.py        tests/test_ladder_scheduler.py
+tests/test_drip_gate.py           tests/test_ladder_actions.py
+tests/test_send_failure_backoff.py  tests/test_ladder_api.py
+tests/test_followup_bulk_send.py  tests/test_settings_tabs.py
+tests/test_touch.py               tests/test_safe_autosend.py
+```
+
+**Prove each fix with a mutation check before you commit it.** Revert your own
+change, confirm the test you just wrote fails, then restore it. This is the single
+habit that did the most work on this branch: a test that still passes with the fix
+removed is not a test of that fix, and four such tests were caught and rejected here
+before they reached a commit. The same check also catches the subtler failure — a
+fix that is present in your editor but not in the tree, which happened once on this
+branch when an interrupted test sweep silently reverted a guard and the author's own
+verification missed it because they grepped for what they expected to find.
+
+## 11. Who reviews the work
+
+Every change on this branch was read by a reviewer that had **not** written it and
+did not see the author's reasoning — only the brief, the author's report and the
+diff — and was told to verify claims against the code, because several reports here
+asserted the opposite of what their own code did.
+
+If you are both writing and reviewing, you lose that. Two ways to keep it:
+
+- Run a genuinely separate review pass with fresh eyes: read the diff against the
+  requirement, not against your memory of writing it, and trace callers rather than
+  reading the deletion.
+- Or hand the diff back for review elsewhere before merging.
+
+The final whole-branch review in section 4 is **not** a substitute for reviewing
+these four fixes: it is one pass over ~11 k lines and will not catch a one-line
+ordering bug in a path it is not looking at.

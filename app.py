@@ -6487,8 +6487,9 @@ def api_followups_timeline():
                       'title': 'Outreach sent' if s.status == 'sent' else f'Send {s.status}',
                       'detail': f'{s.origin} → {s.destination}'.strip(' →') or ''})
 
-    replies = Reply.query.filter(Reply.user_id == uid, db.func.lower(Reply.from_email) == email
-                                 ).order_by(Reply.received_at.desc()).limit(51).all()
+    replies = Reply.query.filter(Reply.user_id == uid,
+                                 db.or_(db.func.lower(Reply.from_email) == email,
+                                        db.func.lower(Reply.matched_recipient) == email)).order_by(Reply.received_at.desc()).limit(51).all()
     cut = cut or len(replies) > 50
     _reply_labels = {'negative': 'said no', 'gave_info': 'gave information',
                      'rate_request': 'asked for a rate', 'auto_reply': 'automatic reply'}

@@ -158,3 +158,14 @@ def test_the_history_says_when_it_was_cut_short(app, db, client, me):
     _event(db, fresh, 'note_added', now, notes='n')
     db.session.commit()
     assert client.get(f'/api/followups/timeline?id={fresh.id}').get_json()['truncated'] is False
+
+
+def test_history_includes_matched_colleague_reply_but_not_other_users(app, db, client, me):
+    from app.models import Reply
+    fc = _contact(db, me)
+    for uid, body in [(me[0].id, 'Colleague load details'), (str(uuid.uuid4()), 'Foreign secret')]:
+        db.session.add(Reply(user_id=uid, msg_id=uuid.uuid4().hex,
+                            from_email='colleague@broker.com', matched_recipient=fc.contact_email,
+                            body=body, received_at=_app._utcnow(), status='new'))
+    db.session.commit()
+    assert [i['detail'] for i in _history(client, fc)] == ['Colleague load details']

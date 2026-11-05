@@ -388,3 +388,22 @@ execution, live-browser end-to-end session or deployed scheduler observation; th
 not evidence those passed. Production dry run/refused-list owner check and first tick
 remain release steps requiring approval. Section 8 remains deferred. No merge, push,
 rollback branch or deploy performed; release remains pending owner's explicit approval.
+
+
+**2026-11-05 — Codex, owner-authorized section-8 implementation (`dbf986c`).**
+Analytics now renders the established ladder funnel/cohort rather than FU-stage stats;
+legacy API fields remain for compatibility/tests, primary UI reads `ladder`. Reuse one
+metric implementation to avoid conflicting counts (cost if wrong: both views share
+its error). Successful OAuth/SMTP sends return rendered subject and 300-character
+body plus truncation flag; all four core success writers persist it in metadata,
+covering manual/bulk, ladder, one-time and recurring sends. No schema change. Chose
+bounded preview per section 8; full historical emails cannot be reconstructed and
+full new bodies remain in Gmail (cost: long messages require Gmail for the rest).
+Capture/timeline/Analytics mutations failed; independently removing each of four
+metadata writes failed. Restored covering files passed: timeline 11, retired drip 49,
+scheduler 56, bulk 6, templates 50. JS valid, divs 761/761. Local browser loads funnel,
+Analytics and rung list; pause/resume observed with restored date. Test harness is
+/tmp only, in-memory DB, synthetic contacts, SMTP disabled, both switches OFF.
+Prior browser failures were harness authentication/session issues, not verified app
+failures. Separate final review/browser history verification still follows. Section 8
+is no longer deferred by owner's explicit instruction. No merge/push/deploy.

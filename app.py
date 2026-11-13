@@ -5098,82 +5098,100 @@ DEFAULT_FU_TEMPLATES = {
 _SIGNATURE = "{name}\n{company} | {phone}"
 _RUNG_FIRST_LOAD = {'warm': 1, 'hot': 2}      # the load count that lands a contact on the rung
 DEFAULT_RUNG_TEMPLATES = {
-    # No reply yet: nothing to recall, so ask what is moving, offer the lanes out of
-    # their city and the services they may not know we run.
+    # Written to be read as one person writing to another, not as a system sending mail:
+    # contractions, one plain question, and no promise the owner cannot keep himself.
+    # Two rules the renderer imposes. A line whose variable the contact has no value for
+    # is dropped whole, so anything that depends on the lane ("that lane") must sit on the
+    # SAME line as {route} or it would dangle; and every body must still carry a question
+    # after those drops.
+    #
+    # No reply yet: nothing to thank them for, so ask what is moving and say what we run.
     'cold': (
         "Hi,\n\n"
-        "Do you have any loads open right now?\n"
-        "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
+        "I've got trucks sitting in {origin} right now.\n"
+        "Anything open on your side?\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Do you have any hazmat, LTL, Mexico, Canada or high-value loads open? "
-        "We run all of those.\n\n" + _SIGNATURE,
+        "Not sure what you usually move, so I'll cast a wide net: we run hazmat, LTL, "
+        "Mexico, Canada and high-value.\n"
+        "Anything there you need covered?\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Which lanes do you move most often?\n"
-        "We have trucks sitting in {origin} and can look at other lanes from there.\n\n" + _SIGNATURE,
+        "Which lanes do you run most often?\n"
+        "If I know what you move, I can watch for trucks on it instead of guessing.\n"
+        "I've got equipment in {origin} most days.\n\n" + _SIGNATURE,
     ),
-    # They answered but have not sent a load yet.
+    # They answered but have not sent a load yet: they are talking to us, so ask for the
+    # work rather than for permission to keep writing.
     'neutral': (
         "Hi,\n\n"
-        "Do you have a load right now that we can quote?\n"
-        "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
+        "Thanks for getting back to me.\n"
+        "Anything on your board right now that I can quote?\n"
+        "I've got trucks in {origin}.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Does any hazmat, LTL, Mexico, Canada or high-value freight come up on your side? "
-        "We run those too.\n\n" + _SIGNATURE,
+        "Does hazmat, LTL, Mexico, Canada or high-value freight come up on your side?\n"
+        "We run all of it, and it is worth knowing before you need it at short notice.\n\n"
+        + _SIGNATURE,
 
         "Hi,\n\n"
-        "Which lanes do you ship most often? Send us a couple and we will check them "
-        "against our trucks.\n"
-        "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
+        "Which lanes do you run most often?\n"
+        "Send me a couple and I'll check them against what we have. No obligation; "
+        "I would rather know your freight than guess at it.\n"
+        "I've got trucks in {origin}.\n\n" + _SIGNATURE,
     ),
     # They sent load information. {route} is the lane of our first outreach to them (the
-    # data does not say which lane they later sent), so the copy only claims we talked about it.
+    # data does not say which lane they later sent), so the copy only claims we talked
+    # about it. "Same day" is a promise the owner keeps himself: he is the one quoting.
     'warm': (
         "Hi,\n\n"
-        "Last time we talked about {route}. How often does that lane come up for you?\n"
-        "Do you have another load coming up?\n\n" + _SIGNATURE,
+        "Thanks again for the {route} load. How often does that lane run for you?\n"
+        "Do you have another load coming up? Send it over and I'll quote it same day.\n\n"
+        + _SIGNATURE,
 
         "Hi,\n\n"
-        "Are there any other loads open on your side right now?\n"
-        "We have trucks sitting in {origin}.\n\n" + _SIGNATURE,
+        "Anything open on your side right now?\n"
+        "I've got trucks in {origin} looking for freight.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Do you have any hazmat, LTL, Mexico, Canada or high-value loads? "
-        "We run all of those.\n\n" + _SIGNATURE,
+        "Do you ever move hazmat, LTL, Mexico, Canada or high-value?\n"
+        "We run all of those too, and it is worth knowing before it comes up at short "
+        "notice.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Is anything moving next week?\n"
-        "If {route} is back on your board, send it over and we will quote it.\n\n" + _SIGNATURE,
+        "Anything moving next week?\n"
+        "If {route} is back on your board, send it over and I'll quote it same day.\n\n"
+        + _SIGNATURE,
 
         "Hi,\n\n"
-        "Are you covered on everything you have open right now?\n"
-        "If not, send us the lane and we will see what we can do.\n\n" + _SIGNATURE,
+        "Are you covered on everything you have open?\n"
+        "If anything is still loose, send me the lane and I'll see what I can do.\n\n"
+        + _SIGNATURE,
     ),
-    # More than one load: a working relationship, so ask for volume and the next load.
+    # More than one load: a working relationship, so ask about volume. What we want from
+    # here is the next load and a picture of the whole week.
     'hot': (
         "Hi,\n\n"
-        "Last time we talked about {route}.\n"
-        "What do you have open this week?\n"
-        "How many loads a week do you usually have?\n\n" + _SIGNATURE,
+        "What have you got open this week?\n"
+        "And roughly how many loads a week do you usually run? If I know the volume I can "
+        "keep trucks closer to you.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
         "Which other lanes are you moving right now?\n"
-        "We have trucks sitting in {origin}.\n"
-        "If {route} comes up again, send it over and we will quote it.\n\n" + _SIGNATURE,
+        "I've got trucks in {origin}.\n"
+        "And if {route} comes up again, send it straight over.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Do you ever have hazmat, LTL, Mexico, Canada or high-value loads? "
-        "We run those too, along with any lanes you already have.\n\n" + _SIGNATURE,
+        "Do you ever get hazmat, LTL, Mexico, Canada or high-value loads?\n"
+        "We run those alongside any lanes you already have.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
-        "Is there anything you need covered this week?\n"
-        "Send over the lane and the pickup date and we will quote it.\n\n" + _SIGNATURE,
+        "Anything you need covered this week?\n"
+        "Send me the lane and the pickup date and I'll quote it same day.\n\n" + _SIGNATURE,
 
         "Hi,\n\n"
         "Which lanes are busiest for you right now?\n"
-        "If anything leaves from {origin}, we have trucks sitting there.\n\n" + _SIGNATURE,
+        "If anything leaves out of {origin}, I've got trucks sitting there.\n\n" + _SIGNATURE,
     ),
 }
 

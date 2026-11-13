@@ -2663,6 +2663,18 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 .fu-nx-late { color: var(--yellow); font-weight: 600; font-size: 12px; }
 .fu-nx-more { font-size: 12px; color: var(--text3); padding: 6px 8px; }
 @media (max-width: 560px) { .fu-nx-lane { display: none; } }
+/* The panel opens on demand: a queue of 270 names is a reference, not a headline, so the
+   card is shut by default and the one line in its header carries the day's numbers. */
+.fu-nx-toggle { display: inline-flex; align-items: center; gap: 7px; background: none; border: 0;
+  padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
+.fu-nx-toggle i { font-size: 11px; color: var(--text3); transition: transform 150ms ease; }
+.fu-nx-toggle[aria-expanded="true"] i { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .fu-nx-toggle i { transition: none; } }
+.fu-nx-cap { margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--text3); white-space: nowrap; }
+.fu-nx-cap input { width: 60px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text); font-size: 12px; font-weight: 600; text-align: center; }
+.fu-nx-cap input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .fu-act { font-size: 13px; color: var(--text2); line-height: 1.7; }
 .fu-act b { color: var(--text); font-variant-numeric: tabular-nums; }
 .fu-act-sep { color: var(--border2); margin: 0 6px; }
@@ -3282,10 +3294,18 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
         <section class="fu-fn-card" id="fuLadderSwitch" aria-label="Automatic follow-ups" hidden></section>
         <section class="fu-fn-card" aria-labelledby="fuNextTitle">
           <div class="fu-fn-head">
-            <h2 class="fu-fn-title" id="fuNextTitle">Going out next</h2>
+            <h2 class="fu-fn-title" id="fuNextTitle" style="margin:0">
+              <button type="button" class="fu-nx-toggle" id="fuNextToggle" aria-expanded="false"
+                      aria-controls="fuNext" onclick="toggleFuNext()">
+                <i class="ph-bold ph-caret-right" aria-hidden="true"></i>Going out next</button>
+            </h2>
             <span class="fu-fn-sub" id="fuNextSub"></span>
+            <label class="fu-nx-cap" for="fuNextCap">Daily limit
+              <input type="number" id="fuNextCap" min="1" max="500" step="1" inputmode="numeric"
+                     onchange="saveFuCap(this)" title="How many follow-ups may go out in one day">
+            </label>
           </div>
-          <div id="fuNext"></div>
+          <div id="fuNext" hidden></div>
         </section>
         <section class="fu-fn-card" aria-labelledby="fuLadderTitle">
           <div class="fu-fn-head">
@@ -8882,16 +8902,89 @@ function fuNextTime(iso) {
   return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+// Open or shut, remembered per browser. Shut is the default: the list is a reference the
+// owner opens when he wants it, and the header line answers the question without it.
+const FU_NEXT_OPEN_KEY = 'fu_next_open';
+
+function syncFuNextOpen() {
+  let open = false;
+  try { open = localStorage.getItem(FU_NEXT_OPEN_KEY) === '1'; } catch (e) {}
+  const body = document.getElementById('fuNext');
+  const btn = document.getElementById('fuNextToggle');
+  if (body) body.hidden = !open;
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function toggleFuNext() {
+  const body = document.getElementById('fuNext');
+  if (!body) return;
+  try { localStorage.setItem(FU_NEXT_OPEN_KEY, body.hidden ? '1' : '0'); } catch (e) {}
+  syncFuNextOpen();
+}
+
+// The one line the shut card shows. It has to say that nothing is moving when the
+// switches are off, because the banner that says so lives inside the list.
+function fuNextSummary(d) {
+  const days = d.days || [];
+  const today = days[0] || { total: 0, held: 0 };
+  const waiting = days.reduce((n, day) => n + day.total, 0) + (d.later || 0);
+  const off = !(d.fu_auto_enabled && d.ladder_auto_enabled && d.auto_send_enabled);
+  const bits = [];
+  if (off) bits.push('Off');
+  bits.push(today.total
+    ? today.total + (off ? ' would go out today' : ' going out today')
+    : 'nothing goes out today');
+  if (today.held) bits.push(today.held + ' held by the limit');
+  if (d.sent_today) bits.push(d.sent_today + ' already sent today');
+  if (waiting > today.total) bits.push(waiting + ' waiting in all');
+  return bits.join(' \u00b7 ');
+}
+
+let _fuCapBusy = false;
+
+// The limit is also in Settings, but this is where its effect is visible: the held
+// count on this very card. Saving sends only this one number, so the rest of the
+// ladder's settings are untouched, and the server clamps it to 1..500.
+async function saveFuCap(el) {
+  const was = (_fuNextData && _fuNextData.cap) || pipelineLadder.daily_cap || 25;
+  const n = parseInt(el.value, 10);
+  if (isNaN(n) || n < 1 || n > 500) { el.value = was; toast('Pick a number from 1 to 500', true); return; }
+  if (n === was || _fuCapBusy) { el.value = n; return; }
+  _fuCapBusy = true; el.disabled = true;
+  try {
+    const res = await fetch('/api/followups/pipeline-config', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ladder: { daily_cap: n } })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    if (data.ladder) { pipelineLadder = data.ladder; renderLadderKnobs(); }
+    toast('Daily limit is now ' + ((data.ladder && data.ladder.daily_cap) || n));
+    await loadFuFunnel();                     // today and held are both the cap's doing
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+    el.value = was;
+  } finally {
+    _fuCapBusy = false; el.disabled = false;
+  }
+}
+
+let _fuNextData = null;
+
 function renderFuNext(d) {
   const el = document.getElementById('fuNext');
   if (!el) return;
+  _fuNextData = d;
   const sub = document.getElementById('fuNextSub');
+  const cap = document.getElementById('fuNextCap');
+  if (cap && document.activeElement !== cap) cap.value = d.cap;
   const off = !(d.fu_auto_enabled && d.ladder_auto_enabled && d.auto_send_enabled);
-  if (sub) sub.textContent = 'Daily limit ' + d.cap + (d.sent_today ? ' · ' + d.sent_today + ' already sent today' : '');
+  if (sub) sub.textContent = fuNextSummary(d);
   const total = (d.days || []).reduce((n, day) => n + day.total, 0);
   if (!total) {
     el.innerHTML = '<div class="fu-act">Nothing is due in the next two days.' +
       (d.later ? ' ' + d.later + ' further on.' : '') + '</div>';
+    syncFuNextOpen();
     return;
   }
   const banner = off
@@ -8903,8 +8996,8 @@ function renderFuNext(d) {
     const when = fuNextTime(day.contacts[0] && !day.contacts[0].overdue ? day.contacts[0].at : null);
     const head = '<div class="fu-nx-head"><b>' + esc(fuNextDayLabel(day.index)) + '</b>' +
       '<span>' + day.total + ' email' + (day.total === 1 ? '' : 's') +
-      (when ? ' · from ' + esc(when) : '') +
-      (day.held ? ' · ' + day.held + ' held by the daily limit' : '') + '</span></div>';
+      (when ? ' \u00b7 from ' + esc(when) : '') +
+      (day.held ? ' \u00b7 ' + day.held + ' held by the daily limit' : '') + '</span></div>';
     const rows = day.contacts.map(c =>
       '<div class="fu-nx-row" data-rung="' + esc(c.rung) + '" data-email="' + esc(c.email) +
         '" onclick="openFuTier(this.dataset.rung, this.dataset.email)" title="Open this contact">' +
@@ -8917,6 +9010,7 @@ function renderFuNext(d) {
       ? '<div class="fu-nx-more">and ' + (day.total - day.contacts.length) + ' more</div>' : '';
     return '<div class="fu-nx-day">' + head + rows + more + '</div>';
   }).join('') + (d.later ? '<div class="fu-nx-more">' + d.later + ' further on, after these.</div>' : '');
+  syncFuNextOpen();
 }
 
 function renderFuFunnel(data) {

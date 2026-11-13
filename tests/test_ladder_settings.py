@@ -243,7 +243,10 @@ def test_a_load_reply_refills_from_the_workspace_config(app, db, me):
     from app.models import Reply
     user, ws = me
     ws = _reload(db, ws)
-    ws.pipeline_config = {'ladder': {'first_touch_days': 4}, 'touch_hour': 12}
+    # first_touch_days is deliberately the ODD one out here: a load no longer dates the
+    # contact from the rung's first-touch rhythm, it waits out the quiet period instead
+    ws.pipeline_config = {'ladder': {'first_touch_days': 4, 'quiet_days_after_load': 6},
+                          'touch_hour': 12}
     db.session.commit()
     fc = _fc(db, me, 'cold', touch_attempt=2)
     reply = Reply(user_id=user.id, msg_id=uuid.uuid4().hex, thread_id='t1', from_email=fc.contact_email,
@@ -254,7 +257,7 @@ def test_a_load_reply_refills_from_the_workspace_config(app, db, me):
     _app._apply_reply_to_ladder(fc, reply, ws, now)
     fc = _reload(db, fc)
     assert fc.rung == 'warm' and fc.touch_attempt == 0
-    assert now + timedelta(days=3) < fc.next_followup_at < now + timedelta(days=5)
+    assert now + timedelta(days=5) < fc.next_followup_at < now + timedelta(days=7)
 
 
 def test_no_engine_path_still_reads_the_global_defaults():

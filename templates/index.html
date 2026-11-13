@@ -2649,6 +2649,20 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
 .fu-cv-tot-v { font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .fu-cv-tot-l { font-size: 12px; color: var(--text3); margin-top: 2px; line-height: 1.4; }
 /* activity */
+/* Going out next: one day per block, one line per contact. */
+.fu-nx-day { margin-bottom: 14px; }
+.fu-nx-day:last-child { margin-bottom: 0; }
+.fu-nx-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 13px;
+  color: var(--text2); padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.fu-nx-head b { color: var(--text); font-size: 14px; }
+.fu-nx-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; }
+.fu-nx-row:hover { background: var(--surface2); }
+.fu-nx-who { color: var(--text); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fu-nx-lane { color: var(--text3); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fu-nx-late { color: var(--yellow); font-weight: 600; font-size: 12px; }
+.fu-nx-more { font-size: 12px; color: var(--text3); padding: 6px 8px; }
+@media (max-width: 560px) { .fu-nx-lane { display: none; } }
 .fu-act { font-size: 13px; color: var(--text2); line-height: 1.7; }
 .fu-act b { color: var(--text); font-variant-numeric: tabular-nums; }
 .fu-act-sep { color: var(--border2); margin: 0 6px; }
@@ -3266,6 +3280,13 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
       <!-- FUNNEL SCOREBOARD (default view) -->
       <div id="fuFunnelTab">
         <section class="fu-fn-card" id="fuLadderSwitch" aria-label="Automatic follow-ups" hidden></section>
+        <section class="fu-fn-card" aria-labelledby="fuNextTitle">
+          <div class="fu-fn-head">
+            <h2 class="fu-fn-title" id="fuNextTitle">Going out next</h2>
+            <span class="fu-fn-sub" id="fuNextSub"></span>
+          </div>
+          <div id="fuNext"></div>
+        </section>
         <section class="fu-fn-card" aria-labelledby="fuLadderTitle">
           <div class="fu-fn-head">
             <h2 class="fu-fn-title" id="fuLadderTitle">The ladder</h2>
@@ -3982,9 +4003,10 @@ html.sb-collapsed .sidebar-collapse i { transform: scaleX(-1); }
             <label class="ld-field"><span>Then every (days)</span><input id="plLdWeekly" type="number" min="1" max="365"></label>
             <label class="ld-field"><span>Attempts while they have sent no load</span><input id="plLdBudgetNo" type="number" min="1" max="20"></label>
             <label class="ld-field"><span>Attempts once they have sent a load</span><input id="plLdBudgetEng" type="number" min="1" max="20"></label>
+            <label class="ld-field"><span>Wait after they send a load (days)</span><input id="plLdQuiet" type="number" min="1" max="365"></label>
             <label class="ld-field"><span>Most follow-ups sent per day</span><input id="plLdCap" type="number" min="1" max="500"></label>
           </div>
-          <div class="settings-note" id="ladderKnobNote" style="margin-bottom:12px">The attempt numbers act at once, not only on new dates: if you lower them, every contact that has already used that many attempts is parked as dormant at the next scheduler run, with no email sent, and none of them show in the 24-hour count. The daily limit counts from your local midnight; contacts over it keep their place and go out the next day, oldest first.</div>
+          <div class="settings-note" id="ladderKnobNote" style="margin-bottom:12px">The attempt numbers act at once, not only on new dates: if you lower them, every contact that has already used that many attempts is parked as dormant at the next scheduler run, with no email sent, and none of them show in the 24-hour count. The daily limit counts from your local midnight; contacts over it keep their place and go out the next day, oldest first. The wait after a load is there because that is the one moment you are in the conversation yourself — the ladder stands back instead of asking “do you have another load?” the next morning.</div>
           <div class="settings-stack-sm">
             <div class="settings-toggle-row">
               <div class="settings-toggle-copy">
@@ -6870,7 +6892,8 @@ let pipelineDripAuto = true;      // the follow-up kill switch (Workspace.fu_aut
 let pipelineAutoSend = true;      // master switch over every automatic send path
 let pipelineAutoPreview = { touches: 0, scheduled: 0 };   // due in next 24h, per path
 let pipelineLadder = { first_touch_days: 1, second_touch_days: 3, weekly_days: 7, budget_no_load: 3,
-                       budget_engaged: 5, hot_weekly: true, higher_rung_patience: true, daily_cap: 25 };   // rhythm + patience (server is the truth)
+                       budget_engaged: 5, hot_weekly: true, higher_rung_patience: true,
+                       quiet_days_after_load: 7, daily_cap: 25 };   // rhythm + patience (server is the truth)
 let pipelineLadderAuto = false;   // the warmth ladder's own switch: off until the owner turns it on
 let pipelineLadderDue = 0;        // contacts it would email in the next 24 h if it were on
 let pipelineStats = { total: 0, by_stage: {}, transitions: {} };
@@ -7821,7 +7844,8 @@ function renderTouchHourEditor() {
 }
 
 const LADDER_KNOBS = { plLdFirst: 'first_touch_days', plLdSecond: 'second_touch_days', plLdWeekly: 'weekly_days',
-                       plLdBudgetNo: 'budget_no_load', plLdBudgetEng: 'budget_engaged', plLdCap: 'daily_cap' };
+                       plLdBudgetNo: 'budget_no_load', plLdBudgetEng: 'budget_engaged',
+                       plLdQuiet: 'quiet_days_after_load', plLdCap: 'daily_cap' };
 const LADDER_FLAGS = { plLdPatience: 'higher_rung_patience', plLdHotWeekly: 'hot_weekly' };
 function renderLadderKnobs() {
   for (const [id, key] of Object.entries(LADDER_KNOBS)) {
@@ -8715,7 +8739,7 @@ async function addContactManual() {
   const res = await fetch('/api/followups/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   const data = await res.json();
   if (!res.ok) { toast('Error: '+(data.error||'unknown'), true); return; }
-  toast('Contact added');
+  toast(data.message || 'Contact added');
   closeAddContactModal();
   await loadFollowups();
 }
@@ -8723,7 +8747,7 @@ async function addCandidate(email, name, company, route) {
   const res = await fetch('/api/followups/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,name,company,route})});
   const data = await res.json();
   if (!res.ok) { toast('Error: '+(data.error||'unknown'), true); return; }
-  toast('Added: '+email);
+  toast(data.message || ('Added: ' + email));
   await loadCandidates(document.getElementById('fuCandSearch').value);
   await loadFollowups();
 }
@@ -8824,10 +8848,11 @@ function fuActivityOk(d) { return !!d && ['sent', 'raised', 'quieted', 'stopped'
 
 async function loadFuFunnel() {
   const seq = ++_fuFunnelSeq;
-  ['fuLadder', 'fuNeedsYou', 'fuConversion', 'fuActivity'].forEach(fuLoadingBlock);
+  ['fuNext', 'fuLadder', 'fuNeedsYou', 'fuConversion', 'fuActivity'].forEach(fuLoadingBlock);
   const get = async url => { const r = await fetch(url); if (!r.ok) throw new Error(r.status); return r.json(); };
-  const [fn, ny, ac] = await Promise.allSettled([
-    get('/api/followups/funnel'), get('/api/followups/needs-you'), get('/api/followups/activity?hours=24')
+  const [fn, ny, ac, up] = await Promise.allSettled([
+    get('/api/followups/funnel'), get('/api/followups/needs-you'), get('/api/followups/activity?hours=24'),
+    get('/api/followups/upcoming')
   ]);
   if (seq !== _fuFunnelSeq) return;                      // a newer load is under way
   const fnOk = fn.status === 'fulfilled' && fuFunnelOk(fn.value);
@@ -8840,6 +8865,58 @@ async function loadFuFunnel() {
   // the activity sentence is only honest next to the switch states, which ride on the funnel payload
   if (ac.status === 'fulfilled' && fuActivityOk(ac.value) && fnOk) renderFuActivity(ac.value, fn.value);
   else fuFailedBlock('fuActivity', 'the activity');
+  if (up.status === 'fulfilled' && Array.isArray(up.value.days)) renderFuNext(up.value);
+  else fuFailedBlock('fuNext', 'the next sends');
+}
+
+// ── Going out next ────────────────────────────────────────────────────────────
+// The numbers were always knowable — on the switch, and in each rung's table — but
+// never in one place, so "what goes out today, and when" took a search. The server
+// already spends the daily cap the way the scheduler will, so these are the real
+// days, not the due dates.
+function fuNextDayLabel(i) { return i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : 'In ' + i + ' days'; }
+
+function fuNextTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function renderFuNext(d) {
+  const el = document.getElementById('fuNext');
+  if (!el) return;
+  const sub = document.getElementById('fuNextSub');
+  const off = !(d.fu_auto_enabled && d.ladder_auto_enabled && d.auto_send_enabled);
+  if (sub) sub.textContent = 'Daily limit ' + d.cap + (d.sent_today ? ' · ' + d.sent_today + ' already sent today' : '');
+  const total = (d.days || []).reduce((n, day) => n + day.total, 0);
+  if (!total) {
+    el.innerHTML = '<div class="fu-act">Nothing is due in the next two days.' +
+      (d.later ? ' ' + d.later + ' further on.' : '') + '</div>';
+    return;
+  }
+  const banner = off
+    ? '<div class="fu-act-off"><b>These are not going anywhere yet.</b> Automatic sending is off, so the list below is what ' +
+      'would go out once you switch it on.</div>'
+    : '';
+  el.innerHTML = banner + (d.days || []).map(day => {
+    if (!day.total) return '';
+    const when = fuNextTime(day.contacts[0] && !day.contacts[0].overdue ? day.contacts[0].at : null);
+    const head = '<div class="fu-nx-head"><b>' + esc(fuNextDayLabel(day.index)) + '</b>' +
+      '<span>' + day.total + ' email' + (day.total === 1 ? '' : 's') +
+      (when ? ' · from ' + esc(when) : '') +
+      (day.held ? ' · ' + day.held + ' held by the daily limit' : '') + '</span></div>';
+    const rows = day.contacts.map(c =>
+      '<div class="fu-nx-row" data-rung="' + esc(c.rung) + '" data-email="' + esc(c.email) +
+        '" onclick="openFuTier(this.dataset.rung, this.dataset.email)" title="Open this contact">' +
+        '<span class="fu-nx-who">' + esc(c.name || c.email) + '</span>' +
+        fuRungPill(c.rung) +
+        '<span class="fu-nx-lane">' + esc(c.route || '') + '</span>' +
+        (c.overdue ? '<span class="fu-nx-late">overdue</span>' : '') +
+      '</div>').join('');
+    const more = day.total > day.contacts.length
+      ? '<div class="fu-nx-more">and ' + (day.total - day.contacts.length) + ' more</div>' : '';
+    return '<div class="fu-nx-day">' + head + rows + more + '</div>';
+  }).join('') + (d.later ? '<div class="fu-nx-more">' + d.later + ' further on, after these.</div>' : '');
 }
 
 function renderFuFunnel(data) {

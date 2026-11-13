@@ -644,3 +644,59 @@ def test_endpoints_require_a_signed_in_user(app, db, client, path):
     resp = client.get(f'/api/followups/{path}')
     assert resp.status_code == 302 and '/login' in resp.headers['Location']     # the app's own sign-in redirect
     assert client.get(f'/api/followups/{path}', headers={'Content-Type': 'application/json'}).status_code == 401
+
+
+# ── Going out next ───────────────────────────────────────────────────────────
+# The owner could read the counts off the switch and the dates off each rung's table,
+# but never "who goes out today, and when" in one place. This endpoint spends the daily
+# cap the way the scheduler will, so a day's list is what that day really sends.
+
+UPCOMING = '/api/followups/upcoming'
+
+
+def test_upcoming_splits_the_queue_into_today_and_tomorrow(app, db, client, me):
+    user, ws = me
+    now = _app._utcnow()
+    for i in range(3):
+        _fc(db, me, 'warm', touch_enabled=True, next_followup_at=now - timedelta(hours=i + 1))
+    _fc(db, me, 'warm', touch_enabled=True, next_followup_at=now + timedelta(days=1, hours=2))
+    got = client.get(UPCOMING).get_json()
+    assert [d['index'] for d in got['days']] == [0, 1]
+    assert got['days'][0]['total'] == 3 and got['days'][1]['total'] == 1
+    assert all(c['overdue'] for c in got['days'][0]['contacts'])
+
+
+def test_upcoming_spends_the_daily_cap_the_way_the_scheduler_will(app, db, client, me):
+    from app.models import Workspace
+    user, ws = me
+    ws = db.session.get(Workspace, ws.id)
+    ws.pipeline_config = {**(ws.pipeline_config or {}), 'ladder': {'daily_cap': 2}}
+    db.session.commit()
+    now = _app._utcnow()
+    for i in range(5):
+        _fc(db, me, 'warm', touch_enabled=True, next_followup_at=now - timedelta(hours=i + 1))
+    got = client.get(UPCOMING).get_json()
+    assert got['cap'] == 2
+    assert got['days'][0]['total'] == 2 and got['days'][0]['held'] == 3
+    assert got['days'][1]['total'] == 2          # two more tomorrow
+    assert got['later'] == 1                     # and the last one past the horizon
+
+
+def test_upcoming_leaves_out_what_the_ladder_would_not_send(app, db, client, me):
+    now = _app._utcnow()
+    _fc(db, me, 'warm', touch_enabled=True, next_followup_at=now - timedelta(hours=1),
+        auto_paused=True)
+    _fc(db, me, 'client', touch_enabled=True, next_followup_at=now - timedelta(hours=1))
+    _fc(db, me, 'warm', touch_enabled=True, next_followup_at=now - timedelta(hours=1),
+        scheduled_once=True)
+    unplaced = _fc(db, me, 'warm', touch_enabled=True, next_followup_at=now - timedelta(hours=1))
+    unplaced.is_followup_enabled = True          # still on the retired drip: no engine sends it
+    db.session.commit()
+    got = client.get(UPCOMING).get_json()
+    assert sum(d['total'] for d in got['days']) == 0 and got['later'] == 0
+
+
+def test_upcoming_reports_the_switches_so_the_list_is_not_a_promise(app, db, client, me):
+    got = client.get(UPCOMING).get_json()
+    for key in ('fu_auto_enabled', 'ladder_auto_enabled', 'auto_send_enabled'):
+        assert isinstance(got[key], bool)

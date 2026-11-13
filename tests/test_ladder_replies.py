@@ -625,3 +625,90 @@ def test_a_live_contacts_vague_reply_still_refills_nothing(app, db):
     fc = _contact(db, rung='warm', touch_attempt=4)
     _reply(db, fc, category=None, body='ok, noted')
     assert (fc.rung, fc.touch_attempt) == ('warm', 4)
+
+
+# ── The ladder stands back while the owner works a load ──────────────────────
+# A load is the one moment the owner is in the conversation himself: reading it,
+# quoting it, answering. The next touch used to land the following morning, in the
+# middle of that. It now waits out a quiet period the owner can set.
+
+def test_a_load_pushes_the_next_touch_past_the_quiet_period(app, db):
+    fc = _contact(db, rung='neutral', touch_attempt=2)
+    now = _app._utcnow()
+    _reply(db, fc, category='gave_info', body='we have a load Laredo to Dallas', thread='q1')
+    quiet = _app._ladder.LADDER_DEFAULTS['quiet_days_after_load']
+    assert fc.rung == 'warm' and fc.touch_attempt == 0
+    assert fc.next_followup_at > now + timedelta(days=quiet - 1)
+    assert fc.next_followup_at < now + timedelta(days=quiet + 2)
+
+
+def test_the_quiet_period_is_the_owners_setting(app, db):
+    from app.models import Workspace
+    fc = _contact(db, rung='neutral')
+    ws = db.session.get(Workspace, fc.workspace_id)
+    cfg = dict(ws.pipeline_config or {})
+    cfg['ladder'] = {**cfg.get('ladder', {}), 'quiet_days_after_load': 2}
+    ws.pipeline_config = cfg
+    db.session.commit()
+    now = _app._utcnow()
+    _reply(db, fc, category='gave_info', body='load Laredo to Dallas', thread='q2')
+    assert fc.next_followup_at < now + timedelta(days=4)
+
+
+def test_the_quiet_period_does_not_date_a_paused_contact(app, db):
+    fc = _contact(db, rung='warm', auto_paused=True)
+    _reply(db, fc, category='gave_info', body='another load', thread='q3')
+    assert fc.load_count >= 1 and fc.rung == 'hot'
+    assert fc.next_followup_at is None
+
+
+# ── The follow-up answers into the latest conversation ───────────────────────
+# These three fields used to be written once, when the contact was created, and never
+# again: a broker who wrote in August and again in October kept the August thread, so
+# "do you have another load?" arrived in the wrong conversation under the first subject.
+
+def test_a_newer_reply_moves_the_contact_onto_its_thread(app, db):
+    fc = _contact(db, rung='neutral', source_thread_id='t-old',
+                  reply_msg_id='<old@mail>', reply_subject='Re: Laredo to El Paso')
+    _reply(db, fc, category='gave_info', body='load Newark to Atlanta',
+           thread='t-new', msg_id='<new@mail>', subject='Re: Newark to Atlanta')
+    assert fc.source_thread_id == 't-new'
+    assert fc.reply_msg_id == '<new@mail>'
+    assert fc.reply_subject == 'Re: Newark to Atlanta'
+
+
+def test_a_rescanned_older_reply_does_not_walk_the_contact_backwards(app, db):
+    fc = _contact(db, rung='neutral')
+    _reply(db, fc, category='gave_info', body='load Newark to Atlanta',
+           thread='t-new', msg_id='<new@mail>', subject='Re: Newark to Atlanta')
+    seen = fc.last_reply_at
+    _reply(db, fc, category='unknown', body='an older message the mailbox handed back',
+           thread='t-old', msg_id='<old@mail>', subject='Re: Laredo to El Paso',
+           received_at=seen - timedelta(days=30))
+    assert fc.source_thread_id == 't-new' and fc.reply_msg_id == '<new@mail>'
+
+
+def test_marking_a_second_reply_for_follow_up_moves_the_conversation(app, db):
+    # the Replies page button goes through add_to_followups, which used to see the
+    # contact already there and return, throwing the newer conversation away
+    from app.models import Reply
+    fc = _contact(db, rung='neutral', source_thread_id='t-old',
+                  reply_msg_id='<old@mail>', reply_subject='Re: Laredo to El Paso')
+    r = Reply(user_id=fc.user_id, msg_id='<second@mail>', thread_id='t-second',
+              from_email=fc.contact_email, subject='Re: Dallas to Memphis',
+              body='we have a load', triage_category='gave_info')
+    db.session.add(r); db.session.commit()
+    _app.add_to_followups(r)
+    db.session.refresh(fc)
+    assert fc.source_thread_id == 't-second'
+    assert fc.reply_subject == 'Re: Dallas to Memphis'
+
+
+def test_each_field_moves_only_when_the_reply_carries_it(app, db):
+    # a blank field is absence of news, not news that there is none: a reply with no
+    # thread id leaves the stored thread alone, while the fields it does carry move
+    fc = _contact(db, rung='neutral', source_thread_id='t-old', reply_subject='Re: Old lane')
+    _reply(db, fc, category='unknown', body='ok', thread=None, msg_id='<fresh@mail>', subject='')
+    assert fc.source_thread_id == 't-old'          # nothing newer to point at
+    assert fc.reply_subject == 'Re: Old lane'      # an empty subject is not a subject
+    assert fc.reply_msg_id == '<fresh@mail>'       # this one it did carry

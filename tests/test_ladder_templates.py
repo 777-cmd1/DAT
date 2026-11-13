@@ -13,6 +13,9 @@ _app = sys.modules['_dat_mailer_app']
 
 SENDABLE = ('cold', 'neutral', 'warm', 'hot')
 ROUTE = 'Laredo, TX -> Dallas, TX'
+# How the lane reads once it is in an email: the arrow belongs on the screen,
+# not in a sentence a broker reads.
+ROUTE_PROSE = 'Laredo, TX to Dallas, TX'
 
 
 def _workspace(db):
@@ -100,7 +103,7 @@ def test_the_code_default_beats_the_general_pool(app, db):
     _tmpl(db, fc, 'FU1', 'Hi, FU1 text')
     body = _body(fc)
     assert 'Just wanted to follow up' not in body and 'FU1 text' not in body
-    assert ROUTE in body
+    assert ROUTE_PROSE in body and ROUTE not in body
 
 
 @pytest.mark.parametrize('rung', SENDABLE)
@@ -113,7 +116,7 @@ def test_a_workspace_with_no_templates_gets_the_rung_default(app, db, rung):
 
 def test_warm_body_can_reference_the_contact_lane(app, db):
     fc = _contact(db, rung='warm', current_route=ROUTE)
-    assert ROUTE in _body(fc)                                 # template uses {route}
+    assert ROUTE_PROSE in _body(fc)                           # template uses {route}
 
 
 def test_the_default_leaves_the_signature_for_the_sender(app, db):
@@ -394,7 +397,7 @@ def test_the_scheduler_sends_the_rung_copy(app, db, bodies):
     fc = _due(db, rung='warm', current_route=ROUTE, touch_attempt=0)
     expected = _body(fc)
     assert _app._run_ladder_touches(_app._utcnow()) == 1
-    assert bodies == [expected] and ROUTE in bodies[0]
+    assert bodies == [expected] and ROUTE_PROSE in bodies[0]
 
 
 def test_the_scheduler_varies_the_copy_by_attempt(app, db, bodies):
@@ -410,3 +413,37 @@ def test_the_scheduler_prefers_the_users_rung_copy(app, db, bodies):
     _tmpl(db, fc, 'HOT', 'HOT BODY')
     assert _app._run_ladder_touches(_app._utcnow()) == 1
     assert bodies == ['HOT BODY']
+
+
+# ── The lane and the subject as a person would write them ────────────────────
+
+@pytest.mark.parametrize('stored, expected', [
+    ('Laredo, TX -> Dallas, TX', 'Laredo, TX to Dallas, TX'),
+    ('Laredo, TX \u2192 Dallas, TX', 'Laredo, TX to Dallas, TX'),
+    ('Laredo, TX', ''),                       # one side is not a lane
+    ('None -> Dallas, TX', ''),               # a NULL column reaches us as "None"
+    ('', ''),
+    (None, ''),
+])
+def test_a_lane_reads_as_prose_in_an_email(stored, expected):
+    assert _app._lane_prose(stored) == expected
+
+
+@pytest.mark.parametrize('stored, expected', [
+    ('Laredo to Dallas', 'Re: Laredo to Dallas'),
+    ('Re: Laredo to Dallas', 'Re: Laredo to Dallas'),          # theirs already had one
+    ('RE: Re: Fwd: Laredo to Dallas', 'Re: Laredo to Dallas'),  # a thread that went around
+    ('re[2]: Laredo to Dallas', 'Re: Laredo to Dallas'),        # some clients number them
+    ('', ''),
+    (None, ''),
+])
+def test_the_subject_carries_one_re_prefix(stored, expected):
+    assert _app._reply_subject(stored) == expected
+
+
+def test_no_arrow_reaches_a_sent_email(app, db, bodies, monkeypatch):
+    # the arrow is right on the screen and wrong in a sentence; it must not survive
+    # the trip into an email, whichever variable the body asked for
+    fc = _due(db, rung='warm', current_route=ROUTE, touch_attempt=0)
+    _app._run_ladder_touches(_app._utcnow())
+    assert bodies and all('\u2192' not in b and '->' not in b for b in bodies)

@@ -111,7 +111,9 @@ def test_hot_is_weekly_from_the_first_touch(app, db, sent):
     assert fc.touch_attempt == 1 and _days_out(fc) == 7
 
 
-def test_the_first_touch_is_due_the_day_after_a_load(app, db):
+def test_the_touch_after_a_load_waits_out_the_quiet_period(app, db):
+    # A load is the one moment the owner is in the conversation himself. The touch used
+    # to land the next morning, on top of him; it now waits, and still lands at his hour.
     from app.models import Reply
     user, ws = _workspace(db, cfg={'touch_hour': 15})
     fc = _contact(db, user, ws, rung='neutral', next_followup_at=None)
@@ -120,7 +122,8 @@ def test_the_first_touch_is_due_the_day_after_a_load(app, db):
     db.session.add(r); db.session.commit()
     _app._check_reply_stops_followup(fc.contact_email, user.id, r)
     db.session.commit(); db.session.refresh(fc)
-    assert fc.touch_attempt == 0 and _days_out(fc) == 1 and fc.next_followup_at.hour == 15
+    quiet = _app._ladder.LADDER_DEFAULTS['quiet_days_after_load']
+    assert fc.touch_attempt == 0 and _days_out(fc) == quiet and fc.next_followup_at.hour == 15
 
 
 def test_budget_exhaustion_goes_dormant_with_a_reason(app, db, sent):

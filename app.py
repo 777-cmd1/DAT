@@ -1088,6 +1088,7 @@ def _at_touch_hour(nxt, ws, uid):
 # ladder.LADDER_DEFAULTS are only the base it merges the saved values over.
 _LADDER_INT_MAX = {'first_touch_days': 365, 'second_touch_days': 365, 'weekly_days': 365,
                    'budget_no_load': 20, 'budget_engaged': 20,
+                   'quiet_days_after_load': 365,
                    'daily_cap': 500}                              # every one is at least 1
 _LADDER_BOOL_KEYS = ('hot_weekly', 'higher_rung_patience')
 
@@ -5034,19 +5035,17 @@ def send_followup_email(fu, template_text, cfg, uid=None):
         if is_blocked(to_email, be, bd):
             return False, 'blocked by stop list'
         route = fu.get('current_route') or fu.get('route', '')
-        if fu.get('reply_subject'):
-            subject = 'Re: ' + fu['reply_subject']
-        elif fu.get('current_route'):
-            subject = f'Following up — {fu["current_route"]}'
-        else:
-            subject = 'Following up'
+        subject = _reply_subject(fu.get('reply_subject'))
+        if not subject:
+            lane = _lane_prose(fu.get('current_route'))
+            subject = f'Following up on {lane}' if lane else 'Following up'
         body = _safe_render(template_text, {
             'name': cfg.get('your_name', '') or cfg.get('name', ''),
             'company': cfg.get('your_company', '') or cfg.get('company', ''),
             'phone': cfg.get('your_phone', '') or cfg.get('phone', ''),
-            'route': route,
-            'origin': route.split('→')[0].strip() if '→' in route else '',
-            'destination': route.split('→')[1].strip() if '→' in route else '',
+            'route': _lane_prose(route),
+            'origin': _lane_sides(route)[0],
+            'destination': _lane_sides(route)[1],
         })
         # Try Gmail API OAuth first
         _uid = uid or current_user_id()
@@ -5378,7 +5377,21 @@ def api_followups_add():
 
     exists = FollowupContact.query.filter_by(workspace_id=ws.id, contact_email=email).first()
     if exists:
-        return jsonify(error='Contact already in follow-ups'), 409
+        # The button used to answer 409 and throw the newer reply away. Pressing it on a
+        # fresher reply means "follow him from this conversation", which is the one thing
+        # it could not do. The rung and the schedule are untouched: a click is not a load.
+        moved = _followup_track_conversation(
+            exists, data.get('source_thread_id', ''), data.get('reply_msg_id', ''),
+            data.get('reply_subject', ''))
+        if moved:
+            exists.source_reply_id = data.get('source_reply_id') or exists.source_reply_id
+            exists.updated_at = _utcnow()
+            _record_event(exists, 'conversation_moved', actor_user_id=uid,
+                          notes='now following the newer conversation')
+            db.session.commit()
+        return jsonify(ok=True, moved=moved, contact=exists.to_dict(),
+                       message=('Now following the newer conversation' if moved
+                                else 'Already in follow-ups')), 200
 
     now = _utcnow()
 
@@ -6521,6 +6534,7 @@ def api_followups_timeline():
                   'auto_send': 'Drip follow-up sent', 'state_change': 'Status changed',
                   'scheduled_once': 'One-time send scheduled', 'schedule_cancelled': 'Schedule cancelled',
                   'recurring_set': 'Recurring send set', 'recurring_stopped': 'Recurring send stopped',
+                  'conversation_moved': 'Now following a newer conversation',
                   # what the warmth ladder did on its own
                   'ladder_load': 'Sent load information', 'ladder_refusal': 'Asked us to stop',
                   'ladder_deferral': 'Asked to come back later', 'ladder_unknown': 'Reply needs a human look',
@@ -7373,6 +7387,41 @@ def api_delete_pipeline():
 
 # ── SCHEDULED FOLLOW-UP AUTOMATION ──────────────────────────────────────────
 
+def _followup_track_conversation(fc, thread_id, msg_id, subject, at=None, since=None):
+    """Point the contact at the conversation a follow-up should answer into.
+
+    These three fields were written once, when the contact was created, and never
+    again: a broker who wrote in August and again in October kept the August thread,
+    so "do you have another load?" arrived in the wrong conversation under the first
+    lane's subject. They are the contact's view of the live conversation, so every
+    inbound reply moves them, not only one that carries a load.
+
+    `since` is the newest reply we had already seen. A mailbox re-scan hands us old
+    messages again, and without that guard the contact would walk backwards into an
+    older thread. Returns True when something moved.
+    """
+    if since is not None and at is not None and at < since:
+        return False
+    changed = False
+    for field, value in (('source_thread_id', thread_id), ('reply_msg_id', msg_id),
+                         ('reply_subject', subject)):
+        value = (value or '').strip()
+        if value and (getattr(fc, field) or '') != value:
+            setattr(fc, field, value)
+            changed = True
+    return changed
+
+
+def _followup_track_reply(fc, reply, since=None):
+    """`_followup_track_conversation` for a Reply row."""
+    if reply is None:
+        return False
+    return _followup_track_conversation(
+        fc, getattr(reply, 'thread_id', '') or '', getattr(reply, 'msg_id', '') or '',
+        getattr(reply, 'subject', '') or '',
+        at=getattr(reply, 'received_at', None), since=since)
+
+
 def add_to_followups(reply_obj):
     """Create FollowupContact from a Reply model object marked as 'follow_up' or 'interested'."""
     from app.models import FollowupContact, Workspace
@@ -7387,6 +7436,11 @@ def add_to_followups(reply_obj):
 
     exists = FollowupContact.query.filter_by(workspace_id=ws.id, contact_email=email).first()
     if exists:
+        # already here: this is not a second contact, it is a newer conversation with
+        # the same broker, and the follow-up should answer into it
+        if _followup_track_reply(exists, reply_obj, since=exists.last_reply_at):
+            exists.updated_at = _utcnow()
+            db.session.commit()
         return
 
     now = _utcnow()
@@ -7687,6 +7741,10 @@ def _apply_reply_to_ladder(fc, reply, ws, now):
         fc.load_count = (fc.load_count or 0) + 1
         fc.last_load_at = now
         _ladder_revive(fc, now, ws, cfg)
+        # _ladder_revive dates the contact from the rung's own rhythm, which for a fresh
+        # WARM contact is tomorrow morning. A load is the one moment the owner is in the
+        # conversation himself, so the ladder waits instead of writing over him.
+        _ladder_set_next(fc, now + timedelta(days=cfg['quiet_days_after_load']), ws)
         _ladder_record_load(fc, conv_key, old_rung, notes=f'load #{fc.load_count} received')
         try:
             with db.session.begin_nested():     # a failed lookup rolls back to here, not the load
@@ -8024,6 +8082,9 @@ def _check_reply_stops_followup(reply_email, user_id, reply=None):
         return
 
     now = _utcnow()
+    # before last_reply_at is overwritten: it is what tells a genuinely newer reply
+    # from one a mailbox re-scan handed us again
+    _followup_track_reply(fc, reply, since=fc.last_reply_at)
     fc.last_reply_at = now
     fc.last_activity_at = now
     if fc.rung == 'excluded':
@@ -8065,15 +8126,47 @@ def _lane_part(value):
     return '' if text.lower() == 'none' else text
 
 
+_LANE_SPLIT_RE = re.compile(r'\s*(?:\u2192|->)\s*')
+_RE_PREFIX_RE = re.compile(r'(?i)^\s*(?:re|fwd|fw)\s*(?:\[\d+\])?\s*:\s*')
+
+
+def _lane_sides(route):
+    """(origin, destination) from a stored route, or ('', '') when it is not a lane.
+    A route is stored for the screen, with an arrow; both spellings are accepted."""
+    parts = _LANE_SPLIT_RE.split((route or '').strip(), maxsplit=1)
+    if len(parts) != 2:
+        return '', ''
+    return _lane_part(parts[0]), _lane_part(parts[1])
+
+
+def _lane_prose(route):
+    """The lane as a person would write it in an email: "Laredo, TX to Dallas, TX".
+    The stored form carries an arrow, which is right on the screen and wrong in a
+    sentence — a broker reading "Laredo, TX → Dallas, TX" is reading software output."""
+    origin, destination = _lane_sides(route)
+    return f'{origin} to {destination}' if origin and destination else ''
+
+
+def _reply_subject(stored):
+    """The subject to send on, from the subject we stored off their reply. Their reply
+    usually already carries a Re:, and prefixing ours on top of it produced
+    "Re: Re: ..." — strip every prefix they or their client added, then add one."""
+    text = (stored or '').strip()
+    while True:
+        stripped = _RE_PREFIX_RE.sub('', text, count=1)
+        if stripped == text:
+            break
+        text = stripped.strip()
+    return f'Re: {text}' if text else ''
+
+
 def _rung_template_vars(fc, names):
     """Values for the lane/rate variables a ladder body asks for. Unknown values are ''.
     {route} needs both ends of the lane; {origin} and {destination} stand on their own."""
     raw = (fc.current_route or '').strip()
-    parts = re.split(r'\s*(?:\u2192|->)\s*', raw, maxsplit=1) if raw else []
-    origin = _lane_part(parts[0]) if len(parts) == 2 else ''
-    destination = _lane_part(parts[1]) if len(parts) == 2 else ''
+    origin, destination = _lane_sides(raw)
     values = {
-        'route': raw if origin and destination else '',
+        'route': _lane_prose(raw),
         'origin': origin,
         'destination': destination,
     }
@@ -8345,6 +8438,78 @@ def _ladder_due_summary(ws, hours=24):
     today = min(due, room)
     days = (1 if today else 0) + -(-(due - today) // cap)      # days that send; ceil division
     return {'due': due, 'today': today, 'days': days}
+
+
+_UPCOMING_DAYS = 2            # today and tomorrow: the horizon the owner can still act on
+_UPCOMING_NAMES = 60          # names per day; the count is always exact, the list is capped
+
+
+def _ladder_upcoming(ws, days=_UPCOMING_DAYS, now=None):
+    """What the ladder would email over the next `days` local days, day by day.
+
+    The owner could read the numbers off the switch and the dates off each rung's table,
+    but nowhere could he read the one sentence he actually wants: who goes out today, and
+    when. This walks the due contacts oldest first and spends the daily cap exactly as the
+    scheduler does, so a day's list is what that day will really send — not what is due.
+
+    Contacts beyond the horizon are counted into `later`, never listed: the point is the
+    part of the queue still worth looking at.
+    """
+    from app.models import FollowupContact
+    if not ws:
+        return {'days': [], 'later': 0, 'cap': 0, 'sent_today': 0}
+    now = now or _utcnow()
+    cfg = _ladder_cfg(ws)
+    cap = cfg['daily_cap']
+    tz = _ws_tz(ws)
+    starts = [_local_day_start(tz, days_ago=-d, now=now) for d in range(days + 1)]
+    due = FollowupContact.query.filter(
+        FollowupContact.workspace_id == ws.id,
+        FollowupContact.state == 'active',
+        FollowupContact.touch_enabled == True,
+        FollowupContact.is_followup_enabled == False,
+        FollowupContact.scheduled_once == False,
+        FollowupContact.recurring_enabled == False,
+        FollowupContact.next_followup_at.isnot(None),
+        FollowupContact.next_followup_at < starts[-1],
+    ).order_by(FollowupContact.next_followup_at).all()
+    due = [c for c in due if _ladder_sendable(c, ws)]
+
+    sent_today = _auto_sent_today(ws)
+    out, queue = [], list(due)
+    for i in range(days):
+        room = max(0, cap - sent_today) if i == 0 else cap
+        # everything due before the END of this day can go on this day, oldest first
+        ready = [c for c in queue if c.next_followup_at < starts[i + 1]]
+        going = ready[:room]
+        queue = [c for c in queue if c not in going]
+        out.append({
+            'day': starts[i].isoformat(),
+            'index': i,
+            'total': len(going),
+            'held': max(0, len(ready) - len(going)),
+            'contacts': [{
+                'id': c.id, 'email': c.contact_email,
+                'name': c.display_name or '', 'rung': c.rung,
+                'route': _lane_prose(c.current_route) or (c.current_route or ''),
+                'at': (c.next_followup_at.isoformat() if c.next_followup_at else None),
+                'overdue': bool(c.next_followup_at and c.next_followup_at < now),
+            } for c in going[:_UPCOMING_NAMES]],
+        })
+    return {'days': out, 'later': len(queue), 'cap': cap, 'sent_today': sent_today}
+
+
+@app.route('/api/followups/upcoming')
+@login_required
+def api_followups_upcoming():
+    """The next couple of days of ladder sends, as the cap will really meter them."""
+    from app.models import Workspace
+    ws = Workspace.query.filter_by(owner_id=_current_user_id()).first()
+    data = _ladder_upcoming(ws)
+    data['ladder_auto_enabled'] = bool(ws and ws.ladder_auto_enabled)
+    data['fu_auto_enabled'] = bool(ws and ws.fu_auto_enabled)
+    data['auto_send_enabled'] = bool(ws and _auto_send_on(ws.id, {}))
+    return jsonify(data)
 
 
 def _ladder_preview_fields(ws):

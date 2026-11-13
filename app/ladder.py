@@ -19,6 +19,10 @@ LADDER_DEFAULTS = {
     'weekly_days': 7,
     'budget_no_load': 3,
     'budget_engaged': 5,
+    # A load means the owner is now working that deal himself — reading it, quoting it,
+    # answering. Asking "do you have another load?" the next morning lands in the middle
+    # of that conversation. This is how long the ladder stands back afterwards.
+    'quiet_days_after_load': 7,
     'hot_weekly': True,
     'higher_rung_patience': True,
     # Most touches the scheduler sends per local day, per workspace. Without it, switching
